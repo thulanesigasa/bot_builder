@@ -38,8 +38,8 @@ class ForwardPredictionRecord:
     model_version: str
     market_state: str
     features_json: str
-    runhigh_pred_prob: float
-    runlow_pred_prob: float
+    runhigh_pred_prob: Optional[float] = None
+    runlow_pred_prob: Optional[float] = None
     runhigh_ask: Optional[float] = None
     runhigh_payout: Optional[float] = None
     runlow_ask: Optional[float] = None
@@ -95,8 +95,8 @@ class ForwardPredictionJournal:
                     model_version TEXT NOT NULL,
                     market_state TEXT NOT NULL,
                     features_json TEXT,
-                    runhigh_pred_prob REAL NOT NULL,
-                    runlow_pred_prob REAL NOT NULL,
+                    runhigh_pred_prob REAL,
+                    runlow_pred_prob REAL,
                     runhigh_ask REAL,
                     runhigh_payout REAL,
                     runlow_ask REAL,
@@ -318,31 +318,34 @@ class ForwardPredictionJournal:
                 "cumulative_pnl": 0.0
             }
 
-        rh_preds = np.array([r["runhigh_pred_prob"] for r in resolved])
-        rl_preds = np.array([r["runlow_pred_prob"] for r in resolved])
-        rh_wins = np.array([r["runhigh_win"] for r in resolved])
-        rl_wins = np.array([r["runlow_win"] for r in resolved])
-        pnls = [r["hypothetical_pnl"] for r in resolved]
+        rh_preds_valid = [r["runhigh_pred_prob"] for r in resolved if r["runhigh_pred_prob"] is not None]
+        rh_wins_valid = [r["runhigh_win"] for r in resolved if r["runhigh_pred_prob"] is not None]
+        rl_preds_valid = [r["runlow_pred_prob"] for r in resolved if r["runlow_pred_prob"] is not None]
+        rl_wins_valid = [r["runlow_win"] for r in resolved if r["runlow_pred_prob"] is not None]
 
-        brier_rh = float(np.mean((rh_preds - rh_wins) ** 2))
-        brier_rl = float(np.mean((rl_preds - rl_wins) ** 2))
-        win_rate_rh = float(np.mean(rh_wins))
-        win_rate_rl = float(np.mean(rl_wins))
-        cum_pnl = float(sum(pnls))
+        rh_wins = np.array([r["runhigh_win"] for r in resolved if r["runhigh_win"] is not None])
+        rl_wins = np.array([r["runlow_win"] for r in resolved if r["runlow_win"] is not None])
+        pnls = [r["hypothetical_pnl"] for r in resolved if r["hypothetical_pnl"] is not None]
+
+        brier_rh = float(np.mean((np.array(rh_preds_valid) - np.array(rh_wins_valid)) ** 2)) if rh_preds_valid else None
+        brier_rl = float(np.mean((np.array(rl_preds_valid) - np.array(rl_wins_valid)) ** 2)) if rl_preds_valid else None
+        win_rate_rh = float(np.mean(rh_wins)) if len(rh_wins) > 0 else None
+        win_rate_rl = float(np.mean(rl_wins)) if len(rl_wins) > 0 else None
+        cum_pnl = float(sum(pnls)) if pnls else 0.0
 
         return {
             "total_predictions": total,
             "resolved_predictions": len(resolved),
             "unverified_predictions": unverified,
             "pending_predictions": pending,
-            "brier_score_runhigh": round(brier_rh, 5),
-            "brier_score_runlow": round(brier_rl, 5),
-            "runhigh_brier_score": round(brier_rh, 5),
-            "runlow_brier_score": round(brier_rl, 5),
-            "runhigh_observed_win_rate": round(win_rate_rh, 5),
-            "runlow_observed_win_rate": round(win_rate_rl, 5),
-            "realized_runhigh_win_rate": round(win_rate_rh, 5),
-            "realized_runlow_win_rate": round(win_rate_rl, 5),
+            "brier_score_runhigh": round(brier_rh, 5) if brier_rh is not None else None,
+            "brier_score_runlow": round(brier_rl, 5) if brier_rl is not None else None,
+            "runhigh_brier_score": round(brier_rh, 5) if brier_rh is not None else None,
+            "runlow_brier_score": round(brier_rl, 5) if brier_rl is not None else None,
+            "runhigh_observed_win_rate": round(win_rate_rh, 5) if win_rate_rh is not None else None,
+            "runlow_observed_win_rate": round(win_rate_rl, 5) if win_rate_rl is not None else None,
+            "realized_runhigh_win_rate": round(win_rate_rh, 5) if win_rate_rh is not None else None,
+            "realized_runlow_win_rate": round(win_rate_rl, 5) if win_rate_rl is not None else None,
             "cumulative_pnl": round(cum_pnl, 2)
         }
 

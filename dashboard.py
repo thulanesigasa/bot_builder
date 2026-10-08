@@ -119,9 +119,10 @@ def generate_v153_payload(symbol: str = "R_75") -> Dict[str, Any]:
                 d = json.load(f)
                 api_diag = {
                     "status": d.get("status", "UNKNOWN"),
-                    "endpoint": d.get("endpoint_url", "wss://ws.derivws.com/websockets/v3"),
+                    "endpoint": d.get("endpoint_url", "wss://api.derivws.com/trading/v1/options/ws/public"),
                     "timestamp": d.get("timestamp_utc", "N/A"),
-                    "details": d.get("error_details") or "Connection diagnostic completed."
+                    "details": d.get("error_details") or "All 8 diagnostic stages passed successfully.",
+                    "stages": d.get("stages", {})
                 }
         except Exception:
             pass

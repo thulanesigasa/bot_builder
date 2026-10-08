@@ -193,15 +193,16 @@ class DerivQuoteRecorder:
         session_records = []
         end_time = time.time() + duration_seconds
 
+        primary_url = f"{self.ws_url}?app_id={self.app_id}" if "?" not in self.ws_url else self.ws_url
         endpoints = [
-            f"{FALLBACK_WS_URL}?app_id={self.app_id}",
-            self.ws_url
+            primary_url,
+            f"{FALLBACK_WS_URL}?app_id={self.app_id}"
         ]
 
         active_ws = None
         for endpoint in endpoints:
             try:
-                active_ws = await websockets.connect(endpoint, open_timeout=6.0, close_timeout=3.0)
+                active_ws = await websockets.connect(endpoint, open_timeout=5.0, close_timeout=3.0)
                 break
             except Exception:
                 continue

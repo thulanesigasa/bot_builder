@@ -182,19 +182,23 @@ class ForwardObserver:
         )
 
         # 6. Evaluate probability strictly from Frozen Model (NO hardcoded values)
-        rejection_reasons: List[str] = []
         rh_pred: Optional[float] = None
         rl_pred: Optional[float] = None
+        rh_lower: Optional[float] = None
+        rl_lower: Optional[float] = None
 
         if self.model_artifact is not None:
             rh_p, rl_p, pred_meta = self.model_artifact.predict_probabilities(market_state)
             rh_pred = float(rh_p)
             rl_pred = float(rl_p)
+            rh_lower = pred_meta.get("lower_bound_runhigh")
+            rl_lower = pred_meta.get("lower_bound_runlow")
         else:
-            rejection_reasons.append("MODEL_NOT_AVAILABLE")
-            # If model is unvalidated or missing, do NOT substitute arbitrary numbers
-            rh_pred = 0.03125
-            rl_pred = 0.03125
+            # Strictly NO fallback probabilities!
+            rh_pred = None
+            rl_pred = None
+            rh_lower = None
+            rl_lower = None
 
         # 7. Quote Validation & Financial Metric Calculation (NO benchmark fallbacks)
         rh_ask: Optional[float] = None
@@ -214,10 +218,8 @@ class ForwardObserver:
             be_rh = rh_ask / rh_payout
             if rh_pred is not None:
                 ev_rh = (rh_pred * rh_payout) - rh_ask
-                rh_lower = max(0.0, rh_pred - 0.015)
-                cons_ev_rh = (rh_lower * rh_payout) - rh_ask
-        else:
-            rejection_reasons.append("QUOTE_UNAVAILABLE")
+                eff_lower_rh = rh_lower if rh_lower is not None else max(0.0, rh_pred - 0.015)
+                cons_ev_rh = (eff_lower_rh * rh_payout) - rh_ask
 
         if q_rl is not None and q_rl.ask_price > 0 and q_rl.total_payout > 0:
             rl_ask = float(q_rl.ask_price)
@@ -225,49 +227,88 @@ class ForwardObserver:
             be_rl = rl_ask / rl_payout
             if rl_pred is not None:
                 ev_rl = (rl_pred * rl_payout) - rl_ask
-                rl_lower = max(0.0, rl_pred - 0.015)
-                cons_ev_rl = (rl_lower * rl_payout) - rl_ask
-        else:
-            if "QUOTE_UNAVAILABLE" not in rejection_reasons:
-                rejection_reasons.append("QUOTE_UNAVAILABLE")
+                eff_lower_rl = rl_lower if rl_lower is not None else max(0.0, rl_pred - 0.015)
+                cons_ev_rl = (eff_lower_rl * rl_payout) - rl_ask
 
-        # 8. Apply Multi-Gate Decision Logic
+        # 8. Apply Centralized Multi-Gate Decision Logic
+        from decision_gate import evaluate_paper_trade_eligibility, DecisionReason
+
+        q_rh_epoch = getattr(q_rh, "response_timestamp", None) if q_rh else None
+        q_rl_epoch = getattr(q_rl, "response_timestamp", None) if q_rl else None
+
+        gate_rh = evaluate_paper_trade_eligibility(
+            symbol=self.symbol,
+            contract_type="RUNHIGH",
+            duration_ticks=5,
+            model_artifact=self.model_artifact,
+            estimated_prob=rh_pred,
+            lower_prob_bound=rh_lower,
+            ask_price=rh_ask,
+            total_payout=rh_payout,
+            quote_epoch=q_rh_epoch,
+            current_epoch=float(epoch),
+            execution_mode=self.mode,
+            market_state=market_state,
+            min_expected_ev=DEFAULT_CONFIG.min_expected_ev,
+            min_conservative_ev=DEFAULT_CONFIG.min_conservative_ev,
+            min_probability_margin=DEFAULT_CONFIG.min_probability_margin,
+            max_quote_age_seconds=self.max_quote_age_seconds,
+            min_validation_sample=DEFAULT_CONFIG.min_validation_sample,
+            current_stake=rh_ask or DEFAULT_CONFIG.default_stake,
+            max_stake=DEFAULT_CONFIG.max_stake,
+            has_data_gap=False
+        )
+
+        gate_rl = evaluate_paper_trade_eligibility(
+            symbol=self.symbol,
+            contract_type="RUNLOW",
+            duration_ticks=5,
+            model_artifact=self.model_artifact,
+            estimated_prob=rl_pred,
+            lower_prob_bound=rl_lower,
+            ask_price=rl_ask,
+            total_payout=rl_payout,
+            quote_epoch=q_rl_epoch,
+            current_epoch=float(epoch),
+            execution_mode=self.mode,
+            market_state=market_state,
+            min_expected_ev=DEFAULT_CONFIG.min_expected_ev,
+            min_conservative_ev=DEFAULT_CONFIG.min_conservative_ev,
+            min_probability_margin=DEFAULT_CONFIG.min_probability_margin,
+            max_quote_age_seconds=self.max_quote_age_seconds,
+            min_validation_sample=DEFAULT_CONFIG.min_validation_sample,
+            current_stake=rl_ask or DEFAULT_CONFIG.default_stake,
+            max_stake=DEFAULT_CONFIG.max_stake,
+            has_data_gap=False
+        )
+
         decision = "NO_TRADE"
+        target_dir = "NONE"
+        reason_str = ""
 
-        # Model validation gating
-        if self.model_artifact is None or self.model_artifact.approval_status not in ModelStatus.APPROVED_FOR_PAPER:
-            rejection_reasons.append("NO_VALIDATED_EDGE")
-
-        if self.mode == "SHADOW":
-            rejection_reasons.append("SHADOW_MODE_NON_TRADING")
-
-        if cons_ev_rh is not None and cons_ev_rl is not None:
-            if cons_ev_rh <= 0 and cons_ev_rl <= 0:
-                rejection_reasons.append("NEGATIVE_CONSERVATIVE_EV")
-
-        # Target direction attribution
-        if ev_rh is not None and ev_rl is not None:
-            target_dir = "RUNHIGH" if ev_rh > ev_rl else "RUNLOW"
-        else:
-            target_dir = "RUNHIGH" if (rh_pred is not None and rl_pred is not None and rh_pred > rl_pred) else "RUNLOW"
-
-        # In PAPER mode, trade could only qualify if all gates pass
-        if (self.mode == "PAPER" and
-                self.model_artifact is not None and
-                self.model_artifact.approval_status in ModelStatus.APPROVED_FOR_PAPER and
-                "QUOTE_UNAVAILABLE" not in rejection_reasons and
-                ((ev_rh is not None and ev_rh > 0) or (ev_rl is not None and ev_rl > 0))):
+        # Prioritize direction with superior conservative EV if both or either qualify
+        if gate_rh.is_eligible and (not gate_rl.is_eligible or (cons_ev_rh or 0) >= (cons_ev_rl or 0)):
             decision = "PAPER_TRADE"
-            rejection_reasons.clear()
+            target_dir = "RUNHIGH"
+            reason_str = DecisionReason.PAPER_TRADE_APPROVED.value
+        elif gate_rl.is_eligible:
+            decision = "PAPER_TRADE"
+            target_dir = "RUNLOW"
+            reason_str = DecisionReason.PAPER_TRADE_APPROVED.value
+        else:
+            decision = "NO_TRADE"
+            if ev_rh is not None and ev_rl is not None:
+                target_dir = "RUNHIGH" if ev_rh > ev_rl else "RUNLOW"
+            elif rh_pred is not None and rl_pred is not None:
+                target_dir = "RUNHIGH" if rh_pred > rl_pred else "RUNLOW"
+            else:
+                target_dir = "NONE"
 
-        # Deduplicate reasons while preserving order
-        seen_reasons = set()
-        dedup_reasons = []
-        for r in rejection_reasons:
-            if r not in seen_reasons:
-                seen_reasons.add(r)
-                dedup_reasons.append(r)
-        reason_str = ";".join(dedup_reasons) if dedup_reasons else "NONE"
+            combined_reasons = []
+            for r in gate_rh.rejection_reasons + gate_rl.rejection_reasons:
+                if r not in combined_reasons:
+                    combined_reasons.append(r)
+            reason_str = ";".join(combined_reasons) if combined_reasons else DecisionReason.NO_TRADE.value
 
         # 9. Construct and record prediction
         rec = ForwardPredictionRecord(
@@ -277,8 +318,8 @@ class ForwardObserver:
             model_version=self.model_version,
             market_state=market_state,
             features_json=json.dumps(feat_dict),
-            runhigh_pred_prob=round(rh_pred, 5) if rh_pred is not None else 0.0,
-            runlow_pred_prob=round(rl_pred, 5) if rl_pred is not None else 0.0,
+            runhigh_pred_prob=round(rh_pred, 5) if rh_pred is not None else None,
+            runlow_pred_prob=round(rl_pred, 5) if rl_pred is not None else None,
             runhigh_ask=round(rh_ask, 2) if rh_ask is not None else None,
             runhigh_payout=round(rh_payout, 2) if rh_payout is not None else None,
             runlow_ask=round(rl_ask, 2) if rl_ask is not None else None,
