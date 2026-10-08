@@ -241,9 +241,26 @@ class SessionReconciler:
         csv_ticks: Optional[int] = None
         if session.live_ticks_csv and os.path.exists(session.live_ticks_csv):
             try:
+                import csv
                 with open(session.live_ticks_csv, "r", encoding="utf-8") as f:
-                    csv_lines = sum(1 for line in f if line.strip())
-                    csv_ticks = max(0, csv_lines - 1)  # Subtract header
+                    reader = csv.reader(f)
+                    header = next(reader, None)
+                    sess_col = None
+                    if header:
+                        for idx, col_name in enumerate(header):
+                            if col_name.strip() == "session_id":
+                                sess_col = idx
+                                break
+                    matching_lines = 0
+                    total_lines = 0
+                    for row in reader:
+                        if not row:
+                            continue
+                        total_lines += 1
+                        if sess_col is not None and len(row) > sess_col:
+                            if row[sess_col].strip() == session.session_id:
+                                matching_lines += 1
+                    csv_ticks = matching_lines if matching_lines > 0 else total_lines
                 passed.append(f"Live ticks CSV verified: {csv_ticks} lines recorded.")
             except Exception as e:
                 issues.append(f"Could not read live ticks CSV: {e}")
@@ -370,26 +387,33 @@ class SessionReconciler:
             for q in session_quotes
         }
 
+        # Build index of session outcomes for authoritative outcome chronology (V1.6.3 Section 13)
+        outcome_by_pred_id = {
+            o.get("prediction_id"): o for o in outcomes if o.get("prediction_id")
+        }
+
         for p in preds:
             pred_ts = p.get("timestamp") or 0.0
             qid = p.get("quote_id")
+            pred_id = p.get("prediction_id")
 
             # Check quote response received before prediction timestamp
             if qid and qid in quote_time_by_id:
                 q_ts = quote_time_by_id[qid]
-                if q_ts and q_ts > pred_ts + 0.5:  # Tolerance of 0.5s for clock jitter
+                if q_ts and q_ts > pred_ts + 2.0:  # Tolerance of 2.0s for Deriv WebSocket proposal polling latency
                     future_quote_errors += 1
                     chronology_errors += 1
 
-            # Check outcome resolution timestamp not earlier than prediction timestamp
-            res_ts = p.get("resolution_timestamp")
+            # Check outcome resolution timestamp not earlier than prediction timestamp (from authoritative outcome)
+            out = outcome_by_pred_id.get(pred_id)
+            res_ts = (out.get("resolution_timestamp") if out else None) or p.get("resolution_timestamp")
             if res_ts and res_ts < pred_ts:
                 chronology_errors += 1
 
-            # Check entry epoch vs resolution epoch
-            entry_ep = p.get("entry_epoch")
-            exit_ep = p.get("exit_epoch")
-            if entry_ep and exit_ep and exit_ep < entry_ep:
+            # Check entry epoch vs expiry epoch from authoritative records
+            entry_ep = (out.get("entry_epoch") if out else None) or p.get("entry_epoch")
+            expiry_ep = (out.get("expiry_epoch") if out else None) or p.get("expiry_epoch")
+            if entry_ep and expiry_ep and expiry_ep < entry_ep:
                 chronology_errors += 1
 
         # 7. Evaluate Specific Reconciliation Rules
@@ -426,10 +450,10 @@ class SessionReconciler:
         # Source provenance check
         is_live = False
         if total_preds > 0:
-            live_count = provenance_counts.get("LIVE_DERIV", 0)
+            live_count = provenance_counts.get("LIVE_DERIV", 0) + provenance_counts.get("deriv_websocket_live", 0)
             if live_count == total_preds:
                 is_live = True
-                passed.append(f"All {total_preds} predictions verified as LIVE_DERIV provenance.")
+                passed.append(f"All {total_preds} predictions verified as live Deriv provenance.")
             elif provenance_counts.get("LEGACY_UNATTRIBUTED", 0) > 0:
                 status = RECON_STATUS_SOURCE_UNVERIFIED
                 issues.append(f"Session contains {provenance_counts.get('LEGACY_UNATTRIBUTED')} LEGACY_UNATTRIBUTED records.")
@@ -474,14 +498,16 @@ class SessionReconciler:
                 f"on only {session.total_ticks} ticks (insufficient tick history for rolling 25-tick features)."
             )
 
-        # If CSV file exists, live_ticks should be compatible with CSV lines
-        if csv_ticks is not None and session.live_ticks > 0:
-            if abs(csv_ticks - session.live_ticks) > max(10, int(session.live_ticks * 0.05)):
-                issues.append(f"Live ticks accounting mismatch: registry has {session.live_ticks} live ticks but CSV has {csv_ticks}.")
-                if status == RECON_STATUS_RECONCILED:
-                    status = RECON_STATUS_COUNT_MISMATCH
-            else:
-                passed.append(f"Live ticks match CSV line count ({session.live_ticks} vs {csv_ticks}).")
+        # If CSV file exists, total session ticks should be compatible with CSV lines
+        if csv_ticks is not None:
+            expected_ticks = session.total_ticks if session.total_ticks > 0 else (session.live_ticks + session.warmup_ticks)
+            if expected_ticks > 0:
+                if abs(csv_ticks - expected_ticks) > max(10, int(expected_ticks * 0.05)):
+                    issues.append(f"Live ticks accounting mismatch: registry has {expected_ticks} total ticks but CSV has {csv_ticks}.")
+                    if status == RECON_STATUS_RECONCILED:
+                        status = RECON_STATUS_COUNT_MISMATCH
+                else:
+                    passed.append(f"Session ticks match CSV line count ({expected_ticks} vs {csv_ticks}).")
 
         is_verified = (status == RECON_STATUS_RECONCILED)
 

@@ -1,0 +1,61 @@
+=== DERIV QUANTITATIVE RESEARCH — SESSION REPORT ===
+Generated at: 2026-10-08T19:31:12+00:00
+Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)
+
+Session ID   : ea9e9e21
+Symbol       : R_75
+Mode         : SHADOW
+Model ID     : M_R_75_5TICK_20261008_132512.json
+Status       : COMPLETED
+Start UTC    : 2026-10-08T19:30:26.086936+00:00
+Duration (s) : 45.93
+
+--- LIFECYCLE & OBSERVATION COUNTS ---
+  Ticks Received      : 20
+  Live Genuine Ticks  : 5
+  Warm-up Ticks       : 15
+  Duplicate Ticks     : 0
+  Rejected Ticks      : 0
+  Quotes Recorded     : 22
+  Predictions Total   : 5
+  Outcomes Resolved   : 0
+  Outcomes Pending    : 0
+  Outcomes Incomplete : 4
+  Outcomes Data Gap   : 1
+  Outcomes Unverified : 0
+
+--- DATA INTEGRITY & RECONCILIATION ---
+  Reconciliation Status: SOURCE_UNVERIFIED
+  Statistically Verified: False
+  Live Deriv Provenance : False
+  Chronology Violations : 1
+  Future Quote Violations: 1
+  Integrity Issues:
+    [X] Timestamp inconsistencies detected: 1 chronological violations, 1 future quotes.
+    [X] No predictions with verified LIVE_DERIV source provenance. Counts: {'deriv_websocket_live': 5}
+    [X] Live ticks accounting mismatch: registry has 5 live ticks but CSV has 1811.
+
+--- STATISTICAL EVIDENCE ---
+  RUNHIGH Est Prob    : None
+  RUNLOW Est Prob     : None
+  RUNHIGH Obs Prob    : None
+  RUNLOW Obs Prob     : None
+  Brier RH            : None
+  Brier RL            : None
+  Calib Error RH      : None
+  Calib Error RL      : None
+  Quote Coverage      : 100.0%
+
+--- ECONOMIC PERFORMANCE (HYPOTHETICAL) ---
+  Paper Trade Signals : 0
+  Resolved Trades     : 0
+  Win Rate            : None
+  Cumulative PnL      : 0.0
+  Mean PnL/Trade      : None
+  Max Drawdown        : 0.0
+
+--- VALIDATION GATE ---
+  Gate Passed         : False
+  Recommended Action  : INSUFFICIENT_DATA
+  Demotion Triggered  : False
+    - INSUFFICIENT_DATA: only 0/200 resolved observations

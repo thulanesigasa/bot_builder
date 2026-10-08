@@ -142,11 +142,33 @@ def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
                 if part:
                     rejection_counts[part] = rejection_counts.get(part, 0) + 1
 
+    # Prediction readiness diagnostics
+    req_lookback = art.required_lookback if ("art" in locals() and art) else 25
+    warm_ticks = active_session.warmup_ticks if active_session else 0
+    live_ticks = active_session.live_ticks if active_session else 0
+    buffer_ticks = warm_ticks + live_ticks
+    is_warmed_up = buffer_ticks >= req_lookback
+    current_blocker = None
+    if not active_session:
+        current_blocker = "No active session registered"
+    elif buffer_ticks < req_lookback:
+        current_blocker = f"Waiting for {req_lookback - buffer_ticks} more warm-up ticks ({buffer_ticks}/{req_lookback})"
+
     return {
-        "version": "V1.6.2",
+        "version": "V1.6.3",
         "symbol": symbol,
         "available_symbols": get_available_symbols(),
         "safety_invariant": "REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)",
+        "prediction_readiness": {
+            "required_lookback": req_lookback,
+            "buffer_ticks": buffer_ticks,
+            "warmup_ticks": warm_ticks,
+            "live_ticks": live_ticks,
+            "is_warmed_up": is_warmed_up,
+            "pipeline_status": "WARMUP_COMPLETE" if is_warmed_up else "WAITING_FOR_WARMUP",
+            "feature_readiness": "READY" if is_warmed_up else "WARMING_UP",
+            "current_blocker": current_blocker or "None (Ready for inference)"
+        },
         "session": {
             "session_id": active_session.session_id if active_session else "NONE",
             "mode": active_session.mode if active_session else "SHADOW",
@@ -284,9 +306,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .safety-banner svg { width: 20px; height: 20px; fill: var(--accent); flex-shrink: 0; }
   
-  .grid-5 {
+  .grid-6 {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     gap: 16px;
     margin-bottom: 24px;
   }
@@ -356,7 +378,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
       <div>
         <h1>Deriv Only Ups / Only Downs Forward Observation Dashboard</h1>
-        <div class="subtitle">V1.6.2 — Forward Data Integrity, Session Reconciliation & Statistical Confirmation</div>
+        <div class="subtitle">V1.6.3 — System Integration, Forward Prediction Activation & Statistical Reliability</div>
       </div>
     </div>
     <div>
@@ -372,7 +394,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div>REAL-MONEY TRADING DISABLED — Strict Non-Purchasing Forward Research & Statistical Evidence System</div>
   </div>
 
-  <div class="grid-5">
+  <div class="grid-6">
     <!-- 1. Session Integrity -->
     <div class="card">
       <div class="card-label">
@@ -383,7 +405,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="card-desc" id="sess-desc">State: STANDBY | Recon: UNRECONCILED</div>
     </div>
 
-    <!-- 2. Data Accounting -->
+    <!-- 2. Prediction Readiness -->
+    <div class="card">
+      <div class="card-label">
+        <svg viewBox="0 0 24 24"><path d="M13 2.05v3.03c3.39.49 6 3.39 6 6.92 0 .9-.18 1.75-.48 2.54l2.6 1.53c.56-1.24.88-2.62.88-4.07 0-5.18-3.95-9.45-9-9.95zM12 19c-3.87 0-7-3.13-7-7 0-3.53 2.61-6.43 6-6.92V2.05c-5.05.5-9 4.77-9 9.95 0 5.52 4.48 10 10 10 2.35 0 4.5-.82 6.2-2.19l-2.19-2.19c-1.15.9-2.52 1.44-4.01 1.44zm8.65-4.47l-1.55-.91c-.24.5-.55.96-.91 1.38l1.55.91c.36-.43.67-.89.91-1.38z"/></svg>
+        Prediction Readiness
+      </div>
+      <div class="card-val" id="pred-readiness">WARMUP_PENDING</div>
+      <div class="card-desc" id="pred-desc">Lookback: 25 | Buffer: 0 | Ready</div>
+    </div>
+
+    <!-- 3. Data Accounting -->
     <div class="card">
       <div class="card-label">
         <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
@@ -518,7 +550,12 @@ function renderDashboard(data) {
   document.getElementById("sess-id").textContent = s.session_id !== "NONE" ? s.session_id.substring(0, 8) : "STANDBY";
   document.getElementById("sess-desc").textContent = `State: ${s.status} | Recon: ${s.reconciliation_status} | Verified: ${s.is_verified}`;
 
-  // 2. Data Accounting card
+  // 2. Prediction Readiness card
+  const pr = data.prediction_readiness || {};
+  document.getElementById("pred-readiness").textContent = pr.pipeline_status || "WAITING_FOR_WARMUP";
+  document.getElementById("pred-desc").textContent = `Lookback: ${pr.required_lookback || 25} | Buffer: ${pr.buffer_ticks || 0} | ${pr.current_blocker || 'Ready'}`;
+
+  // 3. Data Accounting card
   const ld = data.live_data || {};
   document.getElementById("live-ticks").textContent = `${(ld.total_ticks || 0).toLocaleString()} Ticks`;
   document.getElementById("live-quotes").textContent = `Live: ${ld.live_ticks || 0} | Warmup: ${ld.warmup_ticks || 0} | Dup: ${ld.duplicate_ticks || 0}`;
@@ -633,7 +670,7 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
 def run_dashboard():
     with socketserver.TCPServer((BIND_HOST, PORT), DashboardRequestHandler) as httpd:
         print(f"\n=======================================================")
-        print(f"      DERIV RESEARCH & OBSERVATION DASHBOARD (V1.6.2)")
+        print(f"      DERIV RESEARCH & OBSERVATION DASHBOARD (V1.6.3)")
         print(f"=======================================================")
         print(f"  URL:             http://{BIND_HOST}:{PORT}")
         print(f"  Design Standard: 60-30-10 Palette (#0B0F19, #131B2E, #0284C7)")

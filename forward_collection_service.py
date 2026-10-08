@@ -61,7 +61,8 @@ class ForwardCollectionService:
         flush_interval_ticks: int = 50,
         flush_interval_secs: float = 30.0,
         reports_dir: Optional[str] = None,
-        notes: str = ""
+        notes: str = "",
+        preload_warmup: bool = True
     ):
         if LIVE_EXECUTION_DISABLED is not True:
             raise RuntimeError("Safety invariant violated: LIVE_EXECUTION_DISABLED must be True.")
@@ -82,6 +83,7 @@ class ForwardCollectionService:
         self.flush_interval_secs = flush_interval_secs
         self.reports_dir = reports_dir
         self.notes = notes
+        self.preload_warmup = preload_warmup
 
         # Resolve model ID for session registration
         mgr = ModelManager()
@@ -121,7 +123,8 @@ class ForwardCollectionService:
             max_quote_age_seconds=max_quote_age_seconds,
             journal_db_path=self.session.journal_db_path,
             quote_db_path=self.session.quote_db_path,
-            session_id=self.session.session_id
+            session_id=self.session.session_id,
+            preload_warmup=self.preload_warmup
         )
         self.reporter = SessionReporter(
             reports_dir=self.reports_dir,
@@ -216,12 +219,13 @@ class ForwardCollectionService:
         GLOBAL_HEALTH_MONITOR.update_connection_status("CONNECTING")
 
         print(f"\n{'=' * 65}")
-        print(f"  DERIV FORWARD COLLECTION SERVICE — V1.6.2")
+        print(f"  DERIV FORWARD COLLECTION SERVICE — V1.6.3")
         print(f"{'=' * 65}")
         print(f"  Symbol           : {self.symbol}")
         print(f"  Mode             : {self.mode}")
         print(f"  Model ID         : {self._model_id}")
         print(f"  Session ID       : {self.session.session_id[:8]}")
+        print(f"  Warmup Preload   : {'ENABLED' if self.preload_warmup else 'DISABLED'}")
         print(f"  Safety Guard     : LIVE_EXECUTION_DISABLED = True")
         print(f"  Duration         : {'Indefinite' if not self.duration_seconds else f'{self.duration_seconds}s'}")
         if self.max_observations:
@@ -281,6 +285,22 @@ class ForwardCollectionService:
             self._running = False
             quote_task.cancel()
 
+            # Print pipeline diagnostics
+            try:
+                diag = self.observer.get_diagnostics_report()
+                print("\n[Service Diagnostics Report]")
+                print(f"  Pipeline Status     : {diag.get('pipeline_status')}")
+                print(f"  Warmup Completed    : {diag.get('warmup_completed')}")
+                print(f"  Required Lookback   : {diag.get('required_lookback')}")
+                print(f"  Warmup Ticks Preload: {diag.get('warmup_ticks_preloaded')}")
+                print(f"  Live Ticks Received : {diag.get('live_ticks_received')}")
+                print(f"  Predictions Made    : {diag.get('predictions_generated')}")
+                print(f"  Active Pending      : {diag.get('active_pending_count')}")
+                if diag.get("last_pipeline_error"):
+                    print(f"  Last Pipeline Error : {diag.get('last_pipeline_error')}")
+            except Exception as e:
+                print(f"[Service] Diagnostics extraction error: {e}")
+
             # Final stat flush and outcome marking (mark incomplete as OUTCOME_INCOMPLETE)
             self.journal.mark_incomplete_as_unverified(symbol=self.symbol, target_status=STATUS_INCOMPLETE)
             self._flush_stats()
@@ -331,7 +351,7 @@ class ForwardCollectionService:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sustained Forward Collection Service (V1.6.1)")
+    parser = argparse.ArgumentParser(description="Sustained Forward Collection Service (V1.6.3)")
     parser.add_argument("symbol", nargs="?", default="R_75", help="Asset symbol (e.g. R_75)")
     parser.add_argument("--mode", default="SHADOW", choices=["DATA_COLLECTION_ONLY", "SHADOW", "PAPER"], help="Observation mode")
     parser.add_argument("--duration", type=float, default=None, help="Session duration in seconds (omitted = indefinite)")
@@ -342,6 +362,7 @@ def main():
     parser.add_argument("--flush-interval", type=int, default=50, help="Stat flush interval in ticks")
     parser.add_argument("--report-dir", default=None, help="Directory for reports")
     parser.add_argument("--notes", default="", help="Session notes")
+    parser.add_argument("--no-preload-warmup", action="store_true", help="Disable preloading historical warmup ticks")
     args = parser.parse_args()
 
     service = ForwardCollectionService(
@@ -354,7 +375,8 @@ def main():
         max_reconnect_attempts=args.reconnect_attempts,
         flush_interval_ticks=args.flush_interval,
         reports_dir=args.report_dir,
-        notes=args.notes
+        notes=args.notes,
+        preload_warmup=not args.no_preload_warmup
     )
 
     def handle_sig(sig, frame):

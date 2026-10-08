@@ -1,23 +1,25 @@
-"""Operational Forward Research Session Launcher (V1.6.2).
+"""Operational Forward Research Session Launcher (V1.6.3).
 
 Primary CLI entry point for initiating and managing live non-purchasing forward market observation:
     python run_forward_session.py --mode SHADOW --symbol R_75
     python run_forward_session.py --mode SHADOW --symbol R_75 --duration 3600
     python run_forward_session.py --mode DATA_COLLECTION_ONLY --symbol R_75 --duration 1800
     python run_forward_session.py --smoke-test --symbol R_75
+    python run_forward_session.py --diagnose --symbol R_75
 
 Lifecycle execution sequence:
   1. Verifies supported symbol availability.
   2. Verifies Deriv API endpoint reachability.
-  3. Discovers and validates compatible frozen ModelArtifact.
-  4. Initializes SQLite forward prediction journal, quote database, and persistent risk state.
-  5. Creates a registered ForwardSession in sessions.db.
-  6. Subscribes to live Deriv ticks and records proposals.
-  7. Computes rolling discrete market features without lookahead.
-  8. Executes frozen model inference and logs prediction before outcome is known.
-  9. Streams subsequent ticks to reconstruct canonical 5-tick contract outcomes.
-  10. Persists resolved/incomplete records immutably.
-  11. Handles SIGINT/SIGTERM gracefully, generating end-of-session JSON & text reports.
+  3. Discovers and validates compatible frozen ModelArtifact with dynamic lookback.
+  4. Preloads historical ticks for zero-wait warmup prior to live stream start.
+  5. Initializes SQLite forward prediction journal, quote database, and persistent risk state.
+  6. Creates a registered ForwardSession in sessions.db.
+  7. Subscribes to live Deriv ticks and records proposals.
+  8. Computes rolling discrete market features without lookahead.
+  9. Executes frozen model inference and logs prediction before outcome is known.
+  10. Streams subsequent ticks to reconstruct canonical 5-tick contract outcomes.
+  11. Persists resolved/incomplete records immutably.
+  12. Handles SIGINT/SIGTERM gracefully, generating end-of-session JSON & text reports.
 
 Safety Mandate:
   LIVE_EXECUTION_DISABLED is permanently True.
@@ -35,7 +37,7 @@ from typing import Optional, List
 from config import DEFAULT_CONFIG
 from forward_collection_service import ForwardCollectionService, LIVE_EXECUTION_DISABLED
 from model_manager import ModelManager
-from model_artifact import ModelStatus
+from model_artifact import ModelArtifact, ModelStatus
 
 
 SUPPORTED_SYMBOLS: List[str] = [
@@ -47,7 +49,7 @@ SUPPORTED_SYMBOLS: List[str] = [
 def print_banner(symbol: str, mode: str, duration: Optional[float], max_obs: Optional[int]):
     print("\n" + "=" * 70)
     print("  DERIV ONLY UPS / ONLY DOWNS QUANTITATIVE RESEARCH ENGINE")
-    print("  FORWARD OBSERVATION, RECONCILIATION & EVIDENCE SYSTEM (V1.6.2)")
+    print("  FORWARD OBSERVATION, RECONCILIATION & EVIDENCE SYSTEM (V1.6.3)")
     print("=" * 70)
     print(f"  Target Symbol       : {symbol}")
     print(f"  Execution Mode      : {mode}")
@@ -108,12 +110,46 @@ def main():
     parser.add_argument("--report-dir", default="reports", help="Directory for output reports (default: reports)")
     parser.add_argument("--notes", default="", help="Optional notes stored in session registry")
     parser.add_argument("--smoke-test", action="store_true", help="Run a brief 30-second live smoke test session")
+    parser.add_argument("--diagnose", action="store_true", help="Run prediction pipeline diagnostics and report current status without running collection")
+    parser.add_argument("--no-preload-warmup", action="store_true", help="Disable preloading historical warmup ticks")
     args = parser.parse_args()
+
+    if args.diagnose:
+        from forward_observer import ForwardObserver
+        print("\n=======================================================")
+        print("  OPERATIONAL PREDICTION PIPELINE DIAGNOSTICS (V1.6.3)")
+        print("=======================================================")
+        print(f"  Target Symbol       : {args.symbol}")
+        print(f"  Mode                : {args.mode}")
+        obs = ForwardObserver(
+            symbol=args.symbol,
+            mode=args.mode,
+            model_path_or_id=args.model,
+            preload_warmup=not args.no_preload_warmup
+        )
+        report = obs.get_diagnostics_report()
+        print("\n[Diagnostics Results]")
+        print(f"  Pipeline Status       : {report.get('pipeline_status')}")
+        print(f"  Warmup Status         : {report.get('warmup_status')}")
+        print(f"  Model ID              : {report.get('model_id')}")
+        print(f"  Model Status          : {report.get('model_status')}")
+        print(f"  Required Lookback     : {report.get('required_lookback')} ticks")
+        print(f"  Preloaded Warmup      : {report.get('historical_warmup_ticks')} ticks")
+        print(f"  Buffer Ticks          : {report.get('ticks_in_buffer')} ticks")
+        print(f"  Warmup Completed      : {report.get('is_warmed_up')}")
+        print(f"  Live Ticks Received   : {report.get('live_ticks_received')}")
+        print(f"  Predictions Generated : {report.get('predictions_generated')}")
+        print(f"  Predictions Persisted : {report.get('predictions_persisted')}")
+        print(f"  Current Blocker       : {report.get('current_blocker') or 'None (Ready for inference)'}")
+        print(f"  Last Pipeline Event   : {report.get('last_pipeline_event')}")
+        print(f"  Safety Directive      : {report.get('safety_status')}")
+        print("=======================================================\n")
+        return
 
     # Smoke test preset
     duration = 30.0 if args.smoke_test else (args.duration if args.duration and args.duration > 0 else None)
     max_obs = 10 if args.smoke_test else args.max_observations
-    notes = "V1.6.1 Live Smoke Test" if args.smoke_test else args.notes
+    notes = "V1.6.3 Live Smoke Test" if args.smoke_test else args.notes
 
     print_banner(symbol=args.symbol, mode=args.mode, duration=duration, max_obs=max_obs)
 
@@ -134,7 +170,8 @@ def main():
         tick_buffer_capacity=args.buffer_capacity,
         flush_interval_ticks=args.flush_interval,
         reports_dir=args.report_dir,
-        notes=notes
+        notes=notes,
+        preload_warmup=not args.no_preload_warmup
     )
 
     def handle_sig(sig, frame):
