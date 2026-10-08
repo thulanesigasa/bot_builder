@@ -1,0 +1,34 @@
+{
+  "timestamp_utc": "2026-10-08T14:20:59.121655+00:00",
+  "target_symbol": "R_75",
+  "app_id": "1089",
+  "endpoint_url": "wss://ws.derivws.com/websockets/v3?app_id=1089",
+  "authenticated_session": false,
+  "preflight": {
+    "hostname": "ws.derivws.com",
+    "port": 443,
+    "dns_resolved": true,
+    "resolved_ips": [
+      "104.18.12.218",
+      "104.18.13.218"
+    ],
+    "dns_latency_ms": 11.17,
+    "tcp_connected": true,
+    "tcp_latency_ms": 11.11,
+    "tls_handshake": true,
+    "tls_latency_ms": 37.39,
+    "tls_version": "TLSv1.3",
+    "cipher": "TLS_AES_256_GCM_SHA384",
+    "preflight_status": "PREFLIGHT_SUCCESS",
+    "preflight_error": null
+  },
+  "steps": {
+    "websocket_connection": {
+      "success": false,
+      "error": "TimeoutError()"
+    }
+  },
+  "quotes_persisted": 0,
+  "status": "CONNECTION_FAILED",
+  "error_details": "Failed to connect to endpoints (wss://ws.derivws.com/websockets/v3?app_id=1089, wss://ws.binaryws.com/websockets/v3?app_id=1089, wss://frontend.binaryws.com/websockets/v3?app_id=1089): TimeoutError()"
+}

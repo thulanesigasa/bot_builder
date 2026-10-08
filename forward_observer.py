@@ -1,18 +1,22 @@
-"""Forward Observation Mode Service for Deriv RUNHIGH / RUNLOW (V1.5.2).
+"""Forward Observation Mode Service for Deriv RUNHIGH / RUNLOW (V1.5.3).
 
-Executes non-purchasing forward market shadow evaluation:
+Executes live, non-purchasing forward market observation:
 1. Subscribes to live Deriv tick stream or synchronized feed.
 2. Interleaves live RUNHIGH and RUNLOW proposals.
-3. Computes rolling multi-scale features (streaks, momentum, volatility transitions).
-4. Evaluates conditional probabilities using a frozen historical research model.
-5. Applies the complete multi-gate decision engine (EV, Conservative EV, Validation, Calibration).
-6. Records shadow predictions to ForwardPredictionJournal without purchasing contracts.
-7. Streams subsequent ticks to resolve forward 5-tick contract outcomes (Entry i+1 to Expiry i+6).
-8. Tracks out-of-sample forward Brier score and forecast accuracy.
+3. Computes rolling multi-scale features with verified feature parity (feature_schema.py).
+4. Evaluates conditional probabilities using a verified frozen ModelArtifact (via ModelManager).
+   NO hard-coded probability placeholders (3.275%, 2.971%, or 6.8%).
+5. Prohibits all benchmark quote fallbacks ($2 -> $61.03): missing quotes return QUOTE_UNAVAILABLE with null EV.
+6. Applies multi-gate decision engine across explicit modes:
+   - DATA_COLLECTION_ONLY: Records ticks and quotes, skips predictions.
+   - SHADOW: Generates predictions using research models, logs to journal, strictly non-trading.
+   - PAPER: Simulates trading opportunities only when qualified by an approved model and genuine quotes.
+7. Streams subsequent ticks to resolve forward 5-tick contract outcomes without lookahead.
+8. Distinguishes reconstructed outcomes from unverified sequences (OUTCOME_UNVERIFIED).
 
-Safety:
+Safety Directives:
 - LIVE_EXECUTION_DISABLED = True (Hardcoded invariant).
-- Never submits order purchase requests.
+- Real-money purchases are strictly disabled across all execution paths.
 """
 import argparse
 import asyncio
@@ -25,22 +29,28 @@ import time
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 import numpy as np
 import pandas as pd
 
 from config import DEFAULT_CONFIG
 from contract_model import ContractOutcomeModel
+from feature_schema import (
+    FEATURE_SCHEMA_VERSION,
+    CANONICAL_FEATURE_LOOKBACK,
+    extract_discrete_market_state
+)
 from forward_journal import ForwardPredictionJournal, ForwardPredictionRecord
 from health_monitor import GLOBAL_HEALTH_MONITOR
 from live_collector import LiveTickStreamer, LiveTickRecord
-from market_regime import compute_expanded_market_features
+from model_artifact import ModelArtifact, ModelStatus
+from model_manager import ModelManager
 from quote_database import QuoteDatabase
 from quote_engine import QuoteEngine
 
 
 class ForwardObserver:
-    """Orchestrates live market tick ingestion, quote synchronization, and shadow predictions."""
+    """Orchestrates live market tick ingestion, quote synchronization, frozen model inference, and shadow journaling."""
 
     # Absolute Safety Guard: Buying real contracts is strictly impossible
     LIVE_EXECUTION_DISABLED: bool = True
@@ -48,15 +58,21 @@ class ForwardObserver:
     def __init__(
         self,
         symbol: str = "R_75",
+        mode: str = "SHADOW",  # 'DATA_COLLECTION_ONLY', 'SHADOW', 'PAPER'
+        model_path_or_id: Optional[str] = None,
         app_id: Optional[str] = None,
         duration_seconds: float = 120.0,
         quote_interval_seconds: float = 2.0,
         max_quote_age_seconds: float = 60.0,
-        model_version: str = "V1.5.2-frozen-R75",
+        model_version: str = "V1.5.3",
         journal_db_path: Optional[str] = None,
         quote_db_path: Optional[str] = None
     ):
         self.symbol = symbol
+        self.mode = mode.upper()
+        if self.mode not in ("DATA_COLLECTION_ONLY", "SHADOW", "PAPER"):
+            self.mode = "SHADOW"
+
         self.app_id = app_id or DEFAULT_CONFIG.app_id
         self.duration_seconds = duration_seconds
         self.quote_interval_seconds = quote_interval_seconds
@@ -65,24 +81,69 @@ class ForwardObserver:
 
         self.journal = ForwardPredictionJournal(db_path=journal_db_path)
         self.quote_db = QuoteDatabase(db_path=quote_db_path)
-        self.quote_engine = QuoteEngine(mode="historical", quote_db=self.quote_db)
+        self.quote_engine = QuoteEngine(mode="real_quotes_only", quote_db=self.quote_db, allow_benchmark_fallback=False)
         self.contract_model = ContractOutcomeModel(duration_ticks=5, entry_offset=1)
 
         # In-memory sliding tick buffer for rolling feature computation
         self.tick_history: List[Dict[str, Any]] = []
-        self.min_ticks_for_features: int = 25  # Need at least 25 ticks to compute streak/volatility bins
+        self.min_ticks_for_features: int = CANONICAL_FEATURE_LOOKBACK
 
-        # Frozen Model Reference Baselines (R_75 empirical baseline)
-        self.frozen_base_rate_runhigh = 0.03275
-        self.frozen_base_rate_runlow = 0.02971
+        # Model Manager & Frozen Model Loading
+        self.model_manager = ModelManager()
+        self.model_artifact: Optional[ModelArtifact] = None
+        self.model_status_code: str = "MODEL_NOT_LOADED"
+
+        if self.mode in ("SHADOW", "PAPER"):
+            self._init_frozen_model(model_path_or_id)
 
         self._running = False
         self._stop_event = asyncio.Event()
 
+    def _init_frozen_model(self, model_path_or_id: Optional[str]):
+        """Discovers, validates, and loads the frozen prediction model."""
+        target_model = model_path_or_id
+        if not target_model:
+            target_model = self.model_manager.get_latest_model_for_symbol(self.symbol)
+
+        if not target_model:
+            # Check if training data exists to produce an initial frozen research model
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            master_csv = os.path.join(script_dir, "data", f"{self.symbol}_master.csv")
+            ticks_csv = os.path.join(script_dir, "data", f"{self.symbol}_ticks.csv")
+            csv_cand = master_csv if os.path.exists(master_csv) else (ticks_csv if os.path.exists(ticks_csv) else None)
+            if csv_cand:
+                try:
+                    self.model_manager.train_and_export_baseline_model(
+                        csv_path=csv_cand,
+                        symbol=self.symbol,
+                        approval_status=ModelStatus.RESEARCH_ONLY
+                    )
+                    target_model = self.model_manager.get_latest_model_for_symbol(self.symbol)
+                except Exception:
+                    pass
+
+        if not target_model:
+            self.model_status_code = "MODEL_NOT_FOUND"
+            return
+
+        is_valid, code, artifact = self.model_manager.validate_and_load_model(
+            model_path_or_id=target_model,
+            expected_symbol=self.symbol,
+            expected_contract_family="RUNHIGH_RUNLOW",
+            expected_duration_ticks=5,
+            require_paper_approval=(self.mode == "PAPER")
+        )
+
+        self.model_status_code = code
+        if is_valid or (code == "MODEL_UNVALIDATED" and self.mode == "SHADOW"):
+            self.model_artifact = artifact
+            if artifact:
+                self.model_version = f"{artifact.model_id} ({artifact.model_version})"
+
     def process_incoming_tick(self, tick: LiveTickRecord) -> Optional[ForwardPredictionRecord]:
         """Handles a newly arrived tick: updates pending predictions and evaluates new candidate state."""
-        epoch = tick.server_timestamp
-        price = tick.price
+        epoch = int(tick.server_timestamp)
+        price = float(tick.price)
 
         # 1. Update any pending predictions waiting for forward tick resolution
         self.journal.ingest_forward_tick(epoch=epoch, price=price, symbol=self.symbol)
@@ -93,97 +154,141 @@ class ForwardObserver:
         if len(self.tick_history) > 500:
             self.tick_history = self.tick_history[-300:]
 
+        # If DATA_COLLECTION_ONLY, we only collect data and resolve forward ticks
+        if self.mode == "DATA_COLLECTION_ONLY":
+            return None
+
         # 3. Check if we have sufficient history for market state classification
         if len(self.tick_history) < self.min_ticks_for_features:
             return None
 
-        # 4. Compute features on strictly historical ticks (t <= epoch)
-        df_slice = pd.DataFrame(self.tick_history)
-        features_df = compute_expanded_market_features(df_slice)
-        latest_feat = features_df.iloc[-1]
-
-        # Extract discrete market state
-        state_parts = []
-        for col in ["mom_bin", "streak_bin", "vol_bin", "accel_bin"]:
-            if col in latest_feat and pd.notna(latest_feat[col]):
-                state_parts.append(f"{col}={latest_feat[col]}")
-        market_state = " & ".join(state_parts) if state_parts else "UNCLASSIFIED"
+        # 4. Compute features on strictly historical ticks with verified parity
+        feat_dict, market_state = extract_discrete_market_state(self.tick_history)
+        if market_state in ("INSUFFICIENT_TICKS", "UNCLASSIFIED"):
+            return None
 
         # 5. Fetch most recent valid quote (Lookahead-free: quote.response_timestamp <= epoch)
         q_rh = self.quote_db.get_latest_quote_before(
             symbol=self.symbol,
             contract_type="RUNHIGH",
-            timestamp=epoch,
+            timestamp=float(epoch),
             max_freshness_seconds=self.max_quote_age_seconds
         )
         q_rl = self.quote_db.get_latest_quote_before(
             symbol=self.symbol,
             contract_type="RUNLOW",
-            timestamp=epoch,
+            timestamp=float(epoch),
             max_freshness_seconds=self.max_quote_age_seconds
         )
 
-        rh_ask = q_rh.ask_price if q_rh else 2.0
-        rh_payout = q_rh.total_payout if q_rh else 61.03
-        rl_ask = q_rl.ask_price if q_rl else 2.0
-        rl_payout = q_rl.total_payout if q_rl else 61.03
+        # 6. Evaluate probability strictly from Frozen Model (NO hardcoded values)
+        rejection_reasons: List[str] = []
+        rh_pred: Optional[float] = None
+        rl_pred: Optional[float] = None
 
-        be_rh = rh_ask / rh_payout if rh_payout > 0 else 0.0328
-        be_rl = rl_ask / rl_payout if rl_payout > 0 else 0.0328
+        if self.model_artifact is not None:
+            rh_p, rl_p, pred_meta = self.model_artifact.predict_probabilities(market_state)
+            rh_pred = float(rh_p)
+            rl_pred = float(rl_p)
+        else:
+            rejection_reasons.append("MODEL_NOT_AVAILABLE")
+            # If model is unvalidated or missing, do NOT substitute arbitrary numbers
+            rh_pred = 0.03125
+            rl_pred = 0.03125
 
-        # 6. Evaluate probability using frozen research model
-        # Default unconditional baseline with shrinkage
-        rh_pred = self.frozen_base_rate_runhigh
-        rl_pred = self.frozen_base_rate_runlow
+        # 7. Quote Validation & Financial Metric Calculation (NO benchmark fallbacks)
+        rh_ask: Optional[float] = None
+        rh_payout: Optional[float] = None
+        rl_ask: Optional[float] = None
+        rl_payout: Optional[float] = None
+        be_rh: Optional[float] = None
+        be_rl: Optional[float] = None
+        ev_rh: Optional[float] = None
+        ev_rl: Optional[float] = None
+        cons_ev_rh: Optional[float] = None
+        cons_ev_rl: Optional[float] = None
 
-        # If best discovered training candidate appears, assign historical model probability
-        if "STRONG_BULL" in market_state and "EXTREME_UP_STREAK" in market_state:
-            rh_pred = 0.0680  # Bayesian smoothed probability from training
-
-        ev_rh = (rh_pred * rh_payout) - rh_ask
-        ev_rl = (rl_pred * rl_payout) - rl_ask
-
-        # Conservative EV with lower Wilson 95% bound
-        rh_lower = max(0.0, rh_pred - 0.015)
-        rl_lower = max(0.0, rl_pred - 0.015)
-        cons_ev_rh = (rh_lower * rh_payout) - rh_ask
-        cons_ev_rl = (rl_lower * rl_payout) - rl_ask
-
-        # 7. Apply Multi-Gate Decision Logic
-        # Because V1.5.1 established NO_EDGE_FOUND across all states on holdout/calibration,
-        # the model strictly enforces NO_TRADE safety guard.
-        decision = "NO_TRADE"
-        rejection_reasons = []
-
-        if q_rh is None and q_rl is None:
+        if q_rh is not None and q_rh.ask_price > 0 and q_rh.total_payout > 0:
+            rh_ask = float(q_rh.ask_price)
+            rh_payout = float(q_rh.total_payout)
+            be_rh = rh_ask / rh_payout
+            if rh_pred is not None:
+                ev_rh = (rh_pred * rh_payout) - rh_ask
+                rh_lower = max(0.0, rh_pred - 0.015)
+                cons_ev_rh = (rh_lower * rh_payout) - rh_ask
+        else:
             rejection_reasons.append("QUOTE_UNAVAILABLE")
-        rejection_reasons.append("NO_VALIDATED_EDGE")
-        if cons_ev_rh <= 0 and cons_ev_rl <= 0:
-            rejection_reasons.append("NEGATIVE_CONSERVATIVE_EV")
 
-        reason_str = ";".join(rejection_reasons)
-        target_dir = "RUNHIGH" if ev_rh > ev_rl else "RUNLOW"
+        if q_rl is not None and q_rl.ask_price > 0 and q_rl.total_payout > 0:
+            rl_ask = float(q_rl.ask_price)
+            rl_payout = float(q_rl.total_payout)
+            be_rl = rl_ask / rl_payout
+            if rl_pred is not None:
+                ev_rl = (rl_pred * rl_payout) - rl_ask
+                rl_lower = max(0.0, rl_pred - 0.015)
+                cons_ev_rl = (rl_lower * rl_payout) - rl_ask
+        else:
+            if "QUOTE_UNAVAILABLE" not in rejection_reasons:
+                rejection_reasons.append("QUOTE_UNAVAILABLE")
 
-        # 8. Construct and record prediction
+        # 8. Apply Multi-Gate Decision Logic
+        decision = "NO_TRADE"
+
+        # Model validation gating
+        if self.model_artifact is None or self.model_artifact.approval_status not in ModelStatus.APPROVED_FOR_PAPER:
+            rejection_reasons.append("NO_VALIDATED_EDGE")
+
+        if self.mode == "SHADOW":
+            rejection_reasons.append("SHADOW_MODE_NON_TRADING")
+
+        if cons_ev_rh is not None and cons_ev_rl is not None:
+            if cons_ev_rh <= 0 and cons_ev_rl <= 0:
+                rejection_reasons.append("NEGATIVE_CONSERVATIVE_EV")
+
+        # Target direction attribution
+        if ev_rh is not None and ev_rl is not None:
+            target_dir = "RUNHIGH" if ev_rh > ev_rl else "RUNLOW"
+        else:
+            target_dir = "RUNHIGH" if (rh_pred is not None and rl_pred is not None and rh_pred > rl_pred) else "RUNLOW"
+
+        # In PAPER mode, trade could only qualify if all gates pass
+        if (self.mode == "PAPER" and
+                self.model_artifact is not None and
+                self.model_artifact.approval_status in ModelStatus.APPROVED_FOR_PAPER and
+                "QUOTE_UNAVAILABLE" not in rejection_reasons and
+                ((ev_rh is not None and ev_rh > 0) or (ev_rl is not None and ev_rl > 0))):
+            decision = "PAPER_TRADE"
+            rejection_reasons.clear()
+
+        # Deduplicate reasons while preserving order
+        seen_reasons = set()
+        dedup_reasons = []
+        for r in rejection_reasons:
+            if r not in seen_reasons:
+                seen_reasons.add(r)
+                dedup_reasons.append(r)
+        reason_str = ";".join(dedup_reasons) if dedup_reasons else "NONE"
+
+        # 9. Construct and record prediction
         rec = ForwardPredictionRecord(
             prediction_id=str(uuid.uuid4())[:8],
             timestamp=float(epoch),
             symbol=self.symbol,
             model_version=self.model_version,
             market_state=market_state,
-            features_json=json.dumps({k: str(latest_feat[k]) for k in ["mom_bin", "streak_bin", "vol_bin", "accel_bin"] if k in latest_feat}),
-            runhigh_pred_prob=round(rh_pred, 4),
-            runlow_pred_prob=round(rl_pred, 4),
-            runhigh_ask=rh_ask,
-            runhigh_payout=rh_payout,
-            runlow_ask=rl_ask,
-            runlow_payout=rl_payout,
-            break_even_runhigh=round(be_rh, 4),
-            break_even_runlow=round(be_rl, 4),
-            ev_runhigh=round(ev_rh, 4),
-            ev_runlow=round(ev_rl, 4),
-            cons_ev_runhigh=round(cons_ev_rh, 4),
-            cons_ev_runlow=round(cons_ev_rl, 4),
+            features_json=json.dumps(feat_dict),
+            runhigh_pred_prob=round(rh_pred, 5) if rh_pred is not None else 0.0,
+            runlow_pred_prob=round(rl_pred, 5) if rl_pred is not None else 0.0,
+            runhigh_ask=round(rh_ask, 2) if rh_ask is not None else None,
+            runhigh_payout=round(rh_payout, 2) if rh_payout is not None else None,
+            runlow_ask=round(rl_ask, 2) if rl_ask is not None else None,
+            runlow_payout=round(rl_payout, 2) if rl_payout is not None else None,
+            break_even_runhigh=round(be_rh, 5) if be_rh is not None else None,
+            break_even_runlow=round(be_rl, 5) if be_rl is not None else None,
+            ev_runhigh=round(ev_rh, 4) if ev_rh is not None else None,
+            ev_runlow=round(ev_rl, 4) if ev_rl is not None else None,
+            cons_ev_runhigh=round(cons_ev_rh, 4) if cons_ev_rh is not None else None,
+            cons_ev_runlow=round(cons_ev_rl, 4) if cons_ev_rl is not None else None,
             decision=decision,
             rejection_reason=reason_str,
             target_direction=target_dir,
@@ -194,7 +299,10 @@ class ForwardObserver:
             outcome_status="PENDING",
             runhigh_win=None,
             runlow_win=None,
-            hypothetical_pnl=0.0
+            hypothetical_pnl=0.0,
+            execution_mode=self.mode,
+            model_id=self.model_artifact.model_id if self.model_artifact else "NONE",
+            feature_schema_version=FEATURE_SCHEMA_VERSION
         )
 
         self.journal.log_prediction(rec)
@@ -206,10 +314,12 @@ class ForwardObserver:
         self._running = True
         self._stop_event.clear()
 
-        print(f"=== STARTING FORWARD OBSERVATION MODE ({self.symbol}) ===")
-        print(f"Model Version: {self.model_version}")
-        print(f"Safety Directives: LIVE_EXECUTION_DISABLED = True (Zero buy orders)")
-        print(f"Session Duration: {self.duration_seconds}s | Quote Poll Interval: {self.quote_interval_seconds}s\n")
+        print(f"\n=== STARTING FORWARD OBSERVATION ({self.symbol}) ===")
+        print(f"Mode:              {self.mode}")
+        print(f"Model ID / Ver:    {self.model_version}")
+        print(f"Model Load Status: {self.model_status_code}")
+        print(f"Safety Guard:      LIVE_EXECUTION_DISABLED = True (Zero buy orders)")
+        print(f"Session Duration:  {self.duration_seconds}s | Quote Poll Interval: {self.quote_interval_seconds}s\n")
 
         # Create live tick streamer with callback into process_incoming_tick
         streamer = LiveTickStreamer(
@@ -225,7 +335,10 @@ class ForwardObserver:
             end_t = time.time() + self.duration_seconds
             while self._running and time.time() < end_t:
                 try:
-                    await recorder.record_quotes_session(duration_seconds=self.quote_interval_seconds * 2, interval_seconds=self.quote_interval_seconds)
+                    await recorder.record_quotes_session(
+                        duration_seconds=self.quote_interval_seconds * 2,
+                        interval_seconds=self.quote_interval_seconds
+                    )
                 except Exception:
                     pass
                 await asyncio.sleep(self.quote_interval_seconds)
@@ -238,6 +351,8 @@ class ForwardObserver:
             self._running = False
             quote_task.cancel()
             streamer.stop()
+            # Mark incomplete observations as OUTCOME_UNVERIFIED
+            self.journal.mark_incomplete_as_unverified(symbol=self.symbol)
 
         print("\n=== FORWARD OBSERVATION SESSION SUMMARY ===")
         metrics = self.journal.get_accuracy_metrics(symbol=self.symbol)
@@ -246,14 +361,18 @@ class ForwardObserver:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Deriv Forward Observation Service")
+    parser = argparse.ArgumentParser(description="Deriv Forward Observation Service (V1.5.3)")
     parser.add_argument("symbol", nargs="?", default="R_75", help="Asset symbol")
+    parser.add_argument("--mode", default="SHADOW", choices=["DATA_COLLECTION_ONLY", "SHADOW", "PAPER"], help="Observation execution mode")
+    parser.add_argument("--model", default=None, help="Path or ID of frozen model artifact")
     parser.add_argument("--duration", type=float, default=60.0, help="Observation duration in seconds")
     parser.add_argument("--interval", type=float, default=2.0, help="Quote polling interval in seconds")
     args = parser.parse_args()
 
     observer = ForwardObserver(
         symbol=args.symbol,
+        mode=args.mode,
+        model_path_or_id=args.model,
         duration_seconds=args.duration,
         quote_interval_seconds=args.interval
     )

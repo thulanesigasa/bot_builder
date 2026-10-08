@@ -52,11 +52,11 @@ SECTION C: STATISTICAL DISCOVERY & NEGATIVE CONTROLS
     Edge Survives Stride-5:      True
 
   Time-Series-Aware Negative Controls (Stage-by-Stage False Positive Audit):
-  - Stage 1 (Exploratory Discovery, z >= 2.0):   230 / 6722 | FPR: 3.42% [95% CI: 3.01%, 3.88%]
-  - Stage 2 (Confirmatory Holm p <= 0.05):       3 / 6722 | FPR: 0.04% [95% CI: 0.02%, 0.13%]
-  - Stage 3 (Out-of-Sample Validation Edge > 0): 103 / 230 | FPR: 44.78% [95% CI: 38.49%, 51.24%]
-  - Stage 4 (Untouched Holdout Confirmation):    1 / 230 | FPR: 0.43% [95% CI: 0.08%, 2.42%]
-  - Stage 5 (Full Tradability Gate):             0 / 230 | FPR: 0.00% [95% CI: 0.00%, 1.64%]
+  - Stage 1 (Exploratory Discovery, z >= 2.0):   213 / 6744 | FPR: 3.16% [95% CI: 2.77%, 3.60%]
+  - Stage 2 (Confirmatory Holm p <= 0.05):       9 / 6744 | FPR: 0.13% [95% CI: 0.07%, 0.25%]
+  - Stage 3 (Out-of-Sample Validation Edge > 0): 57 / 213 | FPR: 26.76% [95% CI: 21.27%, 33.08%]
+  - Stage 4 (Untouched Holdout Confirmation):    0 / 213 | FPR: 0.00% [95% CI: 0.00%, 1.77%]
+  - Stage 5 (Full Tradability Gate):             0 / 213 | FPR: 0.00% [95% CI: 0.00%, 1.77%]
   Negative Control Verdict:   PASSED (Zero false edges survived the full tradability gate)
 
 SECTION D: PROBABILITY ESTIMATION & CALIBRATION

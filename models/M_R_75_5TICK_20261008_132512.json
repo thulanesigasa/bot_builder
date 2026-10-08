@@ -1,0 +1,164 @@
+{
+  "model_id": "M_R_75_5TICK_20261008_132512",
+  "model_version": "1.5.3",
+  "created_at_utc": "2026-10-08T13:25:12.253393+00:00",
+  "training_dataset_id": "R_75_master.csv",
+  "dataset_checksum": "8273d215bf93f46d3e12d0d82e46f1ebfca59138180ebfcf8cda7d4a9bedd7a3",
+  "market_symbol": "R_75",
+  "contract_family": "RUNHIGH_RUNLOW",
+  "contract_duration": 5,
+  "contract_duration_unit": "t",
+  "outcome_definition_version": "1.5",
+  "feature_schema_version": "1.5.3",
+  "feature_names": [
+    "mom_bin",
+    "streak_bin",
+    "vol_bin",
+    "accel_bin"
+  ],
+  "feature_ordering": [
+    "mom_bin",
+    "streak_bin",
+    "vol_bin",
+    "accel_bin"
+  ],
+  "model_type": "EMPIRICAL_STATE_CONDITIONAL",
+  "model_parameters": {
+    "base_rate_runhigh": 0.03277,
+    "base_rate_runlow": 0.02973,
+    "total_states_discovered": 23,
+    "state_tables": {
+      "mom_bin=STRONG_BEAR & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
+        "sample_count": 7636,
+        "runhigh_wins": 274,
+        "runlow_wins": 233
+      },
+      "mom_bin=STRONG_BEAR & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 8343,
+        "runhigh_wins": 249,
+        "runlow_wins": 245
+      },
+      "mom_bin=STRONG_BULL & streak_bin=HIGH_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 3445,
+        "runhigh_wins": 108,
+        "runlow_wins": 97
+      },
+      "mom_bin=STRONG_BULL & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 7762,
+        "runhigh_wins": 250,
+        "runlow_wins": 250
+      },
+      "mom_bin=STRONG_BULL & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
+        "sample_count": 8519,
+        "runhigh_wins": 293,
+        "runlow_wins": 261
+      },
+      "mom_bin=STRONG_BULL & streak_bin=HIGH_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
+        "sample_count": 222,
+        "runhigh_wins": 9,
+        "runlow_wins": 4
+      },
+      "mom_bin=STRONG_BEAR & streak_bin=HIGH_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
+        "sample_count": 3430,
+        "runhigh_wins": 94,
+        "runlow_wins": 91
+      },
+      "mom_bin=STRONG_BEAR & streak_bin=HIGH_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 466,
+        "runhigh_wins": 14,
+        "runlow_wins": 9
+      },
+      "mom_bin=STRONG_BEAR & streak_bin=EXTREME_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
+        "sample_count": 873,
+        "runhigh_wins": 30,
+        "runlow_wins": 25
+      },
+      "mom_bin=STRONG_BEAR & streak_bin=EXTREME_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 410,
+        "runhigh_wins": 11,
+        "runlow_wins": 13
+      },
+      "mom_bin=STRONG_BULL & streak_bin=HIGH_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
+        "sample_count": 413,
+        "runhigh_wins": 16,
+        "runlow_wins": 15
+      },
+      "mom_bin=STRONG_BULL & streak_bin=EXTREME_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 980,
+        "runhigh_wins": 37,
+        "runlow_wins": 26
+      },
+      "mom_bin=STRONG_BULL & streak_bin=EXTREME_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
+        "sample_count": 434,
+        "runhigh_wins": 22,
+        "runlow_wins": 11
+      },
+      "mom_bin=STRONG_BEAR & streak_bin=HIGH_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 201,
+        "runhigh_wins": 7,
+        "runlow_wins": 3
+      },
+      "mom_bin=MILD_BEAR & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 4,
+        "runhigh_wins": 0,
+        "runlow_wins": 0
+      },
+      "mom_bin=STRONG_BEAR & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=NEUTRAL_ACCEL": {
+        "sample_count": 1,
+        "runhigh_wins": 0,
+        "runlow_wins": 0
+      },
+      "mom_bin=STRONG_BULL & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=NEUTRAL_ACCEL": {
+        "sample_count": 1,
+        "runhigh_wins": 0,
+        "runlow_wins": 0
+      },
+      "mom_bin=STRONG_BEAR & streak_bin=HIGH_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
+        "sample_count": 4,
+        "runhigh_wins": 0,
+        "runlow_wins": 0
+      },
+      "mom_bin=MILD_BULL & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
+        "sample_count": 4,
+        "runhigh_wins": 0,
+        "runlow_wins": 0
+      },
+      "mom_bin=MILD_BULL & streak_bin=HIGH_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 1,
+        "runhigh_wins": 0,
+        "runlow_wins": 0
+      },
+      "mom_bin=MILD_BEAR & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
+        "sample_count": 2,
+        "runhigh_wins": 0,
+        "runlow_wins": 0
+      },
+      "mom_bin=MILD_BULL & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 1,
+        "runhigh_wins": 0,
+        "runlow_wins": 0
+      },
+      "mom_bin=STRONG_BULL & streak_bin=HIGH_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
+        "sample_count": 1,
+        "runhigh_wins": 0,
+        "runlow_wins": 0
+      }
+    }
+  },
+  "calibration_parameters": {
+    "method": "BAYESIAN_EMPIRICAL_SHRINKAGE",
+    "shrinkage_prior_weight": 50.0,
+    "confidence_level": 0.95
+  },
+  "training_sample_count": 25891,
+  "validation_sample_count": 8630,
+  "holdout_sample_count": 8632,
+  "validation_metrics": {
+    "brier_score_runhigh": 0.03169,
+    "brier_score_runlow": 0.02885,
+    "relative_lift_max": 0.0
+  },
+  "statistical_status": "EMPIRICAL_BASELINE",
+  "approval_status": "RESEARCH_ONLY",
+  "model_hash": "27198037213862fa397f73e6722b595f21f3c26dfd46a50368770db60fc42cd8"
+}

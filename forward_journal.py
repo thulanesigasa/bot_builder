@@ -1,4 +1,4 @@
-"""Forward Prediction Journal and Calibration Tracking Engine (V1.5.2).
+"""Forward Prediction Journal and Calibration Tracking Engine (V1.5.3).
 
 Logs every forward market observation, frozen model conditional probability estimate,
 synchronized proposal quote, hypothetical decision, and subsequent tick outcomes without lookahead.
@@ -9,6 +9,7 @@ Evaluates out-of-sample forward prediction accuracy:
 - Predicted vs Realized Win Rates
 - Hypothetical PnL Attribution
 - Automatic resolution of 5-tick contract windows (Entry i+1 to Expiry i+6)
+- Explicit OUTCOME_UNVERIFIED handling for incomplete sequences or data gaps
 """
 import collections
 import contextlib
@@ -39,29 +40,32 @@ class ForwardPredictionRecord:
     features_json: str
     runhigh_pred_prob: float
     runlow_pred_prob: float
-    runhigh_ask: float
-    runhigh_payout: float
-    runlow_ask: float
-    runlow_payout: float
-    break_even_runhigh: float
-    break_even_runlow: float
-    ev_runhigh: float
-    ev_runlow: float
-    cons_ev_runhigh: float
-    cons_ev_runlow: float
-    decision: str  # 'TRADE' or 'NO_TRADE'
-    rejection_reason: str
-    target_direction: str  # 'RUNHIGH', 'RUNLOW', or 'NONE'
-    signal_epoch: int
-    signal_price: float
+    runhigh_ask: Optional[float] = None
+    runhigh_payout: Optional[float] = None
+    runlow_ask: Optional[float] = None
+    runlow_payout: Optional[float] = None
+    break_even_runhigh: Optional[float] = None
+    break_even_runlow: Optional[float] = None
+    ev_runhigh: Optional[float] = None
+    ev_runlow: Optional[float] = None
+    cons_ev_runhigh: Optional[float] = None
+    cons_ev_runlow: Optional[float] = None
+    decision: str = "NO_TRADE"  # 'TRADE' or 'NO_TRADE'
+    rejection_reason: str = ""
+    target_direction: str = "NONE"  # 'RUNHIGH', 'RUNLOW', or 'NONE'
+    signal_epoch: int = 0
+    signal_price: float = 0.0
     entry_epoch: Optional[int] = None
     expiry_epoch: Optional[int] = None
     forward_prices_json: str = "[]"
     forward_ticks_count: int = 0
-    outcome_status: str = "PENDING"  # 'PENDING', 'RESOLVED', 'EXPIRED'
+    outcome_status: str = "PENDING"  # 'PENDING', 'RESOLVED', 'OUTCOME_UNVERIFIED', 'EXPIRED'
     runhigh_win: Optional[float] = None
     runlow_win: Optional[float] = None
     hypothetical_pnl: float = 0.0
+    execution_mode: str = "SHADOW"  # 'DATA_COLLECTION_ONLY', 'SHADOW', 'PAPER'
+    model_id: str = ""
+    feature_schema_version: str = "1.5.3"
 
 
 class ForwardPredictionJournal:
@@ -93,16 +97,16 @@ class ForwardPredictionJournal:
                     features_json TEXT,
                     runhigh_pred_prob REAL NOT NULL,
                     runlow_pred_prob REAL NOT NULL,
-                    runhigh_ask REAL NOT NULL,
-                    runhigh_payout REAL NOT NULL,
-                    runlow_ask REAL NOT NULL,
-                    runlow_payout REAL NOT NULL,
-                    break_even_runhigh REAL NOT NULL,
-                    break_even_runlow REAL NOT NULL,
-                    ev_runhigh REAL NOT NULL,
-                    ev_runlow REAL NOT NULL,
-                    cons_ev_runhigh REAL NOT NULL,
-                    cons_ev_runlow REAL NOT NULL,
+                    runhigh_ask REAL,
+                    runhigh_payout REAL,
+                    runlow_ask REAL,
+                    runlow_payout REAL,
+                    break_even_runhigh REAL,
+                    break_even_runlow REAL,
+                    ev_runhigh REAL,
+                    ev_runlow REAL,
+                    cons_ev_runhigh REAL,
+                    cons_ev_runlow REAL,
                     decision TEXT NOT NULL,
                     rejection_reason TEXT NOT NULL,
                     target_direction TEXT NOT NULL,
@@ -116,9 +120,23 @@ class ForwardPredictionJournal:
                     runhigh_win REAL,
                     runlow_win REAL,
                     hypothetical_pnl REAL NOT NULL DEFAULT 0.0,
+                    execution_mode TEXT DEFAULT 'SHADOW',
+                    model_id TEXT DEFAULT '',
+                    feature_schema_version TEXT DEFAULT '1.5.3',
                     created_at TEXT NOT NULL
                 )
             """)
+
+            # Schema migration checks
+            cur = conn.execute("PRAGMA table_info(forward_predictions)")
+            cols = [r["name"] for r in cur.fetchall()]
+            if "execution_mode" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN execution_mode TEXT DEFAULT 'SHADOW'")
+            if "model_id" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN model_id TEXT DEFAULT ''")
+            if "feature_schema_version" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN feature_schema_version TEXT DEFAULT '1.5.3'")
+
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_fwd_status
                 ON forward_predictions (outcome_status, timestamp)
@@ -126,7 +144,7 @@ class ForwardPredictionJournal:
             conn.commit()
 
     def log_prediction(self, record: ForwardPredictionRecord) -> str:
-        """Stores a new shadow prediction record."""
+        """Stores a new forward observation / prediction record."""
         created_at = datetime.now(timezone.utc).isoformat()
         with self._get_conn() as conn:
             conn.execute("""
@@ -138,8 +156,9 @@ class ForwardPredictionJournal:
                     cons_ev_runhigh, cons_ev_runlow, decision, rejection_reason,
                     target_direction, signal_epoch, signal_price, entry_epoch,
                     expiry_epoch, forward_prices_json, forward_ticks_count,
-                    outcome_status, runhigh_win, runlow_win, hypothetical_pnl, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    outcome_status, runhigh_win, runlow_win, hypothetical_pnl,
+                    execution_mode, model_id, feature_schema_version, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 record.prediction_id, record.timestamp, record.symbol, record.model_version,
                 record.market_state, record.features_json, record.runhigh_pred_prob,
@@ -151,13 +170,14 @@ class ForwardPredictionJournal:
                 record.signal_price, record.entry_epoch, record.expiry_epoch,
                 record.forward_prices_json, record.forward_ticks_count,
                 record.outcome_status, record.runhigh_win, record.runlow_win,
-                record.hypothetical_pnl, created_at
+                record.hypothetical_pnl, record.execution_mode, record.model_id,
+                record.feature_schema_version, created_at
             ))
             conn.commit()
         return record.prediction_id
 
     def ingest_forward_tick(self, epoch: int, price: float, symbol: str = "R_75"):
-        """Feeds a newly arrived tick to update pending predictions forward windows.
+        """Feeds a newly arrived tick to update pending predictions' forward windows.
         
         Lifecycle:
         - When an observation has 0 forward ticks, first tick is Entry Spot S_0 (i+1).
@@ -198,7 +218,6 @@ class ForwardPredictionJournal:
                     """, (json.dumps(prices), count, pid))
                 else:
                     # 6 ticks accumulated: S_0, S_1, S_2, S_3, S_4, S_5
-                    s0 = prices[0]
                     # Evaluate RUNHIGH: S_1 > S_0, S_2 > S_1, S_3 > S_2, S_4 > S_3, S_5 > S_4
                     rh_win = 1.0 if all(prices[k] > prices[k - 1] for k in range(1, 6)) else 0.0
                     # Evaluate RUNLOW: S_1 < S_0, S_2 < S_1, S_3 < S_2, S_4 < S_3, S_5 < S_4
@@ -207,11 +226,16 @@ class ForwardPredictionJournal:
                     pnl = 0.0
                     td = row["target_direction"]
                     dec = row["decision"]
-                    if dec == "TRADE":
-                        if td == "RUNHIGH":
-                            pnl = (row["runhigh_payout"] - row["runhigh_ask"]) if rh_win == 1.0 else -row["runhigh_ask"]
-                        elif td == "RUNLOW":
-                            pnl = (row["runlow_payout"] - row["runlow_ask"]) if rl_win == 1.0 else -row["runlow_ask"]
+                    rh_ask = row["runhigh_ask"]
+                    rh_pay = row["runhigh_payout"]
+                    rl_ask = row["runlow_ask"]
+                    rl_pay = row["runlow_payout"]
+
+                    if dec in ("TRADE", "PAPER_TRADE"):
+                        if td == "RUNHIGH" and rh_pay is not None and rh_ask is not None:
+                            pnl = (rh_pay - rh_ask) if rh_win == 1.0 else -rh_ask
+                        elif td == "RUNLOW" and rl_pay is not None and rl_ask is not None:
+                            pnl = (rl_pay - rl_ask) if rl_win == 1.0 else -rl_ask
 
                     conn.execute("""
                         UPDATE forward_predictions
@@ -222,6 +246,24 @@ class ForwardPredictionJournal:
                         WHERE prediction_id = ?
                     """, (json.dumps(prices), count, rh_win, rl_win, round(pnl, 2), epoch, pid))
 
+            conn.commit()
+
+    def mark_incomplete_as_unverified(self, symbol: Optional[str] = None):
+        """Marks any dangling or incomplete pending predictions as OUTCOME_UNVERIFIED.
+        Guarantees that partial tick histories are NEVER counted as trading losses.
+        """
+        with self._get_conn() as conn:
+            where_clause = "WHERE outcome_status = 'PENDING'"
+            params = ()
+            if symbol:
+                where_clause += " AND symbol = ?"
+                params = (symbol,)
+
+            conn.execute(f"""
+                UPDATE forward_predictions
+                SET outcome_status = 'OUTCOME_UNVERIFIED'
+                {where_clause}
+            """, params)
             conn.commit()
 
     def get_accuracy_metrics(self, symbol: Optional[str] = None) -> Dict[str, Any]:
@@ -237,65 +279,83 @@ class ForwardPredictionJournal:
             """, params)
             rows = cur.fetchall()
 
+        if not rows:
+            return {
+                "total_predictions": 0,
+                "resolved_predictions": 0,
+                "unverified_predictions": 0,
+                "pending_predictions": 0,
+                "brier_score_runhigh": None,
+                "brier_score_runlow": None,
+                "runhigh_brier_score": None,
+                "runlow_brier_score": None,
+                "runhigh_observed_win_rate": None,
+                "runlow_observed_win_rate": None,
+                "realized_runhigh_win_rate": None,
+                "realized_runlow_win_rate": None,
+                "cumulative_pnl": 0.0
+            }
+
         total = len(rows)
         resolved = [r for r in rows if r["outcome_status"] == "RESOLVED" and r["runhigh_win"] is not None]
-        pending = sum(1 for r in rows if r["outcome_status"] == "PENDING")
+        unverified = len([r for r in rows if r["outcome_status"] == "OUTCOME_UNVERIFIED"])
+        pending = len([r for r in rows if r["outcome_status"] == "PENDING"])
 
         if not resolved:
             return {
                 "total_predictions": total,
                 "resolved_predictions": 0,
+                "unverified_predictions": unverified,
                 "pending_predictions": pending,
+                "brier_score_runhigh": None,
+                "brier_score_runlow": None,
                 "runhigh_brier_score": None,
-                "runhigh_observed_win_rate": None,
-                "runhigh_mean_predicted_prob": None,
                 "runlow_brier_score": None,
+                "runhigh_observed_win_rate": None,
                 "runlow_observed_win_rate": None,
-                "runlow_mean_predicted_prob": None,
-                "total_hypothetical_pnl": 0.0,
-                "status": "AWAITING_RESOLUTIONS"
+                "realized_runhigh_win_rate": None,
+                "realized_runlow_win_rate": None,
+                "cumulative_pnl": 0.0
             }
 
         rh_preds = np.array([r["runhigh_pred_prob"] for r in resolved])
-        rh_acts = np.array([r["runhigh_win"] for r in resolved])
         rl_preds = np.array([r["runlow_pred_prob"] for r in resolved])
-        rl_acts = np.array([r["runlow_win"] for r in resolved])
+        rh_wins = np.array([r["runhigh_win"] for r in resolved])
+        rl_wins = np.array([r["runlow_win"] for r in resolved])
+        pnls = [r["hypothetical_pnl"] for r in resolved]
 
-        rh_brier = float(np.mean((rh_preds - rh_acts) ** 2))
-        rl_brier = float(np.mean((rl_preds - rl_acts) ** 2))
-        total_pnl = sum(r["hypothetical_pnl"] for r in resolved)
+        brier_rh = float(np.mean((rh_preds - rh_wins) ** 2))
+        brier_rl = float(np.mean((rl_preds - rl_wins) ** 2))
+        win_rate_rh = float(np.mean(rh_wins))
+        win_rate_rl = float(np.mean(rl_wins))
+        cum_pnl = float(sum(pnls))
 
         return {
             "total_predictions": total,
             "resolved_predictions": len(resolved),
+            "unverified_predictions": unverified,
             "pending_predictions": pending,
-            "runhigh_brier_score": round(rh_brier, 6),
-            "runhigh_observed_win_rate": round(float(np.mean(rh_acts)), 4),
-            "runhigh_mean_predicted_prob": round(float(np.mean(rh_preds)), 4),
-            "runlow_brier_score": round(rl_brier, 6),
-            "runlow_observed_win_rate": round(float(np.mean(rl_acts)), 4),
-            "runlow_mean_predicted_prob": round(float(np.mean(rl_preds)), 4),
-            "total_hypothetical_pnl": round(total_pnl, 2),
-            "status": "EVALUATED"
+            "brier_score_runhigh": round(brier_rh, 5),
+            "brier_score_runlow": round(brier_rl, 5),
+            "runhigh_brier_score": round(brier_rh, 5),
+            "runlow_brier_score": round(brier_rl, 5),
+            "runhigh_observed_win_rate": round(win_rate_rh, 5),
+            "runlow_observed_win_rate": round(win_rate_rl, 5),
+            "realized_runhigh_win_rate": round(win_rate_rh, 5),
+            "realized_runlow_win_rate": round(win_rate_rl, 5),
+            "cumulative_pnl": round(cum_pnl, 2)
         }
 
-    def inspect_recent(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """Returns the most recent forward prediction records."""
+    def inspect_recent(self, limit: int = 10, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Returns recent prediction records in a stable, credentials-safe format."""
         with self._get_conn() as conn:
-            cur = conn.execute("""
+            where_clause = "WHERE symbol = ?" if symbol else ""
+            params = (symbol, limit) if symbol else (limit,)
+            cur = conn.execute(f"""
                 SELECT * FROM forward_predictions
-                ORDER BY timestamp DESC LIMIT ?
-            """, (limit,))
-            return [dict(r) for r in cur.fetchall()]
-
-
-def main():
-    journal = ForwardPredictionJournal()
-    print("=== FORWARD PREDICTION JOURNAL STATUS ===")
-    metrics = journal.get_accuracy_metrics()
-    for k, v in metrics.items():
-        print(f"  {k}: {v}")
-
-
-if __name__ == "__main__":
-    main()
+                {where_clause}
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, params)
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
