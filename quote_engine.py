@@ -62,6 +62,7 @@ class QuoteEngine:
         app_id: str = "1089",
         symbol: str = "R_75",
         db_path: Optional[str] = None,
+        quote_db: Optional[Any] = None,
         max_freshness_seconds: float = 60.0,
         allow_benchmark_fallback: bool = True
     ):
@@ -77,11 +78,14 @@ class QuoteEngine:
             "DOWN": None
         }
 
-        try:
-            from quote_database import QuoteDatabase
-            self.quote_db = QuoteDatabase(db_path=db_path)
-        except Exception:
-            self.quote_db = None
+        if quote_db is not None:
+            self.quote_db = quote_db
+        else:
+            try:
+                from quote_database import QuoteDatabase
+                self.quote_db = QuoteDatabase(db_path=db_path)
+            except Exception:
+                self.quote_db = None
 
         # If explicit ratios are provided, use them; otherwise use verified benchmark
         if default_up_payout_ratio is not None and default_down_payout_ratio is not None:

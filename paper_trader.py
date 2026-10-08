@@ -1,14 +1,20 @@
-"""Paper Trading Mode for Deriv 5-Tick RUNHIGH / RUNLOW (Only Ups / Only Downs).
+"""Paper Trading Mode for Deriv 5-Tick RUNHIGH / RUNLOW (Only Ups / Only Downs) (V1.5.2).
 
 CRITICAL ARCHITECTURAL DIRECTIVE (NO LIVE MONEY):
 - This engine NEVER calls purchase/buy endpoints.
 - Simulates paper trade evaluation using real market prices, proposals, and execution lifecycles.
+- Strictly distinguishes between:
+  1. HISTORICAL_RECONSTRUCTION (Offline historical backtesting)
+  2. SHADOW_PREDICTION (Forward observation without hypothetical execution)
+  3. FORWARD_PAPER_TRADE (Live synchronized paper execution)
+  4. DEMO_ACCOUNT_EXECUTION (Isolated virtual demo test harness)
 - Records predicted probabilities vs real-world outcomes for post-hoc edge verification.
 """
 from dataclasses import dataclass, asdict
 from typing import Optional, List, Dict, Any, Tuple
 import os
 import json
+import uuid
 import numpy as np
 import pandas as pd
 
@@ -31,7 +37,7 @@ class PaperTradeRecord:
     profit_if_traded: float
     cumulative_PnL: float
     status_reason: str = "NORMAL"
-    # V1.5 Extended Telemetry Fields
+    # Extended Telemetry Fields
     market_state: str = ""
     probability_uncertainty: Tuple[float, float] = (0.0, 0.0)
     actual_proposal_price: float = 2.0
@@ -39,6 +45,10 @@ class PaperTradeRecord:
     conservative_expected_value: float = 0.0
     simulated_entry_timestamp: Optional[int] = None
     rejection_reason: str = ""
+    # V1.5.2 Provenance & Execution Mode Fields
+    signal_id: str = ""
+    trade_mode: str = "FORWARD_PAPER_TRADE"  # HISTORICAL_RECONSTRUCTION, SHADOW_PREDICTION, FORWARD_PAPER_TRADE, DEMO_ACCOUNT_EXECUTION
+    settlement_certainty: str = "CERTAIN"    # CERTAIN, UNCERTAIN_SETTLEMENT, INSUFFICIENT_FORWARD_TICKS
 
     @property
     def selected_direction(self) -> str:
@@ -88,7 +98,10 @@ class PaperTrader:
         signal_idx: int = 0,
         market_state: str = "",
         uncertainty: Optional[Tuple[float, float]] = None,
-        conservative_ev: Optional[float] = None
+        conservative_ev: Optional[float] = None,
+        trade_mode: str = "FORWARD_PAPER_TRADE",
+        is_quote_stale: bool = False,
+        has_data_gap: bool = False
     ) -> PaperTradeRecord:
         """Evaluates whether an observed state qualifies for a paper trade and resolves its forward outcome.
         
@@ -100,9 +113,11 @@ class PaperTrader:
         - is_calibrated is True
         - is_validated is True
         - is_holdout_passed is True
-        - Quote is available
-        Otherwise: records NO_TRADE.
+        - Quote is available & fresh
+        - No market data gaps
+        Otherwise: records NO_TRADE with explicit taxonomic reason.
         """
+        sig_id = str(uuid.uuid4())[:8]
         sig_norm = signal.upper()
         dir_key = "UP" if sig_norm in ("UP", "RUNHIGH", "RISE") else ("DOWN" if sig_norm in ("DOWN", "RUNLOW", "FALL") else None)
         contract_type = "RUNHIGH" if dir_key == "UP" else ("RUNLOW" if dir_key == "DOWN" else "NONE")
@@ -125,7 +140,10 @@ class PaperTrader:
                 status_reason="NO_SIGNAL",
                 market_state=market_state,
                 probability_uncertainty=(0.0, 0.0),
-                rejection_reason="NO_SIGNAL"
+                rejection_reason="NO_SIGNAL",
+                signal_id=sig_id,
+                trade_mode=trade_mode,
+                settlement_certainty="CERTAIN"
             )
             self.records.append(rec)
             return rec
@@ -148,7 +166,10 @@ class PaperTrader:
                 status_reason="QUOTE_UNAVAILABLE",
                 market_state=market_state,
                 probability_uncertainty=ci_bounds,
-                rejection_reason="QUOTE_UNAVAILABLE"
+                rejection_reason="QUOTE_UNAVAILABLE",
+                signal_id=sig_id,
+                trade_mode=trade_mode,
+                settlement_certainty="CERTAIN"
             )
             self.records.append(rec)
             return rec
@@ -159,8 +180,12 @@ class PaperTrader:
         ev = (estimated_prob * payout) - stake
         cons_ev = conservative_ev if conservative_ev is not None else ((ci_bounds[0] * payout) - stake)
 
-        # Multi-gate paper trade eligibility
+        # Multi-gate paper trade eligibility with taxonomic reasons
         reasons = []
+        if is_quote_stale:
+            reasons.append("QUOTE_STALE")
+        if has_data_gap:
+            reasons.append("MARKET_DATA_GAP")
         if estimated_prob <= be_prob:
             reasons.append("PROB_BELOW_BREAK_EVEN")
         if ev <= self.min_required_ev:
@@ -169,33 +194,48 @@ class PaperTrader:
             reasons.append("NEGATIVE_CONSERVATIVE_EV")
         if not is_calibrated:
             reasons.append("UNVERIFIED_CALIBRATION")
+            reasons.append("MODEL_UNCALIBRATED")
         if not is_validated:
             reasons.append("FAILED_VALIDATION")
         if not is_holdout_passed:
             reasons.append("FAILED_HOLDOUT")
+        if not is_validated or not is_holdout_passed:
+            reasons.append("NO_VALIDATED_EDGE")
 
-        can_trade = len(reasons) == 0
+        # Deduplicate reasons while preserving order
+        seen_reasons = set()
+        clean_reasons = []
+        for r in reasons:
+            if r not in seen_reasons:
+                seen_reasons.add(r)
+                clean_reasons.append(r)
+
+        can_trade = len(clean_reasons) == 0
         decision = "PAPER_TRADE" if can_trade else "NO_TRADE"
-        reason_str = "VALIDATED_EDGE" if can_trade else ";".join(reasons)
+        reason_str = "VALIDATED_EDGE" if can_trade else ";".join(clean_reasons)
 
         # Resolve forward outcome if prices window is provided (at least 7 ticks from signal: i to i+6)
         actual_outcome = None
         profit_if_traded = 0.0
         entry_timestamp = epoch + 1
+        certainty = "CERTAIN"
 
-        if prices_window is not None and len(prices_window) >= signal_idx + 7:
-            prices_arr = np.array(prices_window, dtype=float)
-            outcome_res = self.contract_model.evaluate_single_trade(
-                prices=prices_arr,
-                epochs=np.arange(len(prices_arr)),
-                signal_idx=signal_idx,
-                contract_type=contract_type
-            )
-            if outcome_res is not None:
-                actual_outcome = 1.0 if outcome_res.is_win else 0.0
-                if can_trade:
-                    profit_if_traded = (payout - stake) if outcome_res.is_win else -stake
-                    self.cumulative_pnl += profit_if_traded
+        if prices_window is not None:
+            if len(prices_window) >= signal_idx + 7:
+                prices_arr = np.array(prices_window, dtype=float)
+                outcome_res = self.contract_model.evaluate_single_trade(
+                    prices=prices_arr,
+                    epochs=np.arange(len(prices_arr)),
+                    signal_idx=signal_idx,
+                    contract_type=contract_type
+                )
+                if outcome_res is not None:
+                    actual_outcome = 1.0 if outcome_res.is_win else 0.0
+                    if can_trade:
+                        profit_if_traded = (payout - stake) if outcome_res.is_win else -stake
+                        self.cumulative_pnl += profit_if_traded
+            else:
+                certainty = "INSUFFICIENT_FORWARD_TICKS"
 
         rec = PaperTradeRecord(
             timestamp=epoch,
@@ -217,11 +257,13 @@ class PaperTrader:
             total_payout=payout,
             conservative_expected_value=round(cons_ev, 4),
             simulated_entry_timestamp=entry_timestamp,
-            rejection_reason=reason_str
+            rejection_reason=reason_str,
+            signal_id=sig_id,
+            trade_mode=trade_mode,
+            settlement_certainty=certainty
         )
         self.records.append(rec)
         return rec
-
 
     def export_journal(self, file_path: str):
         """Exports paper trades to a CSV file."""

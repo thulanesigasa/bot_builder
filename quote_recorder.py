@@ -1,8 +1,8 @@
-"""Dedicated Live and Historical Deriv Proposal Quote Recorder for RUNHIGH / RUNLOW.
+"""Dedicated Live and Historical Deriv Proposal Quote Recorder for RUNHIGH / RUNLOW (V1.5.2).
 
 Collects real-time proposal responses from Deriv WebSocket API without purchasing contracts.
 Stores detailed quote records for both RUNHIGH (Only Ups) and RUNLOW (Only Downs) contracts,
-capturing latency, exact payout amounts, ask prices, proposal IDs, and collection status.
+capturing latency, exact payout amounts, ask prices, proposal IDs, session IDs, and collection status.
 
 Usage:
     python quote_recorder.py [symbol] [--duration seconds] [--interval seconds] [--app-id id]
@@ -15,10 +15,13 @@ import json
 import os
 import sys
 import time
+import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Tuple, List
 import websockets
+
+from health_monitor import GLOBAL_HEALTH_MONITOR
 
 
 DEFAULT_APP_ID = "1089"
@@ -43,6 +46,7 @@ class ProposalRecord:
     quote_latency_ms: float
     collection_status: str     # 'QUOTE_AVAILABLE' or 'QUOTE_UNAVAILABLE'
     api_response_metadata: str = ""
+    session_id: str = ""
 
     @property
     def ask_price(self) -> float:
@@ -68,6 +72,7 @@ class DerivQuoteRecorder:
         self.app_id = app_id
         self.ws_url = ws_url or PRIMARY_WS_URL
         self.default_stake = default_stake
+        self.session_id = str(uuid.uuid4())[:8]
         self.records: List[ProposalRecord] = []
         try:
             from quote_database import QuoteDatabase
@@ -112,7 +117,7 @@ class DerivQuoteRecorder:
                     "spot": p.get("spot"),
                     "spot_time": p.get("spot_time")
                 })
-                return ProposalRecord(
+                rec = ProposalRecord(
                     request_timestamp=req_time,
                     response_timestamp=resp_time,
                     market_symbol=self.symbol,
@@ -127,11 +132,14 @@ class DerivQuoteRecorder:
                     quote_source="live_proposal",
                     quote_latency_ms=round(latency_ms, 2),
                     collection_status="QUOTE_AVAILABLE",
-                    api_response_metadata=meta
+                    api_response_metadata=meta,
+                    session_id=self.session_id
                 )
+                GLOBAL_HEALTH_MONITOR.record_quote(success=True, latency_ms=latency_ms)
+                return rec
             else:
                 err_msg = data.get("error", {}).get("message", "Proposal error")
-                return ProposalRecord(
+                rec = ProposalRecord(
                     request_timestamp=req_time,
                     response_timestamp=resp_time,
                     market_symbol=self.symbol,
@@ -146,12 +154,15 @@ class DerivQuoteRecorder:
                     quote_source="live_proposal",
                     quote_latency_ms=round(latency_ms, 2),
                     collection_status="QUOTE_UNAVAILABLE",
-                    api_response_metadata=json.dumps({"error": err_msg})
+                    api_response_metadata=json.dumps({"error": err_msg}),
+                    session_id=self.session_id
                 )
+                GLOBAL_HEALTH_MONITOR.record_quote(success=False, latency_ms=latency_ms)
+                return rec
         except Exception as e:
             resp_time = time.time()
             latency_ms = (resp_time - req_time) * 1000.0
-            return ProposalRecord(
+            rec = ProposalRecord(
                 request_timestamp=req_time,
                 response_timestamp=resp_time,
                 market_symbol=self.symbol,
@@ -166,8 +177,11 @@ class DerivQuoteRecorder:
                 quote_source="live_proposal",
                 quote_latency_ms=round(latency_ms, 2),
                 collection_status="QUOTE_UNAVAILABLE",
-                api_response_metadata=json.dumps({"exception": str(e)})
+                api_response_metadata=json.dumps({"exception": str(e)}),
+                session_id=self.session_id
             )
+            GLOBAL_HEALTH_MONITOR.record_quote(success=False, latency_ms=latency_ms)
+            return rec
 
     async def record_quotes_session(
         self,
@@ -180,8 +194,8 @@ class DerivQuoteRecorder:
         end_time = time.time() + duration_seconds
 
         endpoints = [
-            self.ws_url,
-            f"{FALLBACK_WS_URL}?app_id={self.app_id}"
+            f"{FALLBACK_WS_URL}?app_id={self.app_id}",
+            self.ws_url
         ]
 
         active_ws = None
