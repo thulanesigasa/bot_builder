@@ -132,6 +132,10 @@ class ForwardObserver:
         self.predictions_persisted_count: int = 0
         self.skipped_reasons: Dict[str, int] = collections.defaultdict(int)
 
+        # Historical Warmup & Live Anchoring State (V1.6.4 Part E Section 11)
+        self.first_live_epoch: Optional[int] = None
+        self.prediction_cutoff_active: bool = False
+
         # Model Manager & Frozen Model Loading
         self.model_manager = ModelManager()
         self.model_artifact: Optional[ModelArtifact] = None
@@ -273,6 +277,9 @@ class ForwardObserver:
             "model_version": self.model_version,
             "predictions_generated": self.predictions_generated_count,
             "predictions_persisted": self.predictions_persisted_count,
+            "active_pending_count": getattr(getattr(self.journal, "resolver", None), "active_pending_count", 0),
+            "prediction_cutoff_active": self.prediction_cutoff_active,
+            "first_live_epoch": self.first_live_epoch,
             "skipped_reasons": dict(self.skipped_reasons),
             "current_blocker": blocker,
             "last_pipeline_event": self.last_pipeline_event,
@@ -332,13 +339,28 @@ class ForwardObserver:
         self.journal.ingest_forward_tick(epoch=epoch, price=price, symbol=self.symbol)
         GLOBAL_HEALTH_MONITOR.record_tick(epoch=epoch, latency_ms=tick.latency_ms)
 
+        # 1b. First live tick boundary anchoring (V1.6.4 Part E Section 11)
+        if self.first_live_epoch is None:
+            self.first_live_epoch = epoch
+            if self.tick_history:
+                # Strictly filter: historical warmup must precede the first live tick boundary
+                self.tick_history = [t for t in self.tick_history if t["epoch"] < epoch]
+                seen = set()
+                deduped = []
+                for t in sorted(self.tick_history, key=lambda x: x["epoch"]):
+                    if t["epoch"] not in seen:
+                        seen.add(t["epoch"])
+                        deduped.append(t)
+                self.tick_history = deduped
+                self.historical_warmup_ticks = len(self.tick_history)
+
         # 2. Append to rolling feature buffer
         self.tick_history.append({"epoch": epoch, "price": price})
         if len(self.tick_history) > 500:
             self.tick_history = self.tick_history[-300:]
 
-        # If DATA_COLLECTION_ONLY, we only collect data and resolve forward ticks
-        if self.mode == "DATA_COLLECTION_ONLY":
+        # If DATA_COLLECTION_ONLY or prediction cutoff active, skip prediction generation
+        if self.mode == "DATA_COLLECTION_ONLY" or self.prediction_cutoff_active:
             return None
 
         # 3. Check if we have sufficient history for market state classification

@@ -1,4 +1,4 @@
-"""Local Web Dashboard & Visual Analysis Engine for Deriv Quantitative Research (V1.6.2).
+"""Local Web Dashboard & Visual Analysis Engine for Deriv Quantitative Research (V1.6.4).
 
 Renders a strict 60-30-10 interface with SVG visualizations:
 1. Session Integrity: Session ID, authoritative lifecycle state, reconciliation status, verified boolean.
@@ -154,8 +154,15 @@ def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
     elif buffer_ticks < req_lookback:
         current_blocker = f"Waiting for {req_lookback - buffer_ticks} more warm-up ticks ({buffer_ticks}/{req_lookback})"
 
+    # Outcome resolution progress (V1.6.4 Part J Section 24)
+    pending_summary = getattr(fwd_journal, "resolver", None).get_pending_summary() if hasattr(fwd_journal, "resolver") else {}
+    session_outcomes = fwd_journal.get_session_outcomes(sess_id) if sess_id else []
+    recent_outcomes = session_outcomes[-8:] if len(session_outcomes) > 8 else session_outcomes
+    resolved_wins_rh = sum(1 for o in session_outcomes if o.get("runhigh_win") == 1.0)
+    resolved_wins_rl = sum(1 for o in session_outcomes if o.get("runlow_win") == 1.0)
+
     return {
-        "version": "V1.6.3",
+        "version": "V1.6.4",
         "symbol": symbol,
         "available_symbols": get_available_symbols(),
         "safety_invariant": "REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)",
@@ -191,11 +198,20 @@ def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
             "data_gaps_count": health.get("ticks", {}).get("total_gaps", 0),
             "has_active_data_gap": health.get("has_active_data_gap", False)
         },
+        "outcome_progress": {
+            "required_future_ticks": 6,
+            "active_pending_count": pending_summary.get("active_pending_count", 0),
+            "pending_outcomes": pending_summary.get("pending_outcomes", []),
+            "resolved_outcomes_count": len(session_outcomes),
+            "resolved_wins_runhigh": resolved_wins_rh,
+            "resolved_wins_runlow": resolved_wins_rl,
+            "recent_outcomes": recent_outcomes,
+        },
         "pipeline": {
             "eligible_feature_windows": fwd_metrics.get("total_predictions", 0),
             "predictions_generated": fwd_metrics.get("total_predictions", 0),
             "predictions_persisted": fwd_metrics.get("total_predictions", 0),
-            "outcomes_pending": fwd_metrics.get("pending_predictions", 0),
+            "outcomes_pending": pending_summary.get("active_pending_count", fwd_metrics.get("pending_predictions", 0)),
             "outcomes_resolved": fwd_metrics.get("resolved_predictions", 0),
             "outcomes_incomplete": fwd_metrics.get("incomplete_predictions", 0),
             "outcomes_data_gap": fwd_metrics.get("data_gap_predictions", 0),
@@ -467,6 +483,50 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Outcome Resolution Progress Panel (V1.6.4 Part J Section 24) -->
+  <div class="panel">
+    <div class="panel-title">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z"/></svg>
+      Forward Contract Outcome Resolution & 5-Movement Progress
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;">
+      <div style="background-color: var(--bg-base); padding: 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Required Movement Window</div>
+        <div style="font-size: 16px; font-weight: 700; color: var(--accent); margin-top: 4px;">6 Ticks (S0 &rarr; S5)</div>
+      </div>
+      <div style="background-color: var(--bg-base); padding: 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Active Pending Predictions</div>
+        <div style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-top: 4px;" id="outcomes-pending-count">0</div>
+      </div>
+      <div style="background-color: var(--bg-base); padding: 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Resolved Outcomes</div>
+        <div style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-top: 4px;" id="outcomes-resolved-count">0</div>
+      </div>
+      <div style="background-color: var(--bg-base); padding: 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Canonical Wins (RH / RL)</div>
+        <div style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-top: 4px;" id="outcomes-wins-count">0 / 0</div>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Outcome ID</th>
+          <th>Prediction ID</th>
+          <th>Entry Price</th>
+          <th>Price Sequence (S0 &rarr; S5)</th>
+          <th>Ticks</th>
+          <th>RH Win</th>
+          <th>RL Win</th>
+          <th>Status</th>
+          <th>Resolution Diagnostic</th>
+        </tr>
+      </thead>
+      <tbody id="outcomes-table-body">
+        <tr><td colspan="9" style="color: var(--text-secondary); text-align: center;">No resolved outcomes in this session</td></tr>
+      </tbody>
+    </table>
+  </div>
+
   <div class="panel">
     <div class="panel-title">
       <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z"/></svg>
@@ -596,6 +656,43 @@ function renderDashboard(data) {
     rdiv.innerHTML = html;
   }
 
+  // Outcome Resolution Progress (V1.6.4 Part J Section 24)
+  const op = data.outcome_progress || {};
+  document.getElementById("outcomes-pending-count").textContent = op.active_pending_count || 0;
+  document.getElementById("outcomes-resolved-count").textContent = op.resolved_outcomes_count || 0;
+  document.getElementById("outcomes-wins-count").textContent = `${op.resolved_wins_runhigh || 0} / ${op.resolved_wins_runlow || 0}`;
+
+  const otb = document.getElementById("outcomes-table-body");
+  otb.innerHTML = "";
+  const recentOuts = op.recent_outcomes || [];
+  if (recentOuts.length === 0) {
+    otb.innerHTML = '<tr><td colspan="9" style="color: var(--text-secondary); text-align: center;">No resolved outcomes in this session</td></tr>';
+  } else {
+    recentOuts.forEach(o => {
+      let prSeq = "[]";
+      try {
+        const parr = JSON.parse(o.forward_prices_json || "[]");
+        prSeq = parr.map(p => typeof p === 'number' ? p.toFixed(2) : p).join(" &rarr; ");
+      } catch(e) { prSeq = o.forward_prices_json || "[]"; }
+
+      const rhW = o.runhigh_win === 1.0 ? '<span style="color: #4ADE80; font-weight: 700;">WIN</span>' : (o.runhigh_win === 0.0 ? '<span style="color: #F87171;">LOSS</span>' : 'N/A');
+      const rlW = o.runlow_win === 1.0 ? '<span style="color: #4ADE80; font-weight: 700;">WIN</span>' : (o.runlow_win === 0.0 ? '<span style="color: #F87171;">LOSS</span>' : 'N/A');
+      const entPr = o.entry_price ? `$${Number(o.entry_price).toFixed(2)}` : 'N/A';
+
+      otb.innerHTML += `<tr>
+        <td style="font-family: monospace;">${(o.outcome_id || '').substring(0, 8)}</td>
+        <td style="font-family: monospace;">${(o.prediction_id || '').substring(0, 8)}</td>
+        <td>${entPr}</td>
+        <td style="font-size: 11.5px; font-family: monospace;">${prSeq}</td>
+        <td>${o.forward_ticks_count || 0}</td>
+        <td>${rhW}</td>
+        <td>${rlW}</td>
+        <td><strong>${o.outcome_status || 'UNKNOWN'}</strong></td>
+        <td style="color: var(--text-secondary);">${o.unresolved_reason || 'Canonical 5-Movement Settled'}</td>
+      </tr>`;
+    });
+  }
+
   // Quotes table
   const q = data.quotes || {};
   const qtb = document.getElementById("quotes-table-body");
@@ -670,7 +767,7 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
 def run_dashboard():
     with socketserver.TCPServer((BIND_HOST, PORT), DashboardRequestHandler) as httpd:
         print(f"\n=======================================================")
-        print(f"      DERIV RESEARCH & OBSERVATION DASHBOARD (V1.6.3)")
+        print(f"      DERIV RESEARCH & OBSERVATION DASHBOARD (V1.6.4)")
         print(f"=======================================================")
         print(f"  URL:             http://{BIND_HOST}:{PORT}")
         print(f"  Design Standard: 60-30-10 Palette (#0B0F19, #131B2E, #0284C7)")

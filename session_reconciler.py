@@ -341,7 +341,7 @@ class SessionReconciler:
 
         # 4. Count outcome categories from predictions
         resolved_count = sum(1 for p in preds if p.get("outcome_status") in ("RESOLVED", "OUTCOME_RECONSTRUCTED", "OUTCOME_VERIFIED"))
-        pending_count = sum(1 for p in preds if p.get("outcome_status") == "PENDING")
+        pending_count = sum(1 for p in preds if p.get("outcome_status") in ("PENDING", "OUTCOME_PENDING"))
         incomplete_count = sum(1 for p in preds if p.get("outcome_status") == "OUTCOME_INCOMPLETE")
         data_gap_count = sum(1 for p in preds if p.get("outcome_status") == "OUTCOME_DATA_GAP")
         unverified_count = sum(1 for p in preds if p.get("outcome_status") == "OUTCOME_UNVERIFIED")
