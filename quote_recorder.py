@@ -66,13 +66,14 @@ class DerivQuoteRecorder:
         app_id: str = DEFAULT_APP_ID,
         ws_url: Optional[str] = None,
         default_stake: float = 2.0,
-        db_path: Optional[str] = None
+        db_path: Optional[str] = None,
+        session_id: Optional[str] = None
     ):
         self.symbol = symbol
         self.app_id = app_id
         self.ws_url = ws_url or PRIMARY_WS_URL
         self.default_stake = default_stake
-        self.session_id = str(uuid.uuid4())[:8]
+        self.session_id = session_id or str(uuid.uuid4())[:8]
         self.records: List[ProposalRecord] = []
         try:
             from quote_database import QuoteDatabase

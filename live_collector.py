@@ -64,7 +64,8 @@ class LiveTickStreamer:
         max_buffer_size: int = 5000,
         flush_interval_ticks: int = 25,
         output_csv: Optional[str] = None,
-        on_tick_callback: Optional[Callable[[LiveTickRecord], None]] = None
+        on_tick_callback: Optional[Callable[[LiveTickRecord], None]] = None,
+        session_id: Optional[str] = None
     ):
         self.symbol = symbol
         self.app_id = app_id or DEFAULT_CONFIG.app_id
@@ -76,7 +77,7 @@ class LiveTickStreamer:
         self.output_csv = output_csv
         self.on_tick_callback = on_tick_callback
 
-        self.session_id = str(uuid.uuid4())[:8]
+        self.session_id = session_id or str(uuid.uuid4())[:8]
         self.sequence_id = 0
         self.last_epoch: Optional[int] = None
         self.last_price: Optional[float] = None

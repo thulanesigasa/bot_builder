@@ -1,0 +1,38 @@
+=== DERIV QUANTITATIVE RESEARCH — SESSION REPORT ===
+Generated at: 2026-10-08T17:35:14+00:00
+Safety: Live money trading DISABLED. All metrics are hypothetical.
+
+Session ID   : aad12986
+Symbol       : R_75
+Mode         : SHADOW
+Model ID     : M_R_75_5TICK_20261008_132512.json
+Status       : COMPLETED
+Start UTC    : 2026-10-08T16:35:13.490893+00:00
+Duration (s) : 3600.53
+
+--- PREDICTIONS ---
+  Total          : 1744
+  Resolved       : 1725
+  Unverified     : 6
+  Brier RH       : 0.03635
+  Brier RL       : 0.02103
+  RH Win Rate    : 0.03768
+  RL Win Rate    : 0.02145
+
+--- ECONOMIC PERFORMANCE (HYPOTHETICAL) ---
+  Paper Trade Signals : 0
+  Resolved Trades     : 0
+  Win Rate            : None
+  Cumulative PnL      : 0.0
+  Mean PnL/Trade      : None
+  Sharpe Ratio        : None
+  Max Drawdown        : 0.0
+  Quote Coverage      : 34.4%
+  Predicted EV Mean   : None
+  Realized EV Mean    : None
+
+--- VALIDATION GATE ---
+  Gate Passed         : False
+  Recommended Action  : INSUFFICIENT_DATA
+  Demotion Triggered  : False
+    - INSUFFICIENT_DATA: only 0/200 resolved

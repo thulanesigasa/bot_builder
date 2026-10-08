@@ -93,8 +93,12 @@ class ForwardCollectionService:
             self._model_id = os.path.basename(latest) if latest else "NONE"
             self._model_version = "auto-latest"
 
-        # Create session in registry
+        # Create session in registry and recover interrupted sessions
         self.registry = ForwardSessionRegistry()
+        recovered = self.registry.recover_interrupted_sessions()
+        if recovered:
+            print(f"[Service] Auto-recovered {len(recovered)} dangling session(s) to INTERRUPTED state.")
+
         self.session: ForwardSession = self.registry.create_session(
             symbol=symbol,
             mode=self.mode,
@@ -106,7 +110,7 @@ class ForwardCollectionService:
         print(f"[Service] Session created: {self.session.session_id[:8]} | Mode: {self.mode}")
 
         # Components with session_id linkage
-        self.journal = ForwardPredictionJournal(db_path=self.session.journal_db_path)
+        self.journal = ForwardPredictionJournal(db_path=self.session.journal_db_path, enforce_session_id=True)
         self.observer = ForwardObserver(
             symbol=symbol,
             mode=self.mode,
@@ -130,6 +134,8 @@ class ForwardCollectionService:
         self._ticks_since_flush = 0
         self._last_flush_time = time.time()
         self._total_ticks = 0
+        self._duplicate_ticks = 0
+        self._rejected_ticks = 0
         self._total_predictions = 0
 
     def _on_tick(self, tick: LiveTickRecord):
@@ -142,6 +148,7 @@ class ForwardCollectionService:
         )
 
         if tick.data_quality_flags == "DUPLICATE_IGNORED":
+            self._duplicate_ticks += 1
             return
 
         # Delegate to observer (evaluates features, inference, journal)
@@ -166,7 +173,7 @@ class ForwardCollectionService:
 
     def _flush_stats(self):
         """Writes current session metrics to the registry."""
-        metrics = self.journal.get_accuracy_metrics(symbol=self.symbol)
+        metrics = self.journal.get_accuracy_metrics(symbol=self.symbol, session_id=self.session.session_id)
         pnl = metrics.get("cumulative_pnl", 0.0) or 0.0
         self.registry.update_session_stats(
             session_id=self.session.session_id,
@@ -174,7 +181,11 @@ class ForwardCollectionService:
             total_predictions=metrics.get("total_predictions", 0),
             resolved_predictions=metrics.get("resolved_predictions", 0),
             unverified_predictions=metrics.get("unverified_predictions", 0),
-            cumulative_pnl=pnl
+            cumulative_pnl=pnl,
+            live_ticks=self.observer.live_ticks_count,
+            warmup_ticks=self.observer.warmup_ticks_count,
+            duplicate_ticks=self._duplicate_ticks,
+            rejected_ticks=self._rejected_ticks
         )
         self._ticks_since_flush = 0
         self._last_flush_time = time.time()
@@ -182,7 +193,7 @@ class ForwardCollectionService:
     async def _quote_polling_loop(self):
         """Background task polling Deriv proposal quotes at regular intervals."""
         from quote_recorder import DerivQuoteRecorder
-        recorder = DerivQuoteRecorder(symbol=self.symbol, app_id=self.app_id)
+        recorder = DerivQuoteRecorder(symbol=self.symbol, app_id=self.app_id, session_id=self.session.session_id)
         end_t = (time.time() + self.duration_seconds) if self.duration_seconds else float("inf")
 
         while self._running and time.time() < end_t:
@@ -200,10 +211,12 @@ class ForwardCollectionService:
         """Starts the sustained collection loop with auto-reconnect."""
         self._running = True
         self._stop_event.clear()
+        from forward_session import STATUS_ACTIVE, STATUS_COMPLETED, STATUS_INTERRUPTED
+        self.registry.set_session_status(self.session.session_id, STATUS_ACTIVE)
         GLOBAL_HEALTH_MONITOR.update_connection_status("CONNECTING")
 
         print(f"\n{'=' * 65}")
-        print(f"  DERIV FORWARD COLLECTION SERVICE — V1.6.1")
+        print(f"  DERIV FORWARD COLLECTION SERVICE — V1.6.2")
         print(f"{'=' * 65}")
         print(f"  Symbol           : {self.symbol}")
         print(f"  Mode             : {self.mode}")
@@ -223,6 +236,7 @@ class ForwardCollectionService:
 
         max_backoff = 60.0
         retry_count = 0
+        service_error = False
 
         try:
             while self._running and time.time() < end_t:
@@ -230,7 +244,8 @@ class ForwardCollectionService:
                     symbol=self.symbol,
                     app_id=self.app_id,
                     output_csv=self.session.live_ticks_csv,
-                    on_tick_callback=self._on_tick
+                    on_tick_callback=self._on_tick,
+                    session_id=self.session.session_id
                 )
                 GLOBAL_HEALTH_MONITOR.update_connection_status("CONNECTING")
                 remaining = max(1.0, end_t - time.time()) if self.duration_seconds else None
@@ -245,6 +260,7 @@ class ForwardCollectionService:
                     retry_count += 1
                     if retry_count > self.max_reconnect_attempts:
                         print(f"[Service] Max reconnect attempts reached ({self.max_reconnect_attempts}). Stopping...")
+                        service_error = True
                         break
                     backoff = min(max_backoff, 2.0 ** min(retry_count, 6))
                     print(f"[Service] Reconnecting in {backoff:.1f}s (attempt {retry_count}/{self.max_reconnect_attempts})...")
@@ -258,6 +274,9 @@ class ForwardCollectionService:
 
                 retry_count = 0
 
+        except Exception as e:
+            print(f"[Service] Unexpected error in collection loop: {e}")
+            service_error = True
         finally:
             self._running = False
             quote_task.cancel()
@@ -266,19 +285,37 @@ class ForwardCollectionService:
             self.journal.mark_incomplete_as_unverified(symbol=self.symbol, target_status=STATUS_INCOMPLETE)
             self._flush_stats()
 
-            # Complete session in registry
-            final_metrics = self.journal.get_accuracy_metrics(symbol=self.symbol)
+            # Complete session in registry with authoritative status
+            final_metrics = self.journal.get_accuracy_metrics(symbol=self.symbol, session_id=self.session.session_id)
+            final_status = STATUS_INTERRUPTED if service_error else STATUS_COMPLETED
             self.registry.complete_session(
                 session_id=self.session.session_id,
-                status="COMPLETED",
+                status=final_status,
                 total_ticks=self._total_ticks,
                 total_predictions=final_metrics.get("total_predictions", 0),
                 resolved_predictions=final_metrics.get("resolved_predictions", 0),
                 unverified_predictions=final_metrics.get("unverified_predictions", 0),
                 cumulative_pnl=final_metrics.get("cumulative_pnl", 0.0) or 0.0,
+                live_ticks=self.observer.live_ticks_count,
+                warmup_ticks=self.observer.warmup_ticks_count,
+                duplicate_ticks=self._duplicate_ticks,
+                rejected_ticks=self._rejected_ticks,
                 notes=self.notes
             )
             GLOBAL_HEALTH_MONITOR.update_connection_status("DISCONNECTED")
+
+            # Run automated reconciliation engine (V1.6.2 Section 12)
+            try:
+                from session_reconciler import SessionReconciler
+                reconciler = SessionReconciler(
+                    registry_db_path=self.registry.db_path,
+                    journal_db_path=self.session.journal_db_path,
+                    quote_db_path=self.session.quote_db_path
+                )
+                recon_res = reconciler.reconcile_session(self.session.session_id)
+                print(f"\n{recon_res.summary_text()}\n")
+            except Exception as e:
+                print(f"[Service] Warning: Could not run reconciliation: {e}")
 
             # Generate end-of-session report
             try:

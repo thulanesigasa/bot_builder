@@ -29,6 +29,47 @@ DEFAULT_SESSIONS_DB = os.path.join(
 )
 
 
+# Authoritative Session Lifecycle Statuses (V1.6.2 Section 11)
+STATUS_CREATED = "CREATED"
+STATUS_INITIALIZING = "INITIALIZING"
+STATUS_ACTIVE = "ACTIVE"
+STATUS_INTERRUPTED = "INTERRUPTED"
+STATUS_STOPPING = "STOPPING"
+STATUS_COMPLETED = "COMPLETED"
+STATUS_FAILED = "FAILED"
+
+VALID_SESSION_STATUSES = {
+    STATUS_CREATED,
+    STATUS_INITIALIZING,
+    STATUS_ACTIVE,
+    STATUS_INTERRUPTED,
+    STATUS_STOPPING,
+    STATUS_COMPLETED,
+    STATUS_FAILED,
+}
+
+# Authoritative Session Reconciliation Statuses (V1.6.2 Section 12)
+RECON_STATUS_RECONCILED = "RECONCILED"
+RECON_STATUS_COUNT_MISMATCH = "COUNT_MISMATCH"
+RECON_STATUS_MISSING_SESSION_ID = "MISSING_SESSION_ID"
+RECON_STATUS_ORPHAN_PREDICTION = "ORPHAN_PREDICTION"
+RECON_STATUS_ORPHAN_OUTCOME = "ORPHAN_OUTCOME"
+RECON_STATUS_CROSS_SESSION_REFERENCE = "CROSS_SESSION_REFERENCE"
+RECON_STATUS_TIMESTAMP_INCONSISTENCY = "TIMESTAMP_INCONSISTENCY"
+RECON_STATUS_SOURCE_UNVERIFIED = "SOURCE_UNVERIFIED"
+
+VALID_RECONCILIATION_STATUSES = {
+    RECON_STATUS_RECONCILED,
+    RECON_STATUS_COUNT_MISMATCH,
+    RECON_STATUS_MISSING_SESSION_ID,
+    RECON_STATUS_ORPHAN_PREDICTION,
+    RECON_STATUS_ORPHAN_OUTCOME,
+    RECON_STATUS_CROSS_SESSION_REFERENCE,
+    RECON_STATUS_TIMESTAMP_INCONSISTENCY,
+    RECON_STATUS_SOURCE_UNVERIFIED,
+}
+
+
 @dataclass
 class ForwardSession:
     """Complete description of a single forward research session."""
@@ -41,16 +82,21 @@ class ForwardSession:
     end_time: Optional[float]       # None while active
     planned_duration_seconds: float
     actual_duration_seconds: Optional[float]
-    status: str                     # ACTIVE, COMPLETED, ABORTED
+    status: str                     # Authoritative lifecycle status
     journal_db_path: str
     quote_db_path: str
     live_ticks_csv: str
     config_snapshot_json: str       # JSON dump of TradingConfig at session start
     total_ticks: int = 0
+    live_ticks: int = 0
+    warmup_ticks: int = 0
+    duplicate_ticks: int = 0
+    rejected_ticks: int = 0
     total_predictions: int = 0
     resolved_predictions: int = 0
     unverified_predictions: int = 0
     cumulative_pnl: float = 0.0
+    reconciliation_status: str = "PENDING"
     notes: str = ""
 
     @property
@@ -59,7 +105,7 @@ class ForwardSession:
 
     @property
     def is_active(self) -> bool:
-        return self.status == "ACTIVE"
+        return self.status in (STATUS_ACTIVE, STATUS_INITIALIZING)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -124,14 +170,32 @@ class ForwardSessionRegistry:
                     live_ticks_csv TEXT NOT NULL,
                     config_snapshot_json TEXT NOT NULL,
                     total_ticks INTEGER DEFAULT 0,
+                    live_ticks INTEGER DEFAULT 0,
+                    warmup_ticks INTEGER DEFAULT 0,
+                    duplicate_ticks INTEGER DEFAULT 0,
+                    rejected_ticks INTEGER DEFAULT 0,
                     total_predictions INTEGER DEFAULT 0,
                     resolved_predictions INTEGER DEFAULT 0,
                     unverified_predictions INTEGER DEFAULT 0,
                     cumulative_pnl REAL DEFAULT 0.0,
+                    reconciliation_status TEXT DEFAULT 'PENDING',
                     notes TEXT DEFAULT '',
                     created_at TEXT NOT NULL
                 )
             """)
+            # Schema migration checks for existing sessions tables
+            cur = conn.execute("PRAGMA table_info(sessions)")
+            cols = [r["name"] for r in cur.fetchall()]
+            if "live_ticks" not in cols:
+                conn.execute("ALTER TABLE sessions ADD COLUMN live_ticks INTEGER DEFAULT 0")
+            if "warmup_ticks" not in cols:
+                conn.execute("ALTER TABLE sessions ADD COLUMN warmup_ticks INTEGER DEFAULT 0")
+            if "duplicate_ticks" not in cols:
+                conn.execute("ALTER TABLE sessions ADD COLUMN duplicate_ticks INTEGER DEFAULT 0")
+            if "rejected_ticks" not in cols:
+                conn.execute("ALTER TABLE sessions ADD COLUMN rejected_ticks INTEGER DEFAULT 0")
+            if "reconciliation_status" not in cols:
+                conn.execute("ALTER TABLE sessions ADD COLUMN reconciliation_status TEXT DEFAULT 'PENDING'")
             conn.commit()
 
     def create_session(
@@ -140,13 +204,14 @@ class ForwardSessionRegistry:
         mode: str,
         model_id: str,
         model_version: str,
-        planned_duration_seconds: float,
+        planned_duration_seconds: float = 3600.0,
         journal_db_path: Optional[str] = None,
         quote_db_path: Optional[str] = None,
         live_ticks_csv: Optional[str] = None,
-        notes: str = ""
+        notes: str = "",
+        status: str = STATUS_ACTIVE
     ) -> ForwardSession:
-        """Creates and persists a new ACTIVE session record."""
+        """Creates and persists a new session record with specified initial status."""
         script_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(script_dir, "data")
         sid = str(uuid.uuid4())
@@ -166,7 +231,7 @@ class ForwardSessionRegistry:
             end_time=None,
             planned_duration_seconds=planned_duration_seconds,
             actual_duration_seconds=None,
-            status="ACTIVE",
+            status=status,
             journal_db_path=j_path,
             quote_db_path=q_path,
             live_ticks_csv=t_csv,
@@ -181,55 +246,113 @@ class ForwardSessionRegistry:
                     session_id, symbol, mode, model_id, model_version,
                     start_time, end_time, planned_duration_seconds, actual_duration_seconds,
                     status, journal_db_path, quote_db_path, live_ticks_csv,
-                    config_snapshot_json, total_ticks, total_predictions,
+                    config_snapshot_json, total_ticks, live_ticks, warmup_ticks,
+                    duplicate_ticks, rejected_ticks, total_predictions,
                     resolved_predictions, unverified_predictions, cumulative_pnl,
-                    notes, created_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    reconciliation_status, notes, created_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 session.session_id, session.symbol, session.mode,
                 session.model_id, session.model_version, session.start_time,
                 None, session.planned_duration_seconds, None,
-                "ACTIVE", session.journal_db_path, session.quote_db_path,
+                session.status, session.journal_db_path, session.quote_db_path,
                 session.live_ticks_csv, session.config_snapshot_json,
-                0, 0, 0, 0, 0.0, notes, created_at
+                0, 0, 0, 0, 0, 0, 0, 0, 0.0, "PENDING", notes, created_at
             ))
             conn.commit()
 
         return session
 
+    def set_session_status(self, session_id: str, new_status: str, notes: Optional[str] = None):
+        """Atomically transitions session lifecycle state with validation."""
+        if new_status not in VALID_SESSION_STATUSES:
+            raise ValueError(f"Invalid session status: {new_status}. Must be one of {VALID_SESSION_STATUSES}")
+        with self._get_conn() as conn:
+            if notes is not None:
+                conn.execute(
+                    "UPDATE sessions SET status=?, notes=? WHERE session_id=?",
+                    (new_status, notes, session_id)
+                )
+            else:
+                conn.execute(
+                    "UPDATE sessions SET status=? WHERE session_id=?",
+                    (new_status, session_id)
+                )
+            conn.commit()
+
+    def update_reconciliation_status(self, session_id: str, status: str):
+        """Persists the session reconciliation integrity status."""
+        with self._get_conn() as conn:
+            conn.execute(
+                "UPDATE sessions SET reconciliation_status=? WHERE session_id=?",
+                (status, session_id)
+            )
+            conn.commit()
+
     def update_session_stats(
         self,
         session_id: str,
         total_ticks: int = 0,
+        live_ticks: Optional[int] = None,
+        warmup_ticks: Optional[int] = None,
+        duplicate_ticks: Optional[int] = None,
+        rejected_ticks: Optional[int] = None,
         total_predictions: int = 0,
         resolved_predictions: int = 0,
         unverified_predictions: int = 0,
-        cumulative_pnl: float = 0.0
+        cumulative_pnl: float = 0.0,
+        reconciliation_status: Optional[str] = None
     ):
-        """Updates live session statistics (called periodically during a session)."""
+        """Updates live session statistics with granular tick accounting."""
+        lt = live_ticks if live_ticks is not None else total_ticks
+        wt = warmup_ticks if warmup_ticks is not None else 0
+        dt = duplicate_ticks if duplicate_ticks is not None else 0
+        rt = rejected_ticks if rejected_ticks is not None else 0
+
         with self._get_conn() as conn:
-            conn.execute("""
-                UPDATE sessions
-                SET total_ticks=?, total_predictions=?, resolved_predictions=?,
-                    unverified_predictions=?, cumulative_pnl=?
-                WHERE session_id=?
-            """, (total_ticks, total_predictions, resolved_predictions,
-                  unverified_predictions, round(cumulative_pnl, 4), session_id))
+            if reconciliation_status:
+                conn.execute("""
+                    UPDATE sessions
+                    SET total_ticks=?, live_ticks=?, warmup_ticks=?, duplicate_ticks=?, rejected_ticks=?,
+                        total_predictions=?, resolved_predictions=?,
+                        unverified_predictions=?, cumulative_pnl=?, reconciliation_status=?
+                    WHERE session_id=?
+                """, (total_ticks, lt, wt, dt, rt, total_predictions, resolved_predictions,
+                      unverified_predictions, round(cumulative_pnl, 4), reconciliation_status, session_id))
+            else:
+                conn.execute("""
+                    UPDATE sessions
+                    SET total_ticks=?, live_ticks=?, warmup_ticks=?, duplicate_ticks=?, rejected_ticks=?,
+                        total_predictions=?, resolved_predictions=?,
+                        unverified_predictions=?, cumulative_pnl=?
+                    WHERE session_id=?
+                """, (total_ticks, lt, wt, dt, rt, total_predictions, resolved_predictions,
+                      unverified_predictions, round(cumulative_pnl, 4), session_id))
             conn.commit()
 
     def complete_session(
         self,
         session_id: str,
-        status: str = "COMPLETED",
+        status: str = STATUS_COMPLETED,
         total_ticks: int = 0,
+        live_ticks: Optional[int] = None,
+        warmup_ticks: Optional[int] = None,
+        duplicate_ticks: Optional[int] = None,
+        rejected_ticks: Optional[int] = None,
         total_predictions: int = 0,
         resolved_predictions: int = 0,
         unverified_predictions: int = 0,
         cumulative_pnl: float = 0.0,
+        reconciliation_status: Optional[str] = None,
         notes: str = ""
     ):
-        """Marks a session as COMPLETED or ABORTED and records final metrics."""
+        """Marks a session as COMPLETED, INTERRUPTED, or FAILED and records final metrics."""
         end_time = time.time()
+        lt = live_ticks if live_ticks is not None else total_ticks
+        wt = warmup_ticks if warmup_ticks is not None else 0
+        dt = duplicate_ticks if duplicate_ticks is not None else 0
+        rt = rejected_ticks if rejected_ticks is not None else 0
+
         with self._get_conn() as conn:
             row = conn.execute(
                 "SELECT start_time FROM sessions WHERE session_id=?", (session_id,)
@@ -238,16 +361,60 @@ class ForwardSessionRegistry:
             conn.execute("""
                 UPDATE sessions
                 SET status=?, end_time=?, actual_duration_seconds=?,
-                    total_ticks=?, total_predictions=?, resolved_predictions=?,
+                    total_ticks=?, live_ticks=?, warmup_ticks=?, duplicate_ticks=?, rejected_ticks=?,
+                    total_predictions=?, resolved_predictions=?,
                     unverified_predictions=?, cumulative_pnl=?, notes=?
                 WHERE session_id=?
             """, (
                 status, end_time, actual_dur,
-                total_ticks, total_predictions, resolved_predictions,
+                total_ticks, lt, wt, dt, rt,
+                total_predictions, resolved_predictions,
                 unverified_predictions, round(cumulative_pnl, 4),
                 notes, session_id
             ))
+            if reconciliation_status:
+                conn.execute(
+                    "UPDATE sessions SET reconciliation_status=? WHERE session_id=?",
+                    (reconciliation_status, session_id)
+                )
             conn.commit()
+
+    def update_reconciliation_status(self, session_id: str, reconciliation_status: str):
+        """Updates the authoritative reconciliation status of a session (V1.6.2 Section 12)."""
+        with self._get_conn() as conn:
+            conn.execute(
+                "UPDATE sessions SET reconciliation_status=? WHERE session_id=?",
+                (reconciliation_status, session_id)
+            )
+            conn.commit()
+
+    def recover_interrupted_sessions(self, max_grace_seconds: float = 30.0) -> List[str]:
+        """Scans for active/initializing sessions that crashed or were abandoned on restart."""
+        recovered = []
+        now = time.time()
+        with self._get_conn() as conn:
+            rows = conn.execute("""
+                SELECT session_id, start_time, planned_duration_seconds
+                FROM sessions
+                WHERE status IN ('ACTIVE', 'INITIALIZING', 'CREATED')
+            """).fetchall()
+
+            for r in rows:
+                sid = r["session_id"]
+                st = float(r["start_time"])
+                planned = float(r["planned_duration_seconds"] or 0.0)
+                # If planned duration elapsed + grace period, or if process restarted
+                dur = round(now - st, 2)
+                conn.execute("""
+                    UPDATE sessions
+                    SET status=?, end_time=?, actual_duration_seconds=?, notes=notes || ' [Auto-recovered on startup]'
+                    WHERE session_id=?
+                """, (STATUS_INTERRUPTED, now, dur, sid))
+                recovered.append(sid)
+
+            if recovered:
+                conn.commit()
+        return recovered
 
     def get_session(self, session_id: str) -> Optional[ForwardSession]:
         """Retrieves a session by ID."""
@@ -310,9 +477,15 @@ class ForwardSessionRegistry:
             live_ticks_csv=d["live_ticks_csv"],
             config_snapshot_json=d.get("config_snapshot_json", "{}"),
             total_ticks=d.get("total_ticks", 0),
+            live_ticks=d.get("live_ticks", d.get("total_ticks", 0)),
+            warmup_ticks=d.get("warmup_ticks", 0),
+            duplicate_ticks=d.get("duplicate_ticks", 0),
+            rejected_ticks=d.get("rejected_ticks", 0),
             total_predictions=d.get("total_predictions", 0),
             resolved_predictions=d.get("resolved_predictions", 0),
             unverified_predictions=d.get("unverified_predictions", 0),
             cumulative_pnl=d.get("cumulative_pnl", 0.0),
+            reconciliation_status=d.get("reconciliation_status", "PENDING"),
             notes=d.get("notes", "")
         )
+

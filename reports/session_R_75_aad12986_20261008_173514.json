@@ -1,0 +1,100 @@
+{
+  "report_type": "SESSION",
+  "generated_at": "2026-10-08T17:35:14+00:00",
+  "session": {
+    "session_id": "aad12986-9912-4e02-ae7f-888bf78b798f",
+    "symbol": "R_75",
+    "mode": "SHADOW",
+    "model_id": "M_R_75_5TICK_20261008_132512.json",
+    "status": "COMPLETED",
+    "start_time_utc": "2026-10-08T16:35:13.490893+00:00",
+    "planned_duration_seconds": 3600.0,
+    "actual_duration_seconds": 3600.53
+  },
+  "safety": {
+    "live_money_trading_disabled": true,
+    "purchasing_allowed": false,
+    "declaration": "All financial metrics are hypothetical paper-trading simulations only."
+  },
+  "model": {},
+  "tick_health": {
+    "total_ticks": 3589,
+    "tick_rate_per_sec": 1.0,
+    "last_tick_epoch": 1791480914,
+    "last_tick_age_seconds": 0.5,
+    "last_tick_latency_ms": -469.79,
+    "duplicate_ticks": 0,
+    "gap_count": 0
+  },
+  "quote_health": {
+    "total_requests": 435,
+    "successful_quotes": 432,
+    "rejected_quotes": 3,
+    "success_rate_pct": 99.3,
+    "last_quote_age_seconds": 2480.77,
+    "last_quote_latency_ms": 0.0
+  },
+  "connectivity": {
+    "connection_status": "DISCONNECTED",
+    "reconnection_count": 0,
+    "last_reconnect_time": null,
+    "has_active_data_gap": false
+  },
+  "predictions": {
+    "total": 1744,
+    "resolved": 1725,
+    "pending": 0,
+    "unverified": 6,
+    "brier_score_runhigh": 0.03635,
+    "brier_score_runlow": 0.02103,
+    "realized_runhigh_win_rate": 0.03768,
+    "realized_runlow_win_rate": 0.02145
+  },
+  "economic_performance": {
+    "session_id": null,
+    "symbol": "R_75",
+    "mode": "SHADOW",
+    "total_predictions": 1744,
+    "paper_trade_signals": 0,
+    "resolved_trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": null,
+    "cumulative_pnl": 0.0,
+    "mean_pnl_per_trade": null,
+    "std_pnl_per_trade": null,
+    "sharpe_ratio": null,
+    "max_drawdown": 0.0,
+    "quote_coverage_pct": 34.4,
+    "predicted_ev_mean": null,
+    "realized_ev_mean": null,
+    "ev_accuracy_error": null,
+    "brier_score_runhigh": 0.03635,
+    "brier_score_runlow": 0.02103,
+    "per_state_breakdown": {},
+    "generated_at": "2026-10-08T17:35:14.120249+00:00"
+  },
+  "validation_gate": {
+    "model_id": "M_R_75_5TICK_20261008_132512.json",
+    "symbol": "R_75",
+    "evaluation_time": 1791480914.1256273,
+    "resolved_predictions": 0,
+    "runhigh_win_rate": null,
+    "runlow_win_rate": null,
+    "runhigh_z_score": null,
+    "runlow_z_score": null,
+    "brier_rh": null,
+    "brier_rl": null,
+    "naive_brier": 0.25,
+    "brier_improvement_pct": null,
+    "quote_coverage_pct": 0.0,
+    "cumulative_pnl": 0.0,
+    "max_drawdown": 0.0,
+    "gate_passed": false,
+    "demotion_triggered": false,
+    "gate_reasons": [
+      "INSUFFICIENT_DATA: only 0/200 resolved"
+    ],
+    "recommended_action": "INSUFFICIENT_DATA"
+  }
+}
