@@ -46,6 +46,8 @@ LIVE_EXECUTION_DISABLED: bool = True
 class ForwardCollectionService:
     """Long-running forward data collection and shadow prediction service (V1.6.1)."""
 
+    LIVE_EXECUTION_DISABLED: bool = True
+
     def __init__(
         self,
         symbol: str = "R_75",
@@ -62,7 +64,10 @@ class ForwardCollectionService:
         flush_interval_secs: float = 30.0,
         reports_dir: Optional[str] = None,
         notes: str = "",
-        preload_warmup: bool = True
+        preload_warmup: bool = True,
+        prediction_cutoff_seconds: float = 20.0,
+        max_resolution_grace_seconds: float = 30.0,
+        resolve_on_shutdown: bool = True
     ):
         if LIVE_EXECUTION_DISABLED is not True:
             raise RuntimeError("Safety invariant violated: LIVE_EXECUTION_DISABLED must be True.")
@@ -84,6 +89,9 @@ class ForwardCollectionService:
         self.reports_dir = reports_dir
         self.notes = notes
         self.preload_warmup = preload_warmup
+        self.prediction_cutoff_seconds = max(0.0, prediction_cutoff_seconds)
+        self.max_resolution_grace_seconds = max(0.0, max_resolution_grace_seconds)
+        self.resolve_on_shutdown = resolve_on_shutdown
 
         # Resolve model ID for session registration
         mgr = ModelManager()
@@ -153,6 +161,13 @@ class ForwardCollectionService:
         if tick.data_quality_flags == "DUPLICATE_IGNORED":
             self._duplicate_ticks += 1
             return
+
+        # Check prediction cutoff near end of session (V1.6.4 Part D Section 9)
+        if self.duration_seconds and hasattr(self, "_session_end_time"):
+            if time.time() >= (self._session_end_time - self.prediction_cutoff_seconds):
+                if not self.observer.prediction_cutoff_active:
+                    self.observer.prediction_cutoff_active = True
+                    print(f"\n[Service] Prediction cutoff reached ({self.prediction_cutoff_seconds:.0f}s before session end). Halting new predictions; continuing observation to resolve pending outcomes.")
 
         # Delegate to observer (evaluates features, inference, journal)
         pred = self.observer.process_incoming_tick(tick)
@@ -234,6 +249,7 @@ class ForwardCollectionService:
         print(f"{'=' * 65}\n")
 
         end_t = (time.time() + self.duration_seconds) if self.duration_seconds else float("inf")
+        self._session_end_time = end_t
 
         # Start background quote poller
         quote_task = asyncio.create_task(self._quote_polling_loop())
@@ -277,6 +293,34 @@ class ForwardCollectionService:
                     break
 
                 retry_count = 0
+
+            # Controlled Resolution Grace Window (V1.6.4 Part D Section 9)
+            if (not service_error and self.resolve_on_shutdown and
+                    getattr(self.journal, "resolver", None) and
+                    self.journal.resolver.active_pending_count > 0 and
+                    self.max_resolution_grace_seconds > 0):
+                pending_cnt = self.journal.resolver.active_pending_count
+                print(f"\n[Service] Nominal session duration reached. Entering resolution grace window for {pending_cnt} pending prediction(s) (up to {self.max_resolution_grace_seconds:.0f}s)...")
+                grace_end = time.time() + self.max_resolution_grace_seconds
+                self.observer.prediction_cutoff_active = True
+
+                while self._running and time.time() < grace_end and self.journal.resolver.active_pending_count > 0:
+                    streamer_grace = LiveTickStreamer(
+                        symbol=self.symbol,
+                        app_id=self.app_id,
+                        output_csv=self.session.live_ticks_csv,
+                        on_tick_callback=self._on_tick,
+                        session_id=self.session.session_id
+                    )
+                    rem_grace = max(1.0, grace_end - time.time())
+                    try:
+                        await streamer_grace.run_streaming_session(duration_seconds=min(rem_grace, 6.0))
+                    except Exception as ge:
+                        print(f"[Service] Grace streaming notice: {ge}")
+                        break
+                    if self.journal.resolver.active_pending_count == 0:
+                        print(f"[Service] All pending forward outcomes resolved successfully during grace window!")
+                        break
 
         except Exception as e:
             print(f"[Service] Unexpected error in collection loop: {e}")

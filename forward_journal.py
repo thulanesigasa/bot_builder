@@ -31,19 +31,24 @@ import numpy as np
 import pandas as pd
 
 from config import DEFAULT_CONFIG
+from outcome_resolver import (
+    OutcomeResolver,
+    STATUS_PENDING,
+    STATUS_RESOLVED,
+    STATUS_RECONSTRUCTED,
+    STATUS_VERIFIED,
+    STATUS_INCOMPLETE,
+    STATUS_DATA_GAP,
+    STATUS_UNVERIFIED,
+    REASON_WAITING_FOR_ENTRY_TICK,
+    REASON_WAITING_FOR_FUTURE_TICKS,
+    REASON_TICK_SEQUENCE_GAP,
+    REASON_SESSION_ENDED_BEFORE_RESOLUTION,
+)
 
 
 DEFAULT_FORWARD_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "forward_predictions.db")
 
-
-# Canonical outcome status codes (V1.6.1 Section 11 & V1.6.2)
-STATUS_PENDING = "OUTCOME_PENDING"
-STATUS_RESOLVED = "RESOLVED"
-STATUS_RECONSTRUCTED = "OUTCOME_RECONSTRUCTED"
-STATUS_VERIFIED = "OUTCOME_VERIFIED"
-STATUS_INCOMPLETE = "OUTCOME_INCOMPLETE"
-STATUS_DATA_GAP = "OUTCOME_DATA_GAP"
-STATUS_UNVERIFIED = "OUTCOME_UNVERIFIED"
 
 RESOLVED_STATUSES = (STATUS_RECONSTRUCTED, STATUS_VERIFIED, "RESOLVED")
 PENDING_STATUSES = (STATUS_PENDING, "PENDING")
@@ -88,6 +93,8 @@ class ForwardPredictionRecord:
     quote_id: str = ""
     feature_schema_version: str = "1.0"
     source_provenance: str = "LIVE_DERIV"
+    unresolved_reason: str = ""
+    forward_epochs_json: str = "[]"
 
 
 class ForwardPredictionJournal:
@@ -98,6 +105,7 @@ class ForwardPredictionJournal:
         self.enforce_session_id = enforce_session_id
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         self._init_db()
+        self.resolver = OutcomeResolver(db_path=self.db_path, gap_threshold_seconds=5.0)
 
     @contextlib.contextmanager
     def _get_conn(self):
@@ -261,6 +269,23 @@ class ForwardPredictionJournal:
                 getattr(record, "feature_schema_version", "1.0") or "1.0", provenance, created_at
             ))
             conn.commit()
+
+        # Register pending outcome with persistent resolver
+        self.resolver.register_pending_prediction(
+            prediction_id=record.prediction_id,
+            session_id=sess_id,
+            symbol=record.symbol,
+            signal_epoch=record.signal_epoch or int(record.timestamp),
+            signal_price=record.signal_price,
+            timestamp=record.timestamp,
+            model_version=record.model_version,
+            decision=record.decision,
+            target_direction=record.target_direction,
+            runhigh_ask=record.runhigh_ask,
+            runhigh_payout=record.runhigh_payout,
+            runlow_ask=record.runlow_ask,
+            runlow_payout=record.runlow_payout,
+        )
         return record.prediction_id
 
     def ingest_forward_tick(
@@ -279,117 +304,10 @@ class ForwardPredictionJournal:
         - RUNHIGH wins iff S_1 > S_0 AND S_2 > S_1 AND S_3 > S_2 AND S_4 > S_3 AND S_5 > S_4.
         - RUNLOW wins iff S_1 < S_0 AND S_2 < S_1 AND S_3 < S_2 AND S_4 < S_3 AND S_5 < S_4.
         - Any tie or reversal is a loss under canonical model.
-        - If tick interval > gap_threshold_seconds during window: marks OUTCOME_DATA_GAP.
+        - If tick interval > gap_threshold_seconds between successive ticks: marks OUTCOME_DATA_GAP.
         """
-        with self._get_conn() as conn:
-            cur = conn.execute("""
-                SELECT prediction_id, session_id, signal_epoch, forward_prices_json, forward_ticks_count,
-                       runhigh_ask, runhigh_payout, runlow_ask, runlow_payout,
-                       target_direction, decision, entry_epoch, timestamp
-                FROM forward_predictions
-                WHERE symbol = ? AND outcome_status IN ('PENDING', 'OUTCOME_PENDING')
-                ORDER BY timestamp ASC
-            """, (symbol,))
-            pending_rows = cur.fetchall()
-
-            for row in pending_rows:
-                pid = row["prediction_id"]
-                sess_id = row["session_id"] or "LEGACY_UNATTRIBUTED"
-                sig_epoch = row["signal_epoch"]
-                if epoch <= sig_epoch:
-                    continue  # Ignore ticks at or before signal timestamp
-
-                try:
-                    prices = json.loads(row["forward_prices_json"])
-                except Exception:
-                    prices = []
-
-                # Check data gap between successive ticks in observation window
-                prev_epoch = row["entry_epoch"] or sig_epoch
-                if prices and (epoch - prev_epoch) > gap_threshold_seconds:
-                    # Data gap occurred during the forward outcome window
-                    conn.execute("""
-                        UPDATE forward_predictions
-                        SET outcome_status = ?, expiry_epoch = ?
-                        WHERE prediction_id = ?
-                    """, (STATUS_DATA_GAP, epoch, pid))
-                    # Record gap outcome in forward_outcomes
-                    oid = str(uuid.uuid4())[:8]
-                    now_iso = datetime.now(timezone.utc).isoformat()
-                    conn.execute("""
-                        INSERT OR REPLACE INTO forward_outcomes (
-                            outcome_id, prediction_id, session_id, entry_epoch, expiry_epoch,
-                            forward_prices_json, forward_ticks_count, outcome_status,
-                            runhigh_win, runlow_win, hypothetical_pnl, contract_model_version,
-                            resolution_timestamp, verification_level, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        oid, pid, sess_id, prev_epoch, epoch,
-                        json.dumps(prices), len(prices), STATUS_DATA_GAP,
-                        None, None, 0.0, "5_movement_canonical",
-                        float(epoch), "DATA_GAP", now_iso
-                    ))
-                    continue
-
-                prices.append(price)
-                count = len(prices)
-                entry_epoch_val = epoch if count == 1 else (row["entry_epoch"] or epoch)
-
-                if count < 6:
-                    # Still accumulating forward ticks
-                    conn.execute("""
-                        UPDATE forward_predictions
-                        SET forward_prices_json = ?, forward_ticks_count = ?, entry_epoch = ?
-                        WHERE prediction_id = ?
-                    """, (json.dumps(prices), count, entry_epoch_val, pid))
-                else:
-                    # 6 ticks accumulated: S_0, S_1, S_2, S_3, S_4, S_5
-                    # Strict 5-movement canonical model verification
-                    rh_win = 1.0 if all(prices[k] > prices[k - 1] for k in range(1, 6)) else 0.0
-                    rl_win = 1.0 if all(prices[k] < prices[k - 1] for k in range(1, 6)) else 0.0
-
-                    pnl = 0.0
-                    td = row["target_direction"]
-                    dec = row["decision"]
-                    rh_ask = row["runhigh_ask"]
-                    rh_pay = row["runhigh_payout"]
-                    rl_ask = row["runlow_ask"]
-                    rl_pay = row["runlow_payout"]
-
-                    if dec in ("TRADE", "PAPER_TRADE"):
-                        if td == "RUNHIGH" and rh_pay is not None and rh_ask is not None:
-                            pnl = (rh_pay - rh_ask) if rh_win == 1.0 else -rh_ask
-                        elif td == "RUNLOW" and rl_pay is not None and rl_ask is not None:
-                            pnl = (rl_pay - rl_ask) if rl_win == 1.0 else -rl_ask
-
-                    # Immutable write to forward_predictions denormalised view
-                    conn.execute("""
-                        UPDATE forward_predictions
-                        SET forward_prices_json = ?, forward_ticks_count = ?,
-                            outcome_status = ?,
-                            runhigh_win = ?, runlow_win = ?,
-                            hypothetical_pnl = ?, expiry_epoch = ?
-                            WHERE prediction_id = ?
-                    """, (json.dumps(prices), count, STATUS_RECONSTRUCTED, rh_win, rl_win, round(pnl, 2), epoch, pid))
-
-                    # Immutable write to separate forward_outcomes table (V1.6.2 Section 6, 7, 8)
-                    oid = str(uuid.uuid4())[:8]
-                    now_iso = datetime.now(timezone.utc).isoformat()
-                    conn.execute("""
-                        INSERT OR REPLACE INTO forward_outcomes (
-                            outcome_id, prediction_id, session_id, entry_epoch, expiry_epoch,
-                            forward_prices_json, forward_ticks_count, outcome_status,
-                            runhigh_win, runlow_win, hypothetical_pnl, contract_model_version,
-                            resolution_timestamp, verification_level, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        oid, pid, sess_id, entry_epoch_val, epoch,
-                        json.dumps(prices), count, STATUS_RECONSTRUCTED,
-                        rh_win, rl_win, round(pnl, 2), "5_movement_canonical",
-                        float(epoch), "RECONSTRUCTED", now_iso
-                    ))
-
-            conn.commit()
+        self.resolver.gap_threshold_seconds = gap_threshold_seconds
+        return self.resolver.ingest_tick(epoch=epoch, price=price, symbol=symbol)
 
     def mark_incomplete_as_unverified(
         self,
@@ -399,19 +317,7 @@ class ForwardPredictionJournal:
         """Marks dangling pending predictions as OUTCOME_INCOMPLETE (or OUTCOME_UNVERIFIED).
         Guarantees that partial tick histories are NEVER classified as trading losses.
         """
-        with self._get_conn() as conn:
-            where_clause = "WHERE outcome_status IN ('PENDING', 'OUTCOME_PENDING')"
-            params = []
-            if symbol:
-                where_clause += " AND symbol = ?"
-                params.append(symbol)
-
-            conn.execute(f"""
-                UPDATE forward_predictions
-                SET outcome_status = ?
-                {where_clause}
-            """, [target_status] + params)
-            conn.commit()
+        return self.resolver.mark_remaining_as_incomplete(symbol=symbol, target_status=target_status)
 
     def get_accuracy_metrics(
         self,
@@ -585,7 +491,7 @@ class ForwardPredictionJournal:
             return [dict(r) for r in cur.fetchall()]
 
     def migrate_legacy_unattributed(self) -> int:
-        """Migrates historical records with blank/null session_id to LEGACY_UNATTRIBUTED (V1.6.2 Section 5)."""
+        """Migrates historical records with blank/null or unregistered session_id to LEGACY_UNATTRIBUTED (V1.6.2 Section 5 & V1.6.4)."""
         with self._get_conn() as conn:
             cur = conn.execute("""
                 UPDATE forward_predictions
@@ -593,6 +499,35 @@ class ForwardPredictionJournal:
                 WHERE session_id = '' OR session_id IS NULL
             """)
             count = cur.rowcount
+
+            # Migrate orphan session references not found in sessions.db
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            sess_db = os.path.join(script_dir, "data", "sessions.db")
+            if os.path.exists(sess_db):
+                try:
+                    with sqlite3.connect(sess_db, timeout=2.0) as sconn:
+                        srows = sconn.execute("SELECT session_id FROM sessions").fetchall()
+                        registered_sessions = {r[0] for r in srows}
+                    if registered_sessions:
+                        curr_rows = conn.execute(
+                            "SELECT DISTINCT session_id FROM forward_predictions WHERE session_id != 'LEGACY_UNATTRIBUTED'"
+                        ).fetchall()
+                        for crow in curr_rows:
+                            sid = crow[0]
+                            if sid and sid not in registered_sessions:
+                                c2 = conn.execute("""
+                                    UPDATE forward_predictions
+                                    SET session_id = 'LEGACY_UNATTRIBUTED', source_provenance = 'LEGACY_UNATTRIBUTED'
+                                    WHERE session_id = ?
+                                """, (sid,))
+                                conn.execute("""
+                                    UPDATE forward_outcomes
+                                    SET session_id = 'LEGACY_UNATTRIBUTED'
+                                    WHERE session_id = ?
+                                """, (sid,))
+                                count += c2.rowcount
+                except Exception:
+                    pass
 
             # Backfill outcomes table for resolved legacy predictions if not already present
             resolved = conn.execute("""

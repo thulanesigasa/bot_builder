@@ -1,0 +1,222 @@
+{
+  "report_type": "SESSION",
+  "generated_at": "2026-10-08T20:29:52+00:00",
+  "session": {
+    "session_id": "a381a4d3-8594-4700-af1d-fe7c849e2e66",
+    "symbol": "R_75",
+    "mode": "SHADOW",
+    "model_id": "M_R_75_5TICK_20261008_132512.json",
+    "status": "COMPLETED",
+    "start_time_utc": "2026-10-08T20:28:49.550690+00:00",
+    "planned_duration_seconds": 60.0,
+    "actual_duration_seconds": 62.39,
+    "reconciliation_status": "RECONCILED",
+    "is_verified": true
+  },
+  "reconciliation": {
+    "session_id": "a381a4d3-8594-4700-af1d-fe7c849e2e66",
+    "symbol": "R_75",
+    "status": "RECONCILED",
+    "is_verified": true,
+    "reconciled_at_utc": "2026-10-08T20:29:51+00:00",
+    "ticks": {
+      "session_counter_ticks": 28,
+      "live_ticks": 13,
+      "warmup_ticks": 4,
+      "duplicate_ticks": 0,
+      "rejected_ticks": 0,
+      "csv_ticks": 28
+    },
+    "quotes": {
+      "quotes_recorded_in_db": 378,
+      "quotes_linked_to_session": 28,
+      "predictions_with_quotes": 13,
+      "quote_coverage_pct": 100.0
+    },
+    "predictions": {
+      "total_predictions": 13,
+      "unattributed_predictions": 0,
+      "cross_session_predictions": 0
+    },
+    "outcomes": {
+      "total_outcomes": 13,
+      "resolved_outcomes": 13,
+      "pending_outcomes": 0,
+      "incomplete_outcomes": 0,
+      "data_gap_outcomes": 0,
+      "orphan_outcomes": 0,
+      "orphan_predictions": 0
+    },
+    "provenance": {
+      "breakdown": {
+        "deriv_websocket_live": 13
+      },
+      "is_live_deriv": true
+    },
+    "chronology": {
+      "chronology_errors": 0,
+      "future_quote_errors": 0
+    },
+    "issues": [],
+    "passed_checks": [
+      "Session found in registry with status 'COMPLETED'.",
+      "Live ticks CSV verified: 28 lines recorded.",
+      "All 13 predictions verified as live Deriv provenance.",
+      "Prediction outcome sum matches: 13 == 13.",
+      "Registry prediction count reconciled (13 == 13).",
+      "Session ticks match CSV line count (28 vs 28)."
+    ]
+  },
+  "safety": {
+    "live_money_trading_disabled": true,
+    "purchasing_allowed": false,
+    "declaration": "REAL-MONEY TRADING DISABLED. All metrics are non-purchasing forward research observations."
+  },
+  "model": {
+    "model_id": "M_R_75_5TICK_20261008_132512",
+    "model_version": "1.5.3",
+    "approval_status": "RESEARCH_ONLY",
+    "validation_sample_count": 8630
+  },
+  "predictions": {
+    "total": 13,
+    "resolved": 13,
+    "pending": 0,
+    "unverified": 0,
+    "brier_score_runhigh": 0.00096,
+    "brier_score_runlow": 0.00088,
+    "realized_runhigh_win_rate": 0.0,
+    "realized_runlow_win_rate": 0.0
+  },
+  "lifecycle_counts": {
+    "ticks_received": 28,
+    "live_ticks": 13,
+    "warmup_ticks": 4,
+    "duplicate_ticks": 0,
+    "rejected_ticks": 0,
+    "quotes_recorded": 28,
+    "eligible_feature_windows": 13,
+    "predictions_generated": 13,
+    "predictions_persisted": 13,
+    "outcomes_resolved": 13,
+    "outcomes_pending": 0,
+    "outcomes_incomplete": 0,
+    "outcomes_data_gap": 0,
+    "outcomes_unverified": 0
+  },
+  "statistical_evidence": {
+    "runhigh_estimated_win_prob": 0.03095,
+    "runlow_estimated_win_prob": 0.02964,
+    "runhigh_observed_win_prob": 0.0,
+    "runlow_observed_win_prob": 0.0,
+    "brier_score_runhigh": 0.00096,
+    "brier_score_runlow": 0.00088,
+    "calibration_error_runhigh": 0.03095,
+    "calibration_error_runlow": 0.02964,
+    "genuine_quote_coverage_pct": 100.0,
+    "dependence_aware_uncertainty": {
+      "method": "Politis & Romano Stationary Block Bootstrap (mean block length = 5)",
+      "runhigh_bootstrap_95_ci": [
+        0.0,
+        0.0
+      ],
+      "runlow_bootstrap_95_ci": [
+        0.0,
+        0.0
+      ],
+      "runhigh_non_overlapping_sensitivity": {
+        "n_full": 13,
+        "n_non_overlapping": 3,
+        "stride": 5,
+        "full_win_rate": 0.0,
+        "non_overlapping_win_rate": 0.0,
+        "full_z": -0.664,
+        "non_overlapping_z": -0.319,
+        "edge_survives_non_overlapping": false
+      },
+      "runlow_non_overlapping_sensitivity": {
+        "n_full": 13,
+        "n_non_overlapping": 3,
+        "stride": 5,
+        "full_win_rate": 0.0,
+        "non_overlapping_win_rate": 0.0,
+        "full_z": -0.664,
+        "non_overlapping_z": -0.319,
+        "edge_survives_non_overlapping": false
+      }
+    }
+  },
+  "economic_performance": {
+    "session_id": "a381a4d3-8594-4700-af1d-fe7c849e2e66",
+    "symbol": "R_75",
+    "mode": "SHADOW",
+    "total_predictions": 13,
+    "paper_trade_signals": 0,
+    "resolved_trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": null,
+    "cumulative_pnl": 0.0,
+    "mean_pnl_per_trade": null,
+    "std_pnl_per_trade": null,
+    "sharpe_ratio": null,
+    "max_drawdown": 0.0,
+    "quote_coverage_pct": 100.0,
+    "predicted_ev_mean": null,
+    "realized_ev_mean": null,
+    "ev_accuracy_error": null,
+    "brier_score_runhigh": 0.00096,
+    "brier_score_runlow": 0.00088,
+    "per_state_breakdown": {},
+    "generated_at": "2026-10-08T20:29:52.003135+00:00"
+  },
+  "health_telemetry": {
+    "ticks": {
+      "total_ticks": 56,
+      "tick_rate_per_sec": 0.93,
+      "last_tick_epoch": 1791491392,
+      "last_tick_age_seconds": 0.32,
+      "last_tick_latency_ms": -339.17,
+      "duplicate_ticks": 0,
+      "gap_count": 0
+    },
+    "quotes": {
+      "total_requests": 35,
+      "successful_quotes": 35,
+      "rejected_quotes": 0,
+      "success_rate_pct": 100.0,
+      "last_quote_age_seconds": 4.27,
+      "last_quote_latency_ms": 0.0
+    },
+    "connectivity": {
+      "connection_status": "DISCONNECTED",
+      "reconnection_count": 0,
+      "last_reconnect_time": null,
+      "has_active_data_gap": false
+    }
+  },
+  "validation_gate": {
+    "model_id": "M_R_75_5TICK_20261008_132512.json",
+    "symbol": "R_75",
+    "evaluation_time": 1791491392.009564,
+    "resolved_predictions": 0,
+    "independent_periods": 0,
+    "runhigh_win_rate": null,
+    "runlow_win_rate": null,
+    "runhigh_z_score": null,
+    "runlow_z_score": null,
+    "brier_rh": null,
+    "brier_rl": null,
+    "naive_brier": 0.0317,
+    "brier_improvement_pct": null,
+    "quote_coverage_pct": 0.0,
+    "cumulative_pnl": 0.0,
+    "max_drawdown": 0.0,
+    "gate_passed": false,
+    "demotion_triggered": false,
+    "gate_reasons": [
+      "INSUFFICIENT_DATA: only 0/200 resolved observations"
+    ],
+    "recommended_action": "INSUFFICIENT_DATA"
+  }
+}

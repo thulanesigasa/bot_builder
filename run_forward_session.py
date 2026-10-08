@@ -1,4 +1,4 @@
-"""Operational Forward Research Session Launcher (V1.6.3).
+"""Operational Forward Research Session Launcher (V1.6.4).
 
 Primary CLI entry point for initiating and managing live non-purchasing forward market observation:
     python run_forward_session.py --mode SHADOW --symbol R_75
@@ -49,7 +49,7 @@ SUPPORTED_SYMBOLS: List[str] = [
 def print_banner(symbol: str, mode: str, duration: Optional[float], max_obs: Optional[int]):
     print("\n" + "=" * 70)
     print("  DERIV ONLY UPS / ONLY DOWNS QUANTITATIVE RESEARCH ENGINE")
-    print("  FORWARD OBSERVATION, RECONCILIATION & EVIDENCE SYSTEM (V1.6.3)")
+    print("  FORWARD OBSERVATION, RECONCILIATION & EVIDENCE SYSTEM (V1.6.4)")
     print("=" * 70)
     print(f"  Target Symbol       : {symbol}")
     print(f"  Execution Mode      : {mode}")
@@ -91,7 +91,7 @@ def verify_environment(symbol: str, mode: str, model_path: Optional[str] = None)
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Deriv Forward Observation & Evidence Collection Service (V1.6.1)"
+        description="Deriv Forward Outcome Resolution & Evidence Collection Service (V1.6.4)"
     )
     parser.add_argument("--symbol", default="R_75", help="Deriv synthetic asset symbol (default: R_75)")
     parser.add_argument(
@@ -112,12 +112,14 @@ def main():
     parser.add_argument("--smoke-test", action="store_true", help="Run a brief 30-second live smoke test session")
     parser.add_argument("--diagnose", action="store_true", help="Run prediction pipeline diagnostics and report current status without running collection")
     parser.add_argument("--no-preload-warmup", action="store_true", help="Disable preloading historical warmup ticks")
+    parser.add_argument("--grace-seconds", type=float, default=30.0, help="Max grace window seconds to resolve pending outcomes at session end (default: 30.0)")
+    parser.add_argument("--cutoff-seconds", type=float, default=20.0, help="Seconds before session end to halt new prediction creation (default: 20.0)")
     args = parser.parse_args()
 
     if args.diagnose:
         from forward_observer import ForwardObserver
         print("\n=======================================================")
-        print("  OPERATIONAL PREDICTION PIPELINE DIAGNOSTICS (V1.6.3)")
+        print("  OPERATIONAL PREDICTION PIPELINE DIAGNOSTICS (V1.6.4)")
         print("=======================================================")
         print(f"  Target Symbol       : {args.symbol}")
         print(f"  Mode                : {args.mode}")
@@ -140,6 +142,7 @@ def main():
         print(f"  Live Ticks Received   : {report.get('live_ticks_received')}")
         print(f"  Predictions Generated : {report.get('predictions_generated')}")
         print(f"  Predictions Persisted : {report.get('predictions_persisted')}")
+        print(f"  Active Pending        : {report.get('active_pending_count')}")
         print(f"  Current Blocker       : {report.get('current_blocker') or 'None (Ready for inference)'}")
         print(f"  Last Pipeline Event   : {report.get('last_pipeline_event')}")
         print(f"  Safety Directive      : {report.get('safety_status')}")
@@ -149,7 +152,7 @@ def main():
     # Smoke test preset
     duration = 30.0 if args.smoke_test else (args.duration if args.duration and args.duration > 0 else None)
     max_obs = 10 if args.smoke_test else args.max_observations
-    notes = "V1.6.3 Live Smoke Test" if args.smoke_test else args.notes
+    notes = "V1.6.4 Live Smoke Test" if args.smoke_test else args.notes
 
     print_banner(symbol=args.symbol, mode=args.mode, duration=duration, max_obs=max_obs)
 
@@ -171,7 +174,9 @@ def main():
         flush_interval_ticks=args.flush_interval,
         reports_dir=args.report_dir,
         notes=notes,
-        preload_warmup=not args.no_preload_warmup
+        preload_warmup=not args.no_preload_warmup,
+        prediction_cutoff_seconds=args.cutoff_seconds,
+        max_resolution_grace_seconds=args.grace_seconds
     )
 
     def handle_sig(sig, frame):

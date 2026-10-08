@@ -1,19 +1,20 @@
-# Deriv 5-Tick Quantitative Research & Real-Market Validation Framework (V1.6.3)
+# Deriv 5-Tick Quantitative Research & Real-Market Validation Framework (V1.6.4)
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Testing](https://img.shields.io/badge/pytest-188%20passed%20(100%25)-0284C7)
+![Testing](https://img.shields.io/badge/pytest-196%20passed%20(100%25)-0284C7)
 ![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-0284C7)
 ![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v1%2Foptions%20Verified-0284C7)
 ![Safety](https://img.shields.io/badge/Safety-Real--Money%20Trading%20DISABLED-0F172A)
+![Outcome Resolver](https://img.shields.io/badge/Resolver-Multi--Pending%20Consecutive%20Gap%20Fixed-0284C7)
 ![Reconciliation](https://img.shields.io/badge/Reconciliation-6--Dimension%20Automated%20Engine-0284C7)
 ![Referential Integrity](https://img.shields.io/badge/Database-Foreign%20Keys%20Enforced-0284C7)
 ![Quote Integrity](https://img.shields.io/badge/Quotes-Session--Linked%20%7C%20Lookahead--Free-0284C7)
 ![Prediction Pipeline](https://img.shields.io/badge/Prediction%20Activation-Dynamic%20Lookback%20%26%20Warmup%20Preload-0284C7)
-![Architecture](https://img.shields.io/badge/Architecture-V1.6.3%20Complete%20System%20Integration-0284C7)
+![Architecture](https://img.shields.io/badge/Architecture-V1.6.4%20Forward%20Outcome%20Resolution-0284C7)
 
 A quantitative research, frozen model inference, and real-market forward observation system engineered for Deriv 5-tick contracts—specifically modeling RUNHIGH (Only Ups) and RUNLOW (Only Downs) where every successive tick after the entry spot must move strictly in the contract direction.
 
-V1.6.3 resolves the zero forward predictions problem through dynamic model lookback, historical feature warm-up preloading, quote-independent SHADOW prediction journaling, authoritative outcome chronology verification, and multi-session provenance accounting.
+V1.6.4 completes the genuine forward prediction lifecycle by diagnosing and fixing the Zero-Resolved-Outcome problem: resolving consecutive inter-tick gap logic, tracking multi-pending overlapping predictions, anchoring historical warm-up strictly before the authoritative first live tick, managing controlled session shutdown with bounded resolution grace windows, and immutably recording genuine future ticks.
 
 ---
 
@@ -41,7 +42,7 @@ Entry Spot S_0 = tick i + 1 (First tick after processing)
 - **Equality Rule**: Any equality ($=$) at any step results in an immediate contract loss.
 - **Reversal Rule**: Any opposing directional tick results in an immediate contract loss.
 - **Incomplete Sequences**: Evaluates to `OUTCOME_INCOMPLETE`, preventing artificial loss attribution.
-- **Data Gap Sequences**: If elapsed time between ticks during observation exceeds $5.0\text{s}$, classified as `OUTCOME_DATA_GAP` and excluded from win-rate metrics.
+- **Data Gap Sequences**: If elapsed time between consecutive ticks during observation exceeds $5.0\text{s}$, classified as `OUTCOME_DATA_GAP` and excluded from win-rate metrics.
 
 ---
 
@@ -59,16 +60,17 @@ Empirical results on Volatility 75 (`R_75`, 43,184 ticks, 43,178 contract window
 
 ---
 
-## V1.6.3 Core Architecture & Pipeline Components
+## V1.6.4 Core Architecture & Pipeline Components
 
 | Component | File | Role |
 |---|---|---|
-| **Forward Observer** | `forward_observer.py` | Feature buffer, historical warmup preloading, dynamic lookback inference, quote matching |
-| **Collection Service** | `forward_collection_service.py` | Sustained WebSocket collection service, auto-reconnect, end-of-session reconciliation |
-| **Session Launcher** | `run_forward_session.py` | Operational CLI entry point with preflight checks and `--diagnose` troubleshooting mode |
+| **Outcome Resolver** | `outcome_resolver.py` | Dedicated multi-pending outcome resolution tracking consecutive inter-tick gaps and full 6-tick sequences ($S_0 \to S_5$) |
+| **Forward Observer** | `forward_observer.py` | Feature buffer, historical warmup anchored strictly before first live tick, prediction cutoff controls |
+| **Collection Service** | `forward_collection_service.py` | Sustained WebSocket collection service, auto-reconnect, bounded resolution grace window, reconciliation |
+| **Session Launcher** | `run_forward_session.py` | Operational CLI entry point supporting extended duration, `--cutoff-seconds`, and `--grace-seconds` |
 | **Session Reconciler** | `session_reconciler.py` | 6-dimension automated audit engine verifying provenance, ticks, quotes, and outcome chronology |
 | **Session Registry** | `forward_session.py` | Authoritative lifecycle transitions, tick breakdown accounting, dangling session recovery |
-| **Prediction Journal** | `forward_journal.py` | Dedicated foreign-key `forward_outcomes` table, immutable predictions, outcome reconstruction |
+| **Prediction Journal** | `forward_journal.py` | Integrated `OutcomeResolver`, immutable prediction logging, dedicated `forward_outcomes` table |
 | **Model Artifact** | `model_artifact.py` | Frozen model schema with dynamic `required_lookback`, cryptographic checksum, and inference |
 | **Quote Database** | `quote_database.py` | SQLite proposal quote persistence strictly linked and queried by `session_id` |
 | **Quote Recorder** | `quote_recorder.py` | Deriv proposal quote recorder with active `session_id` propagation |
@@ -78,7 +80,7 @@ Empirical results on Volatility 75 (`R_75`, 43,184 ticks, 43,178 contract window
 ### End-to-End Auditable Pipeline
 
 ```
-[Historical Ticks Preload: CSV / Master] ──► Feature Buffer (Pre-warmed, 0 Wait)
+[Historical Ticks Preload: CSV / Master] ──► Anchored Strictly Preceding First Live Tick
                                                       │
 [Genuine Deriv Tick: wss://api.derivws.com]           │
          │                                            │
@@ -92,7 +94,8 @@ Empirical results on Volatility 75 (`R_75`, 43,184 ticks, 43,178 contract window
          │                               ├──► ForwardPredictionJournal.log_prediction()
          │                               │       [Mandatory session_id, Immutable]
          │                               │
-         │                               └──► ForwardPredictionJournal.ingest_forward_tick()
+         │                               └──► OutcomeResolver.ingest_tick()
+         │                                       │ (Consecutive Tick Gaps Checked vs last_epoch)
          │                                       │ (Reconstructs S0..S5 Monotonic Movement)
          │                                       └──► Writes to forward_outcomes
          │                                               [Foreign Key -> forward_predictions]
@@ -114,20 +117,21 @@ bot_builder/
 ├── contract_lifecycle.py               # Canonical 5-tick contract execution model
 ├── dashboard.py                        # Web dashboard (60-30-10 palette, SVG only)
 ├── decision_gate.py                    # Centralized multi-gate eligibility engine
-├── forward_collection_service.py       # Long-running collection service with reconciliation
-├── forward_journal.py                  # Prediction journal with foreign-key forward_outcomes
-├── forward_observer.py                 # Forward observation orchestrator with warmup preload
+├── forward_collection_service.py       # Long-running collection service with resolution grace period
+├── forward_journal.py                  # Prediction journal delegating to OutcomeResolver
+├── forward_observer.py                 # Forward observation orchestrator with anchored warmup
 ├── forward_session.py                  # Session registry with authoritative lifecycle statuses
 ├── forward_validation_gate.py          # Promotion gate requiring RECONCILED session status
 ├── live_collector.py                   # Live WebSocket tick streaming and gap monitor
 ├── model_artifact.py                   # Frozen model schema with dynamic required_lookback
 ├── model_manager.py                    # Model registry, training, and holdout evaluation
+├── outcome_resolver.py                 # Multi-pending outcome tracking & canonical resolution
 ├── performance_tracker.py              # Economic PnL attribution engine strictly per session
 ├── quote_database.py                   # SQLite proposal quote database with session filtering
 ├── quote_recorder.py                   # Deriv proposal quote recorder with session propagation
 ├── risk.py                             # SQLite-persisted risk management engine
 ├── run_edge_research.py                # Statistical edge analysis and hypothesis testing
-├── run_forward_session.py              # Primary V1.6.3 CLI entry point with --diagnose flag
+├── run_forward_session.py              # Operational V1.6.4 CLI launcher with cutoff/grace flags
 ├── session_reconciler.py               # Automated session reconciliation engine
 ├── session_reporter.py                 # Session-specific and daily report generator
 ├── verify_deriv_connection.py          # WebSocket handshake and latency diagnostic
@@ -145,22 +149,24 @@ bot_builder/
 ├── models/
 │   └── M_R_75_5TICK_20261008_132512.json # Frozen baseline research model artifact
 ├── reports/
-│   ├── V1_6_3_COMPREHENSIVE_VALIDATION_REPORT.md # Comprehensive V1.6.3 validation report
+│   ├── V1_6_4_FORWARD_OUTCOME_VALIDATION_REPORT.md # Comprehensive V1.6.4 validation report
+│   ├── V1_6_3_COMPREHENSIVE_VALIDATION_REPORT.md
 │   ├── V1_6_2_DATA_INTEGRITY_REPORT.md
 │   ├── V1_6_1_FORWARD_ACTIVATION_REPORT.md
 │   └── session_*.json                  # Generated forward session audit reports
 └── tests/
+    ├── test_v164_outcome_resolution.py # V1.6.4 outcome resolver, gap fix & e2e acceptance
     ├── test_v163_integration.py        # V1.6.3 dynamic lookback, warmup & lifecycle tests
     ├── test_v162_data_integrity.py     # V1.6.2 data integrity & reconciliation tests
     ├── test_v161_forward_activation.py # V1.6.1 safety and lifecycle regression tests
-    └── ...                             # 188 total passing automated unit & integration tests
+    └── ...                             # 196 total passing automated unit & integration tests
 ```
 
 ---
 
 ## Verified Command Execution Reference
 
-### 1. Run Complete Regression Test Suite (188 Passed)
+### 1. Run Complete Regression Test Suite (196 Passed)
 ```powershell
 python -m pytest tests/ -q
 ```
@@ -170,9 +176,9 @@ python -m pytest tests/ -q
 python run_forward_session.py --diagnose --symbol R_75
 ```
 
-### 3. Start Live Forward Observation in SHADOW Mode
+### 3. Start Live Forward Observation in SHADOW Mode with Resolution Grace Window
 ```powershell
-python run_forward_session.py --mode SHADOW --symbol R_75 --duration 1200
+python run_forward_session.py --mode SHADOW --symbol R_75 --duration 1800 --cutoff-seconds 30 --grace-seconds 45
 ```
 
 ### 4. Verify Deriv WebSocket API Connectivity
@@ -190,9 +196,9 @@ python -c "from session_reconciler import SessionReconciler; r = SessionReconcil
 python -c "from quote_database import QuoteDatabase; q = QuoteDatabase(); print(len(q.get_session_quotes('<SESSION_ID>')))"
 ```
 
-### 7. Inspect Session-Specific Predictions
+### 7. Inspect Session-Specific Predictions & Outcomes
 ```powershell
-python -c "from forward_journal import ForwardPredictionJournal; j = ForwardPredictionJournal('data/forward_predictions.db'); print(len(j.get_session_predictions('<SESSION_ID>')))"
+python -c "from forward_journal import ForwardPredictionJournal; j = ForwardPredictionJournal('data/forward_predictions.db'); print('Preds:', len(j.get_session_predictions('<SESSION_ID>'))); print('Outcomes:', len(j.get_session_outcomes('<SESSION_ID>')))"
 ```
 
 ### 8. Launch Unified Web Operations Dashboard
@@ -206,5 +212,5 @@ Navigate to `http://127.0.0.1:8088`.
 ## Safety Directives & Final Verdict
 
 - **Real-Money Trading:** Permanently locked to disabled (`LIVE_EXECUTION_DISABLED = True`). Zero buy orders are submitted under any circumstances.
-- **Operational Status:** `LIVE_SHADOW_PREDICTIONS_VERIFIED`. Ticks, proposal quotes, model probabilities, and forward predictions are collected, journaled, and reconciled with verified provenance.
-- **Model Promotion:** Models remain `RESEARCH_ONLY`. Promotion requires Gate 0 `RECONCILED` session integrity and independent non-overlapping forward evidence exceeding the $3.277\%$ break-even hurdle with conservative positive EV.
+- **Operational Status:** `LIVE_OUTCOMES_RECONSTRUCTED`. Forward predictions generated from live market observations are resolved using full 6-tick canonical sequences ($S_0 \to S_5$) and persisted to dedicated outcome records.
+- **Model Edge Evaluation:** Model performance remains in `FORWARD_CANDIDATE` / research exploration. Resolving live predictions allows accumulating sufficient statistical evidence across non-overlapping evaluation windows against the $3.277\%$ break-even hurdle.
