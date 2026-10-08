@@ -53,21 +53,35 @@ class QuoteEngine:
 
     def __init__(
         self,
-        mode: str = "research",  # 'research' or 'live'
+        mode: str = "research",  # 'research', 'real_quotes_only', or 'live'
         benchmark_stake: float = 2.0,
         benchmark_payout: float = 61.03,
         default_up_payout_ratio: Optional[float] = None,
         default_down_payout_ratio: Optional[float] = None,
         ws_url: str = "wss://api.derivws.com/trading/v1/options/ws/public",
-        app_id: str = "1089"
+        app_id: str = "1089",
+        symbol: str = "R_75",
+        db_path: Optional[str] = None,
+        max_freshness_seconds: float = 60.0,
+        allow_benchmark_fallback: bool = True
     ):
         self.mode = mode
+        self.symbol = symbol
         self.ws_url = ws_url
         self.app_id = app_id
+        self.max_freshness_seconds = max_freshness_seconds
+        self.allow_benchmark_fallback = allow_benchmark_fallback
+        self._historical_quotes = None
         self._quotes: Dict[str, Optional[ProposalQuote]] = {
             "UP": None,
             "DOWN": None
         }
+
+        try:
+            from quote_database import QuoteDatabase
+            self.quote_db = QuoteDatabase(db_path=db_path)
+        except Exception:
+            self.quote_db = None
 
         # If explicit ratios are provided, use them; otherwise use verified benchmark
         if default_up_payout_ratio is not None and default_down_payout_ratio is not None:
@@ -223,30 +237,62 @@ class QuoteEngine:
 
     def get_quote(self, direction: str, epoch: Optional[int] = None) -> Optional[ProposalQuote]:
         """Returns the exact quote for the direction at a given epoch timestamp.
-        If a historical quote table is loaded and epoch is given, retrieves the exact historical quote.
-        If unavailable, returns None (NO TRADE).
+        
+        Priority of lookup:
+        1. QuoteDatabase (SQLite): lookahead-free and freshness-bounded query.
+        2. Historical CSV/DataFrame stream.
+        3. Configured / live cached quotes.
+        4. If mode is 'real_quotes_only' and no quote exists, returns None (QUOTE_UNAVAILABLE).
+        5. If benchmark fallback is permitted in research mode, returns benchmark quote with source='benchmark_configured'.
         """
         d = direction.upper()
         dir_key = "UP" if d in ("UP", "RUNHIGH", "RISE") else ("DOWN" if d in ("DOWN", "RUNLOW", "FALL") else None)
         if dir_key is None:
             return None
 
-        # Check historical quote stream if present and epoch provided
+        # 1. Check persistent QuoteDatabase if epoch provided
+        if epoch is not None and getattr(self, "quote_db", None) is not None:
+            c_type = "RUNHIGH" if dir_key == "UP" else "RUNLOW"
+            rec = self.quote_db.get_latest_quote_before(
+                symbol=self.symbol,
+                contract_type=c_type,
+                timestamp=float(epoch),
+                max_freshness_seconds=self.max_freshness_seconds
+            )
+            if rec is not None:
+                profit = rec.total_payout - rec.stake
+                return ProposalQuote(
+                    symbol=rec.market_symbol,
+                    contract_type=rec.contract_type,
+                    direction=dir_key,
+                    stake=rec.stake,
+                    payout=rec.total_payout,
+                    profit=profit,
+                    payout_ratio=profit / rec.stake if rec.stake > 0 else 0.0,
+                    implied_probability=rec.stake / rec.total_payout if rec.total_payout > 0 else 0.0,
+                    quote_time=rec.response_timestamp,
+                    source="historical_db_quote",
+                    duration=rec.contract_duration,
+                    duration_unit=rec.duration_unit,
+                    currency=rec.currency,
+                    proposal_id=rec.proposal_id
+                )
+
+        # 2. Check historical quote stream DataFrame if present
         if epoch is not None and getattr(self, "_historical_quotes", None) is not None:
             hq = self._historical_quotes
-            # Find closest quote at or before epoch (within 120s tolerance)
             match = hq[hq["epoch"] <= epoch]
             if len(match) > 0:
                 row = match.iloc[-1]
                 time_diff = epoch - row["epoch"]
-                if time_diff <= 120:
+                if time_diff <= self.max_freshness_seconds:
                     stake = float(row.get("stake", 2.0))
                     payout_col = "runhigh_payout" if dir_key == "UP" else "runlow_payout"
                     if payout_col in row and not pd.isna(row[payout_col]):
                         total_payout = float(row[payout_col])
                         profit = total_payout - stake
                         return ProposalQuote(
-                            symbol=str(row.get("symbol", "R_75")),
+                            symbol=str(row.get("symbol", self.symbol)),
                             contract_type="RUNHIGH" if dir_key == "UP" else "RUNLOW",
                             direction=dir_key,
                             stake=stake,
@@ -258,6 +304,19 @@ class QuoteEngine:
                             source="historical_quote_stream"
                         )
 
+        # 3. Check memory / live cached quote
+        live_quote = self._quotes.get(dir_key)
+        if live_quote is not None:
+            if epoch is not None and self.mode in ("real_quotes_only", "paper"):
+                if epoch - live_quote.quote_time > self.max_freshness_seconds:
+                    return None
+            return live_quote
+
+        # 4. If strict real quotes required and none found, return None
+        if self.mode == "real_quotes_only" or not self.allow_benchmark_fallback:
+            return None
+
+        # 5. Benchmark fallback in research mode
         return self._quotes.get(dir_key)
 
     def get_quote_status(self, direction: str, epoch: Optional[int] = None) -> Tuple[str, Optional[ProposalQuote]]:

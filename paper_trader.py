@@ -6,7 +6,7 @@ CRITICAL ARCHITECTURAL DIRECTIVE (NO LIVE MONEY):
 - Records predicted probabilities vs real-world outcomes for post-hoc edge verification.
 """
 from dataclasses import dataclass, asdict
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import os
 import json
 import numpy as np

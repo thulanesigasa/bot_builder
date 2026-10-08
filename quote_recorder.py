@@ -61,13 +61,19 @@ class DerivQuoteRecorder:
         symbol: str = "R_75",
         app_id: str = DEFAULT_APP_ID,
         ws_url: Optional[str] = None,
-        default_stake: float = 2.0
+        default_stake: float = 2.0,
+        db_path: Optional[str] = None
     ):
         self.symbol = symbol
         self.app_id = app_id
         self.ws_url = ws_url or PRIMARY_WS_URL
         self.default_stake = default_stake
         self.records: List[ProposalRecord] = []
+        try:
+            from quote_database import QuoteDatabase
+            self.quote_db: Optional[QuoteDatabase] = QuoteDatabase(db_path=db_path)
+        except Exception:
+            self.quote_db = None
 
     async def fetch_single_direction_quote(
         self,
@@ -205,6 +211,13 @@ class DerivQuoteRecorder:
                 if output_csv:
                     self.append_record_to_csv(output_csv, rh_rec)
                     self.append_record_to_csv(output_csv, rl_rec)
+
+                if self.quote_db is not None:
+                    try:
+                        self.quote_db.store_quote(rh_rec)
+                        self.quote_db.store_quote(rl_rec)
+                    except Exception:
+                        pass
 
                 await asyncio.sleep(interval_seconds)
         finally:

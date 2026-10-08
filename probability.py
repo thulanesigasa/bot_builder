@@ -240,6 +240,24 @@ def norm_cdf(z: float) -> float:
     return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
 
 
+def norm_ppf(p: float) -> float:
+    """Standard normal percent point function (inverse CDF) using binary search."""
+    if p <= 0.0:
+        return -8.0
+    if p >= 1.0:
+        return 8.0
+    if abs(p - 0.5) < 1e-12:
+        return 0.0
+    low, high = (-8.0, 0.0) if p < 0.5 else (0.0, 8.0)
+    for _ in range(60):
+        mid = (low + high) / 2.0
+        if norm_cdf(mid) < p:
+            low = mid
+        else:
+            high = mid
+    return float((low + high) / 2.0)
+
+
 def bonferroni_critical_z(num_tests: int, alpha: float = 0.05) -> float:
     """Computes critical z-score threshold adjusted for family-wise error rate via Bonferroni."""
     if num_tests <= 0:
@@ -507,4 +525,134 @@ def calculate_fdr_q_values(p_values: List[float]) -> List[float]:
         q_vals[orig_idx] = float(running_min)
         
     return q_vals
+
+
+def calculate_holm_adjusted_p(p_values: List[float]) -> List[float]:
+    """Calculates Holm step-down adjusted p-values controlling family-wise error rate (FWER).
+    
+    More powerful than standard Bonferroni while guaranteeing strong FWER control:
+    p_(k)^adj = min(1.0, max_{j <= k} ((m - j + 1) * p_(j)))
+    """
+    m = len(p_values)
+    if m == 0:
+        return []
+    
+    indexed = sorted(enumerate(p_values), key=lambda x: x[1])
+    adjusted_sorted = [0.0] * m
+    running_max = 0.0
+
+    for rank_idx, (orig_idx, p_val) in enumerate(indexed):
+        k = rank_idx + 1  # 1-indexed rank
+        multiplier = m - k + 1
+        adj_p = min(1.0, p_val * multiplier)
+        running_max = max(running_max, adj_p)
+        adjusted_sorted[rank_idx] = float(running_max)
+
+    # Restore original ordering
+    res = [0.0] * m
+    for (orig_idx, _), adj_p in zip(indexed, adjusted_sorted):
+        res[orig_idx] = adj_p
+    return res
+
+
+def wilson_score_ci(wins: int, n: int, confidence: float = 0.95) -> Tuple[float, float]:
+    """Calculates Wilson score interval for binomial proportion with robust coverage near boundaries."""
+    if n <= 0:
+        return 0.0, 0.0
+    z = norm_ppf(1.0 - (1.0 - confidence) / 2.0)
+    p_hat = float(wins / n)
+    z2 = z * z
+    denom = 1.0 + z2 / n
+    center = (p_hat + z2 / (2.0 * n)) / denom
+    margin = (z * math.sqrt((p_hat * (1.0 - p_hat) / n) + (z2 / (4.0 * n * n)))) / denom
+    return max(0.0, float(center - margin)), min(1.0, float(center + margin))
+
+
+def stationary_block_bootstrap_ci(
+    data: np.ndarray,
+    num_resamples: int = 1000,
+    mean_block_length: int = 10,
+    confidence: float = 0.95,
+    seed: int = 42
+) -> Tuple[float, float]:
+    """Calculates stationary block bootstrap confidence interval (Politis & Romano, 1994).
+    
+    Preserves serial autocorrelation and moving-window dependence inherent in overlapping
+    5-tick contract evaluations by sampling blocks with geometric lengths.
+    """
+    arr = np.asarray(data, dtype=float)
+    n = len(arr)
+    if n == 0:
+        return 0.0, 0.0
+    if n == 1 or np.all(arr == arr[0]):
+        return float(arr[0]), float(arr[0])
+
+    rng = np.random.default_rng(seed)
+    p_geom = 1.0 / max(1, mean_block_length)
+    boot_means = np.empty(num_resamples, dtype=float)
+
+    for b in range(num_resamples):
+        indices = np.empty(n, dtype=int)
+        idx_count = 0
+        while idx_count < n:
+            start_idx = rng.integers(0, n)
+            # Sample block length from geometric distribution
+            block_len = rng.geometric(p_geom)
+            for step in range(block_len):
+                if idx_count >= n:
+                    break
+                indices[idx_count] = (start_idx + step) % n
+                idx_count += 1
+        boot_means[b] = np.mean(arr[indices])
+
+    alpha = 1.0 - confidence
+    lower_pct = 100.0 * (alpha / 2.0)
+    upper_pct = 100.0 * (1.0 - alpha / 2.0)
+    ci_lower = float(np.percentile(boot_means, lower_pct))
+    ci_upper = float(np.percentile(boot_means, upper_pct))
+    return max(0.0, ci_lower), min(1.0, ci_upper)
+
+
+def non_overlapping_sensitivity_analysis(
+    series: pd.Series,
+    stride: int = 5,
+    null_prob: float = 0.0328
+) -> Dict[str, Any]:
+    """Evaluates whether an observed statistical edge persists on strictly non-overlapping contract windows.
+    
+    Subsamples observations with stride >= 5 to completely eliminate shared ticks between successive windows.
+    """
+    clean_series = series.dropna().to_numpy(dtype=float)
+    n_full = len(clean_series)
+    if n_full == 0:
+        return {
+            "n_full": 0, "n_non_overlapping": 0, "full_win_rate": 0.0,
+            "non_overlapping_win_rate": 0.0, "full_z": 0.0, "non_overlapping_z": 0.0,
+            "edge_survives_non_overlapping": False
+        }
+
+    full_wins = int(np.sum(clean_series))
+    full_wr = float(full_wins / n_full)
+    full_z = calculate_z_score(full_wr, null_prob, n_full)
+
+    # Subsample stride
+    sub_series = clean_series[::stride]
+    n_sub = len(sub_series)
+    sub_wins = int(np.sum(sub_series))
+    sub_wr = float(sub_wins / n_sub) if n_sub > 0 else 0.0
+    sub_z = calculate_z_score(sub_wr, null_prob, n_sub)
+
+    edge_survives = (sub_wr > null_prob) and (sub_z > 0.0)
+
+    return {
+        "n_full": n_full,
+        "n_non_overlapping": n_sub,
+        "stride": stride,
+        "full_win_rate": round(full_wr, 4),
+        "non_overlapping_win_rate": round(sub_wr, 4),
+        "full_z": round(full_z, 3),
+        "non_overlapping_z": round(sub_z, 3),
+        "edge_survives_non_overlapping": edge_survives
+    }
+
 

@@ -20,7 +20,11 @@ from probability import (
     calculate_p_value,
     calculate_adjusted_p_value,
     evaluate_significance_status,
-    bonferroni_critical_z
+    bonferroni_critical_z,
+    calculate_holm_adjusted_p,
+    calculate_fdr_q_values,
+    stationary_block_bootstrap_ci,
+    non_overlapping_sensitivity_analysis
 )
 from strategy import CONTINUATION_SETUPS, REVERSAL_SETUPS, ALL_SETUPS
 
@@ -114,6 +118,11 @@ class StateCandidate:
     raw_p_value: float = 1.0
     adjusted_p_value: float = 1.0
     significance_status: str = "NOT_SIGNIFICANT"
+    holm_p_value: float = 1.0
+    fdr_q_value: float = 1.0
+    total_hypotheses: int = 1
+    bootstrap_ci: Tuple[float, float] = (0.0, 0.0)
+    non_overlapping_survives: bool = False
 
 
 
@@ -272,19 +281,45 @@ class SystematicStateGridSearch:
                 })
 
         total_states_evaluated = max(1, len(all_evaluations))
-        bonferroni_z = bonferroni_critical_z(total_states_evaluated, alpha=self.alpha)
+        total_hypotheses = total_states_evaluated * 2
+        bonferroni_z = bonferroni_critical_z(total_hypotheses, alpha=self.alpha)
+
+        # Collect all raw p-values for joint Holm step-down and BH-FDR estimation
+        raw_p_list: List[float] = []
+        for r in all_evaluations:
+            raw_p_list.append(r["rh_raw_p"])
+            raw_p_list.append(r["rl_raw_p"])
+
+        holm_p_list = calculate_holm_adjusted_p(raw_p_list)
+        fdr_q_list = calculate_fdr_q_values(raw_p_list)
 
         # Populate adjusted p-values and significance statuses
         rh_candidates = []
         rl_candidates = []
 
-        for r in all_evaluations:
-            r["rh_adj_p"] = calculate_adjusted_p_value(r["rh_raw_p"], total_states_evaluated)
-            r["rl_adj_p"] = calculate_adjusted_p_value(r["rl_raw_p"], total_states_evaluated)
-            r["rh_sig_status"] = evaluate_significance_status(r["rh_raw_p"], r["rh_adj_p"], r["n"], min_samples=self.sample_config.min_discovery_samples, alpha=self.alpha)
-            r["rl_sig_status"] = evaluate_significance_status(r["rl_raw_p"], r["rl_adj_p"], r["n"], min_samples=self.sample_config.min_discovery_samples, alpha=self.alpha)
+        for idx, r in enumerate(all_evaluations):
+            rh_idx = idx * 2
+            rl_idx = idx * 2 + 1
+
+            r["rh_adj_p"] = calculate_adjusted_p_value(r["rh_raw_p"], total_hypotheses)
+            r["rl_adj_p"] = calculate_adjusted_p_value(r["rl_raw_p"], total_hypotheses)
+            r["rh_holm_p"] = holm_p_list[rh_idx]
+            r["rl_holm_p"] = holm_p_list[rl_idx]
+            r["rh_fdr_q"] = fdr_q_list[rh_idx]
+            r["rl_fdr_q"] = fdr_q_list[rl_idx]
+
+            r["rh_sig_status"] = evaluate_significance_status(r["rh_raw_p"], r["rh_holm_p"], r["n"], min_samples=self.sample_config.min_discovery_samples, alpha=self.alpha)
+            r["rl_sig_status"] = evaluate_significance_status(r["rl_raw_p"], r["rl_holm_p"], r["n"], min_samples=self.sample_config.min_discovery_samples, alpha=self.alpha)
 
             if r["rh_edge"] > 0 and r["rh_z"] >= self.candidate_z_threshold and r["rh_lift"] >= self.min_lift_threshold:
+                # Compute dependence-aware block bootstrap CI and non-overlapping sensitivity
+                mask_rh = pd.Series(True, index=train_df.index)
+                for c, v in zip(r["factor_cols"], r["factor_vals"]):
+                    mask_rh = mask_rh & (train_df[c].astype(str) == str(v))
+                rh_sub_series = train_df.loc[mask_rh, "runhigh_win"]
+                boot_ci = stationary_block_bootstrap_ci(rh_sub_series.to_numpy(dtype=float))
+                sens = non_overlapping_sensitivity_analysis(rh_sub_series, stride=5, null_prob=be_up)
+
                 rh_candidates.append(StateCandidate(
                     state_id=r["state_id"],
                     factor_cols=r["factor_cols"],
@@ -304,10 +339,22 @@ class SystematicStateGridSearch:
                     absolute_lift=r["rh_abs_lift"],
                     raw_p_value=r["rh_raw_p"],
                     adjusted_p_value=r["rh_adj_p"],
-                    significance_status=r["rh_sig_status"]
+                    significance_status=r["rh_sig_status"],
+                    holm_p_value=r["rh_holm_p"],
+                    fdr_q_value=r["rh_fdr_q"],
+                    total_hypotheses=total_hypotheses,
+                    bootstrap_ci=boot_ci,
+                    non_overlapping_survives=sens["edge_survives_non_overlapping"]
                 ))
 
             if r["rl_edge"] > 0 and r["rl_z"] >= self.candidate_z_threshold and r["rl_lift"] >= self.min_lift_threshold:
+                mask_rl = pd.Series(True, index=train_df.index)
+                for c, v in zip(r["factor_cols"], r["factor_vals"]):
+                    mask_rl = mask_rl & (train_df[c].astype(str) == str(v))
+                rl_sub_series = train_df.loc[mask_rl, "runlow_win"]
+                boot_ci_rl = stationary_block_bootstrap_ci(rl_sub_series.to_numpy(dtype=float))
+                sens_rl = non_overlapping_sensitivity_analysis(rl_sub_series, stride=5, null_prob=be_down)
+
                 rl_candidates.append(StateCandidate(
                     state_id=r["state_id"],
                     factor_cols=r["factor_cols"],
@@ -327,7 +374,12 @@ class SystematicStateGridSearch:
                     absolute_lift=r["rl_abs_lift"],
                     raw_p_value=r["rl_raw_p"],
                     adjusted_p_value=r["rl_adj_p"],
-                    significance_status=r["rl_sig_status"]
+                    significance_status=r["rl_sig_status"],
+                    holm_p_value=r["rl_holm_p"],
+                    fdr_q_value=r["rl_fdr_q"],
+                    total_hypotheses=total_hypotheses,
+                    bootstrap_ci=boot_ci_rl,
+                    non_overlapping_survives=sens_rl["edge_survives_non_overlapping"]
                 ))
 
         # Sort top rankings
