@@ -85,10 +85,11 @@ class QuoteDatabase:
             """)
             conn.commit()
 
-    def store_quote(self, record: Any) -> int:
+    def store_quote(self, record: Any, session_id: Optional[str] = None) -> int:
         """Stores a single ProposalRecord or dictionary into the database."""
         d = asdict(record) if hasattr(record, "__dataclass_fields__") else dict(record)
         created_at = datetime.now(timezone.utc).isoformat()
+        sess_val = session_id or d.get("session_id", "")
         with self._get_connection() as conn:
             cur = conn.execute("""
                 INSERT INTO quotes (
@@ -113,7 +114,7 @@ class QuoteDatabase:
                 float(d.get("quote_latency_ms", 0.0)),
                 str(d.get("collection_status", "QUOTE_AVAILABLE")),
                 str(d.get("api_response_metadata", "")),
-                str(d.get("session_id", "")),
+                str(sess_val),
                 created_at
             ))
             conn.commit()
@@ -163,9 +164,10 @@ class QuoteDatabase:
         symbol: str,
         contract_type: str,
         timestamp: float,
-        max_freshness_seconds: float = 60.0
+        max_freshness_seconds: float = 60.0,
+        session_id: Optional[str] = None
     ) -> Optional[ProposalRecord]:
-        """Retrieves the most recent genuinely observed quote strictly at or before timestamp.
+        """Fetches the latest recorded quote strictly before `timestamp`.
         
         Guarantees:
         1. Lookahead protection: response_timestamp <= timestamp.
@@ -181,17 +183,31 @@ class QuoteDatabase:
 
         min_time = timestamp - max_freshness_seconds
         with self._get_connection() as conn:
-            cur = conn.execute("""
-                SELECT * FROM quotes
-                WHERE market_symbol = ?
-                  AND contract_type = ?
-                  AND response_timestamp <= ?
-                  AND response_timestamp >= ?
-                  AND collection_status = 'QUOTE_AVAILABLE'
-                  AND total_payout > 0
-                ORDER BY response_timestamp DESC
-                LIMIT 1
-            """, (symbol, c_type, float(timestamp), float(min_time)))
+            if session_id:
+                cur = conn.execute("""
+                    SELECT * FROM quotes
+                    WHERE market_symbol = ?
+                      AND contract_type = ?
+                      AND response_timestamp <= ?
+                      AND response_timestamp >= ?
+                      AND collection_status = 'QUOTE_AVAILABLE'
+                      AND total_payout > 0
+                      AND session_id = ?
+                    ORDER BY response_timestamp DESC
+                    LIMIT 1
+                """, (symbol, c_type, float(timestamp), float(min_time), session_id))
+            else:
+                cur = conn.execute("""
+                    SELECT * FROM quotes
+                    WHERE market_symbol = ?
+                      AND contract_type = ?
+                      AND response_timestamp <= ?
+                      AND response_timestamp >= ?
+                      AND collection_status = 'QUOTE_AVAILABLE'
+                      AND total_payout > 0
+                    ORDER BY response_timestamp DESC
+                    LIMIT 1
+                """, (symbol, c_type, float(timestamp), float(min_time)))
             row = cur.fetchone()
             if row is None:
                 return None
@@ -215,6 +231,37 @@ class QuoteDatabase:
                 api_response_metadata=row["api_response_metadata"],
                 session_id=sess_id
             )
+
+    def get_session_quotes(self, session_id: str) -> List[ProposalRecord]:
+        """Returns all quotes strictly recorded under a specific session (V1.6.2 Section 10)."""
+        with self._get_connection() as conn:
+            cur = conn.execute(
+                "SELECT * FROM quotes WHERE session_id = ? ORDER BY response_timestamp ASC",
+                (session_id,)
+            )
+            rows = cur.fetchall()
+            return [
+                ProposalRecord(
+                    request_timestamp=r["request_timestamp"],
+                    response_timestamp=r["response_timestamp"],
+                    market_symbol=r["market_symbol"],
+                    contract_type=r["contract_type"],
+                    contract_duration=r["contract_duration"],
+                    duration_unit=r["duration_unit"],
+                    stake=r["stake"],
+                    total_payout=r["total_payout"],
+                    potential_net_profit=r["potential_net_profit"],
+                    currency=r["currency"],
+                    proposal_id=r["proposal_id"],
+                    quote_source=r["quote_source"],
+                    quote_latency_ms=r["quote_latency_ms"],
+                    collection_status=r["collection_status"],
+                    api_response_metadata=r["api_response_metadata"],
+                    session_id=r["session_id"]
+                )
+                for r in rows
+            ]
+
 
     def inspect_quotes(self, symbol: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
         """Returns the most recent quotes for inspection."""
@@ -299,11 +346,19 @@ class QuoteDatabase:
 
         return len(rows)
 
-    def report_quote_coverage(self, symbol: Optional[str] = None) -> Dict[str, Any]:
+    def report_quote_coverage(self, symbol: Optional[str] = None, session_id: Optional[str] = None) -> Dict[str, Any]:
         """Reports quote inventory coverage, timestamp spans, and direction counts."""
         with self._get_connection() as conn:
-            where_clause = "WHERE market_symbol = ?" if symbol else ""
-            params = (symbol,) if symbol else ()
+            filters = []
+            params = []
+            if symbol:
+                filters.append("market_symbol = ?")
+                params.append(symbol)
+            if session_id:
+                filters.append("session_id = ?")
+                params.append(session_id)
+
+            where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
             cur = conn.execute(f"""
                 SELECT

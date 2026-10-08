@@ -1,0 +1,57 @@
+=== DERIV QUANTITATIVE RESEARCH — SESSION REPORT ===
+Generated at: 2026-10-08T18:28:20+00:00
+Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)
+
+Session ID   : 21414146
+Symbol       : R_75
+Mode         : SHADOW
+Model ID     : M_R_75_5TICK_20261008_132512.json
+Status       : COMPLETED
+Start UTC    : 2026-10-08T18:27:54.496486+00:00
+Duration (s) : 25.5
+
+--- LIFECYCLE & OBSERVATION COUNTS ---
+  Ticks Received      : 9
+  Live Genuine Ticks  : 0
+  Warm-up Ticks       : 9
+  Duplicate Ticks     : 0
+  Rejected Ticks      : 0
+  Quotes Recorded     : 12
+  Predictions Total   : 0
+  Outcomes Resolved   : 0
+  Outcomes Pending    : 0
+  Outcomes Incomplete : 0
+  Outcomes Data Gap   : 0
+  Outcomes Unverified : 0
+
+--- DATA INTEGRITY & RECONCILIATION ---
+  Reconciliation Status: RECONCILED
+  Statistically Verified: True
+  Live Deriv Provenance : False
+  Chronology Violations : 0
+  Future Quote Violations: 0
+
+--- STATISTICAL EVIDENCE ---
+  RUNHIGH Est Prob    : None
+  RUNLOW Est Prob     : None
+  RUNHIGH Obs Prob    : None
+  RUNLOW Obs Prob     : None
+  Brier RH            : None
+  Brier RL            : None
+  Calib Error RH      : None
+  Calib Error RL      : None
+  Quote Coverage      : 0.0%
+
+--- ECONOMIC PERFORMANCE (HYPOTHETICAL) ---
+  Paper Trade Signals : 0
+  Resolved Trades     : 0
+  Win Rate            : None
+  Cumulative PnL      : 0.0
+  Mean PnL/Trade      : None
+  Max Drawdown        : 0.0
+
+--- VALIDATION GATE ---
+  Gate Passed         : False
+  Recommended Action  : INSUFFICIENT_DATA
+  Demotion Triggered  : False
+    - INSUFFICIENT_DATA: only 0/200 resolved observations

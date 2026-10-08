@@ -36,8 +36,9 @@ from config import DEFAULT_CONFIG
 DEFAULT_FORWARD_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "forward_predictions.db")
 
 
-# Canonical outcome status codes (V1.6.1 Section 11)
+# Canonical outcome status codes (V1.6.1 Section 11 & V1.6.2)
 STATUS_PENDING = "OUTCOME_PENDING"
+STATUS_RESOLVED = "RESOLVED"
 STATUS_RECONSTRUCTED = "OUTCOME_RECONSTRUCTED"
 STATUS_VERIFIED = "OUTCOME_VERIFIED"
 STATUS_INCOMPLETE = "OUTCOME_INCOMPLETE"
@@ -84,20 +85,24 @@ class ForwardPredictionRecord:
     hypothetical_pnl: float = 0.0
     execution_mode: str = "SHADOW"
     model_id: str = ""
-    feature_schema_version: str = "1.5.3"
+    quote_id: str = ""
+    feature_schema_version: str = "1.0"
+    source_provenance: str = "LIVE_DERIV"
 
 
 class ForwardPredictionJournal:
     """Persistent SQLite database and real-time evaluator for forward market predictions."""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None, enforce_session_id: bool = False):
         self.db_path = db_path or DEFAULT_FORWARD_DB
+        self.enforce_session_id = enforce_session_id
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         self._init_db()
 
     @contextlib.contextmanager
     def _get_conn(self):
         conn = sqlite3.connect(self.db_path, timeout=10.0)
+        conn.execute("PRAGMA foreign_keys = ON;")
         conn.row_factory = sqlite3.Row
         try:
             yield conn
@@ -142,8 +147,32 @@ class ForwardPredictionJournal:
                     hypothetical_pnl REAL NOT NULL DEFAULT 0.0,
                     execution_mode TEXT DEFAULT 'SHADOW',
                     model_id TEXT DEFAULT '',
+                    quote_id TEXT DEFAULT '',
                     feature_schema_version TEXT DEFAULT '1.5.3',
+                    source_provenance TEXT DEFAULT 'LIVE_DERIV',
                     created_at TEXT NOT NULL
+                )
+            """)
+
+            # Dedicated forward_outcomes table with foreign key (V1.6.2 Section 6 & 7)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS forward_outcomes (
+                    outcome_id TEXT PRIMARY KEY,
+                    prediction_id TEXT NOT NULL UNIQUE,
+                    session_id TEXT NOT NULL,
+                    entry_epoch INTEGER,
+                    expiry_epoch INTEGER,
+                    forward_prices_json TEXT NOT NULL,
+                    forward_ticks_count INTEGER NOT NULL DEFAULT 0,
+                    outcome_status TEXT NOT NULL,
+                    runhigh_win REAL,
+                    runlow_win REAL,
+                    hypothetical_pnl REAL NOT NULL DEFAULT 0.0,
+                    contract_model_version TEXT DEFAULT '5_movement_canonical',
+                    resolution_timestamp REAL NOT NULL,
+                    verification_level TEXT DEFAULT 'RECONSTRUCTED',
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (prediction_id) REFERENCES forward_predictions(prediction_id)
                 )
             """)
 
@@ -156,8 +185,12 @@ class ForwardPredictionJournal:
                 conn.execute("ALTER TABLE forward_predictions ADD COLUMN execution_mode TEXT DEFAULT 'SHADOW'")
             if "model_id" not in cols:
                 conn.execute("ALTER TABLE forward_predictions ADD COLUMN model_id TEXT DEFAULT ''")
+            if "quote_id" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN quote_id TEXT DEFAULT ''")
             if "feature_schema_version" not in cols:
                 conn.execute("ALTER TABLE forward_predictions ADD COLUMN feature_schema_version TEXT DEFAULT '1.5.3'")
+            if "source_provenance" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN source_provenance TEXT DEFAULT 'LIVE_DERIV'")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_fwd_status
@@ -167,11 +200,25 @@ class ForwardPredictionJournal:
                 CREATE INDEX IF NOT EXISTS idx_fwd_session
                 ON forward_predictions (session_id)
             """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_outcomes_session
+                ON forward_outcomes (session_id)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_outcomes_pred
+                ON forward_outcomes (prediction_id)
+            """)
             conn.commit()
 
     def log_prediction(self, record: ForwardPredictionRecord) -> str:
         """Stores a new forward observation / prediction record with duplicate write prevention."""
+        if self.enforce_session_id and (not record.session_id or not str(record.session_id).strip()):
+            raise ValueError("session_id must be a non-empty string. Blank or null session IDs are strictly rejected.")
+
+        sess_id = record.session_id.strip() if (record.session_id and str(record.session_id).strip()) else "LEGACY_UNATTRIBUTED"
+        provenance = getattr(record, "source_provenance", "LIVE_DERIV") or "LIVE_DERIV"
         created_at = datetime.now(timezone.utc).isoformat()
+
         with self._get_conn() as conn:
             # Check duplicate prediction ID
             existing = conn.execute(
@@ -196,10 +243,10 @@ class ForwardPredictionJournal:
                     target_direction, signal_epoch, signal_price, entry_epoch,
                     expiry_epoch, forward_prices_json, forward_ticks_count,
                     outcome_status, runhigh_win, runlow_win, hypothetical_pnl,
-                    execution_mode, model_id, feature_schema_version, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    execution_mode, model_id, quote_id, feature_schema_version, source_provenance, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                record.prediction_id, record.session_id, record.timestamp, record.symbol, record.model_version,
+                record.prediction_id, sess_id, record.timestamp, record.symbol, record.model_version,
                 record.market_state, record.features_json, record.runhigh_pred_prob,
                 record.runlow_pred_prob, record.runhigh_ask, record.runhigh_payout,
                 record.runlow_ask, record.runlow_payout, record.break_even_runhigh,
@@ -210,7 +257,8 @@ class ForwardPredictionJournal:
                 record.forward_prices_json, record.forward_ticks_count,
                 norm_status, record.runhigh_win, record.runlow_win,
                 record.hypothetical_pnl, record.execution_mode, record.model_id,
-                record.feature_schema_version, created_at
+                getattr(record, "quote_id", "") or "",
+                getattr(record, "feature_schema_version", "1.0") or "1.0", provenance, created_at
             ))
             conn.commit()
         return record.prediction_id
@@ -235,7 +283,7 @@ class ForwardPredictionJournal:
         """
         with self._get_conn() as conn:
             cur = conn.execute("""
-                SELECT prediction_id, signal_epoch, forward_prices_json, forward_ticks_count,
+                SELECT prediction_id, session_id, signal_epoch, forward_prices_json, forward_ticks_count,
                        runhigh_ask, runhigh_payout, runlow_ask, runlow_payout,
                        target_direction, decision, entry_epoch, timestamp
                 FROM forward_predictions
@@ -246,6 +294,7 @@ class ForwardPredictionJournal:
 
             for row in pending_rows:
                 pid = row["prediction_id"]
+                sess_id = row["session_id"] or "LEGACY_UNATTRIBUTED"
                 sig_epoch = row["signal_epoch"]
                 if epoch <= sig_epoch:
                     continue  # Ignore ticks at or before signal timestamp
@@ -264,6 +313,22 @@ class ForwardPredictionJournal:
                         SET outcome_status = ?, expiry_epoch = ?
                         WHERE prediction_id = ?
                     """, (STATUS_DATA_GAP, epoch, pid))
+                    # Record gap outcome in forward_outcomes
+                    oid = str(uuid.uuid4())[:8]
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    conn.execute("""
+                        INSERT OR REPLACE INTO forward_outcomes (
+                            outcome_id, prediction_id, session_id, entry_epoch, expiry_epoch,
+                            forward_prices_json, forward_ticks_count, outcome_status,
+                            runhigh_win, runlow_win, hypothetical_pnl, contract_model_version,
+                            resolution_timestamp, verification_level, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        oid, pid, sess_id, prev_epoch, epoch,
+                        json.dumps(prices), len(prices), STATUS_DATA_GAP,
+                        None, None, 0.0, "5_movement_canonical",
+                        float(epoch), "DATA_GAP", now_iso
+                    ))
                     continue
 
                 prices.append(price)
@@ -297,15 +362,32 @@ class ForwardPredictionJournal:
                         elif td == "RUNLOW" and rl_pay is not None and rl_ask is not None:
                             pnl = (rl_pay - rl_ask) if rl_win == 1.0 else -rl_ask
 
-                    # Immutable write of outcome resolution
+                    # Immutable write to forward_predictions denormalised view
                     conn.execute("""
                         UPDATE forward_predictions
                         SET forward_prices_json = ?, forward_ticks_count = ?,
                             outcome_status = ?,
                             runhigh_win = ?, runlow_win = ?,
                             hypothetical_pnl = ?, expiry_epoch = ?
-                        WHERE prediction_id = ?
+                            WHERE prediction_id = ?
                     """, (json.dumps(prices), count, STATUS_RECONSTRUCTED, rh_win, rl_win, round(pnl, 2), epoch, pid))
+
+                    # Immutable write to separate forward_outcomes table (V1.6.2 Section 6, 7, 8)
+                    oid = str(uuid.uuid4())[:8]
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    conn.execute("""
+                        INSERT OR REPLACE INTO forward_outcomes (
+                            outcome_id, prediction_id, session_id, entry_epoch, expiry_epoch,
+                            forward_prices_json, forward_ticks_count, outcome_status,
+                            runhigh_win, runlow_win, hypothetical_pnl, contract_model_version,
+                            resolution_timestamp, verification_level, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        oid, pid, sess_id, entry_epoch_val, epoch,
+                        json.dumps(prices), count, STATUS_RECONSTRUCTED,
+                        rh_win, rl_win, round(pnl, 2), "5_movement_canonical",
+                        float(epoch), "RECONSTRUCTED", now_iso
+                    ))
 
             conn.commit()
 
@@ -331,16 +413,29 @@ class ForwardPredictionJournal:
             """, [target_status] + params)
             conn.commit()
 
-    def get_accuracy_metrics(self, symbol: Optional[str] = None) -> Dict[str, Any]:
-        """Calculates prediction accuracy, Brier Score, calibration metrics on resolved records only.
-        Incomplete, data gap, and pending observations are explicitly segregated and never counted in win rate.
+    def get_accuracy_metrics(
+        self,
+        symbol: Optional[str] = None,
+        session_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Calculates prediction accuracy, Brier Score, calibration metrics on resolved records.
+        Strictly filters by session_id when specified (V1.6.2 Section 10 & 16).
         """
         with self._get_conn() as conn:
-            where_clause = "WHERE symbol = ?" if symbol else ""
-            params = (symbol,) if symbol else ()
+            filters = []
+            params = []
+            if symbol:
+                filters.append("symbol = ?")
+                params.append(symbol)
+            if session_id:
+                filters.append("session_id = ?")
+                params.append(session_id)
+
+            where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
             cur = conn.execute(f"""
                 SELECT runhigh_pred_prob, runlow_pred_prob, runhigh_win, runlow_win,
-                       decision, hypothetical_pnl, outcome_status, runhigh_ask, runlow_ask
+                       decision, hypothetical_pnl, outcome_status, runhigh_ask, runlow_ask,
+                       session_id
                 FROM forward_predictions
                 {where_clause}
             """, params)
@@ -470,4 +565,62 @@ class ForwardPredictionJournal:
             cur = conn.execute("SELECT * FROM forward_predictions WHERE prediction_id = ?", (prediction_id,))
             row = cur.fetchone()
             return dict(row) if row else None
+
+    def get_session_predictions(self, session_id: str) -> List[Dict[str, Any]]:
+        """Returns all predictions strictly belonging to a specific session (V1.6.2 Section 10)."""
+        with self._get_conn() as conn:
+            cur = conn.execute(
+                "SELECT * FROM forward_predictions WHERE session_id = ? ORDER BY timestamp ASC",
+                (session_id,)
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def get_session_outcomes(self, session_id: str) -> List[Dict[str, Any]]:
+        """Returns all resolved outcomes strictly belonging to a specific session (V1.6.2 Section 10)."""
+        with self._get_conn() as conn:
+            cur = conn.execute(
+                "SELECT * FROM forward_outcomes WHERE session_id = ? ORDER BY resolution_timestamp ASC",
+                (session_id,)
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def migrate_legacy_unattributed(self) -> int:
+        """Migrates historical records with blank/null session_id to LEGACY_UNATTRIBUTED (V1.6.2 Section 5)."""
+        with self._get_conn() as conn:
+            cur = conn.execute("""
+                UPDATE forward_predictions
+                SET session_id = 'LEGACY_UNATTRIBUTED', source_provenance = 'LEGACY_UNATTRIBUTED'
+                WHERE session_id = '' OR session_id IS NULL
+            """)
+            count = cur.rowcount
+
+            # Backfill outcomes table for resolved legacy predictions if not already present
+            resolved = conn.execute("""
+                SELECT prediction_id, session_id, entry_epoch, expiry_epoch, forward_prices_json,
+                       forward_ticks_count, outcome_status, runhigh_win, runlow_win, hypothetical_pnl, timestamp
+                FROM forward_predictions
+                WHERE outcome_status IN ('RESOLVED', 'OUTCOME_RECONSTRUCTED', 'OUTCOME_VERIFIED')
+                  AND prediction_id NOT IN (SELECT prediction_id FROM forward_outcomes)
+            """).fetchall()
+
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for r in resolved:
+                oid = str(uuid.uuid4())[:8]
+                conn.execute("""
+                    INSERT OR REPLACE INTO forward_outcomes (
+                        outcome_id, prediction_id, session_id, entry_epoch, expiry_epoch,
+                        forward_prices_json, forward_ticks_count, outcome_status,
+                        runhigh_win, runlow_win, hypothetical_pnl, contract_model_version,
+                        resolution_timestamp, verification_level, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    oid, r["prediction_id"], r["session_id"] or "LEGACY_UNATTRIBUTED",
+                    r["entry_epoch"] or int(r["timestamp"]), r["expiry_epoch"] or int(r["timestamp"] + 6),
+                    r["forward_prices_json"] or "[]", r["forward_ticks_count"] or 0, r["outcome_status"],
+                    r["runhigh_win"], r["runlow_win"], r["hypothetical_pnl"] or 0.0, "5_movement_canonical",
+                    float(r["expiry_epoch"] or (r["timestamp"] + 6)), "LEGACY_BACKFILLED", now_iso
+                ))
+            conn.commit()
+            return count
+
 

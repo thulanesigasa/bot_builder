@@ -92,7 +92,7 @@ class ForwardObserver:
         self.model_version = model_version
         self.session_id = session_id or str(uuid.uuid4())
 
-        self.journal = ForwardPredictionJournal(db_path=journal_db_path)
+        self.journal = ForwardPredictionJournal(db_path=journal_db_path, enforce_session_id=True)
         self.quote_db = QuoteDatabase(db_path=quote_db_path)
         self.quote_engine = QuoteEngine(mode="real_quotes_only", quote_db=self.quote_db, allow_benchmark_fallback=False)
         self.contract_model = ContractOutcomeModel(duration_ticks=5, entry_offset=1)
@@ -101,6 +101,8 @@ class ForwardObserver:
         # In-memory sliding tick buffer for rolling feature computation
         self.tick_history: List[Dict[str, Any]] = []
         self.min_ticks_for_features: int = CANONICAL_FEATURE_LOOKBACK
+        self.warmup_ticks_count: int = 0
+        self.live_ticks_count: int = 0
 
         # Model Manager & Frozen Model Loading
         self.model_manager = ModelManager()
@@ -174,7 +176,10 @@ class ForwardObserver:
 
         # 3. Check if we have sufficient history for market state classification
         if len(self.tick_history) < self.min_ticks_for_features:
+            self.warmup_ticks_count += 1
             return None
+
+        self.live_ticks_count += 1
 
         # 4. Compute features on strictly historical ticks with verified parity
         feat_dict, market_state = extract_discrete_market_state(self.tick_history)
@@ -404,13 +409,18 @@ class ForwardObserver:
         streamer = LiveTickStreamer(
             symbol=self.symbol,
             app_id=self.app_id,
-            on_tick_callback=self.process_incoming_tick
+            on_tick_callback=self.process_incoming_tick,
+            session_id=self.session_id
         )
 
         # Background task for live proposal quotes
         async def quote_polling_loop():
             from quote_recorder import DerivQuoteRecorder
-            recorder = DerivQuoteRecorder(symbol=self.symbol, app_id=self.app_id)
+            recorder = DerivQuoteRecorder(
+                symbol=self.symbol,
+                app_id=self.app_id,
+                session_id=self.session_id
+            )
             end_t = time.time() + self.duration_seconds
             while self._running and time.time() < end_t:
                 try:

@@ -1,4 +1,4 @@
-"""Operational Forward Research Session Launcher (V1.6.1).
+"""Operational Forward Research Session Launcher (V1.6.2).
 
 Primary CLI entry point for initiating and managing live non-purchasing forward market observation:
     python run_forward_session.py --mode SHADOW --symbol R_75
@@ -47,7 +47,7 @@ SUPPORTED_SYMBOLS: List[str] = [
 def print_banner(symbol: str, mode: str, duration: Optional[float], max_obs: Optional[int]):
     print("\n" + "=" * 70)
     print("  DERIV ONLY UPS / ONLY DOWNS QUANTITATIVE RESEARCH ENGINE")
-    print("  FORWARD OBSERVATION & REAL-MARKET EVIDENCE SYSTEM (V1.6.1)")
+    print("  FORWARD OBSERVATION, RECONCILIATION & EVIDENCE SYSTEM (V1.6.2)")
     print("=" * 70)
     print(f"  Target Symbol       : {symbol}")
     print(f"  Execution Mode      : {mode}")

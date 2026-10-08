@@ -121,11 +121,14 @@ class PerformanceTracker:
         if symbol:
             filters.append("symbol = ?")
             params.append(symbol)
+        if session_id:
+            filters.append("session_id = ?")
+            params.append(session_id)
         if mode:
             filters.append("execution_mode = ?")
             params.append(mode)
         if resolved_only:
-            filters.append("outcome_status = 'RESOLVED'")
+            filters.append("outcome_status IN ('RESOLVED', 'OUTCOME_RECONSTRUCTED', 'OUTCOME_VERIFIED')")
 
         where = ("WHERE " + " AND ".join(filters)) if filters else ""
 
@@ -153,11 +156,9 @@ class PerformanceTracker:
         session_id: Optional[str] = None,
         mode: Optional[str] = None
     ) -> PerformanceSummary:
-        """Computes full economic performance summary for the given filters."""
-        df = self._load_records(symbol=symbol, mode=mode)
+        """Computes full economic performance summary strictly for the given session (V1.6.2 Section 10)."""
+        df = self._load_records(symbol=symbol, session_id=session_id, mode=mode)
 
-        # --- Session filter (session_id not stored in DB yet — we filter by time range
-        # if the ForwardSession object is passed; here we just use all records)
         symbol_str = symbol or "ALL"
         mode_str = mode or "ALL"
 
@@ -172,7 +173,7 @@ class PerformanceTracker:
 
         # Resolved paper trades only for financial metrics
         paper_mask = df["decision"] == "PAPER_TRADE"
-        resolved_mask = df["outcome_status"] == "RESOLVED"
+        resolved_mask = df["outcome_status"].isin(["RESOLVED", "OUTCOME_RECONSTRUCTED", "OUTCOME_VERIFIED"])
         active_mask = paper_mask & resolved_mask & df["hypothetical_pnl"].notna()
 
         paper_count = int(paper_mask.sum())

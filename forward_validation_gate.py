@@ -177,18 +177,27 @@ class ForwardValidationGate:
             """)
             conn.commit()
 
-    def _load_forward_records(self, symbol: str, model_id: Optional[str] = None):
+    def _load_forward_records(self, symbol: str, model_id: Optional[str] = None, session_id: Optional[str] = None):
         """Loads resolved forward prediction records for a symbol."""
         if not os.path.exists(self.forward_db_path):
             return []
         conn = sqlite3.connect(self.forward_db_path, timeout=10.0)
         conn.row_factory = sqlite3.Row
         try:
+            has_table = conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='forward_predictions'"
+            ).fetchone()[0] > 0
+            if not has_table:
+                return []
+
             where_parts = ["symbol = ?", "outcome_status IN ('RESOLVED', 'OUTCOME_RECONSTRUCTED', 'OUTCOME_VERIFIED')"]
             params = [symbol]
             if model_id and model_id != "NONE":
                 where_parts.append("model_id = ?")
                 params.append(model_id)
+            if session_id:
+                where_parts.append("session_id = ?")
+                params.append(session_id)
             where = " AND ".join(where_parts)
             rows = conn.execute(
                 f"SELECT * FROM forward_predictions WHERE {where} ORDER BY timestamp ASC",
@@ -222,9 +231,9 @@ class ForwardValidationGate:
         drawdown = peak - cumulative
         return float(np.max(drawdown))
 
-    def evaluate(self, model_id: str, symbol: str) -> ValidationGateResult:
+    def evaluate(self, model_id: str, symbol: str, session_id: Optional[str] = None) -> ValidationGateResult:
         """Runs the full forward validation gate for a given model and symbol."""
-        records = self._load_forward_records(symbol=symbol, model_id=model_id)
+        records = self._load_forward_records(symbol=symbol, model_id=model_id, session_id=session_id)
         now = time.time()
         naive_brier = self.break_even_prob * (1 - self.break_even_prob)
         n_total = len(records)
@@ -332,6 +341,35 @@ class ForwardValidationGate:
 
         gate_failures = []
         gate_passes = []
+
+        # Gate 0: Integrity & Reconciliation Verification (V1.6.2 Section 20)
+        from forward_session import ForwardSessionRegistry
+        reg = ForwardSessionRegistry()
+        if session_id:
+            sess = reg.get_session(session_id)
+            if not sess:
+                gate_failures.append(f"INTEGRITY_CHECK_FAILED: Session {session_id[:8]} not found in registry")
+            elif sess.reconciliation_status != "RECONCILED":
+                gate_failures.append(f"INTEGRITY_CHECK_FAILED: Session {session_id[:8]} reconciliation status is '{sess.reconciliation_status}' (requires RECONCILED)")
+            else:
+                gate_passes.append(f"INTEGRITY_CHECK_OK: Session {session_id[:8]} verified RECONCILED")
+        else:
+            sids = set(r.get("session_id") for r in records if r.get("session_id"))
+            legacy_count = sum(1 for r in records if not r.get("session_id") or r.get("session_id") in ("", "LEGACY_UNATTRIBUTED"))
+            if legacy_count > 0:
+                gate_failures.append(f"INTEGRITY_CHECK_FAILED: Evaluated data contains {legacy_count} unattributed or legacy records without verified session ID")
+            elif not sids:
+                gate_failures.append("INTEGRITY_CHECK_FAILED: No valid session IDs associated with evaluated records")
+            else:
+                unreconciled = []
+                for sid in sids:
+                    s = reg.get_session(sid)
+                    if not s or s.reconciliation_status != "RECONCILED":
+                        unreconciled.append(sid[:8])
+                if unreconciled:
+                    gate_failures.append(f"INTEGRITY_CHECK_FAILED: Records depend on unreconciled sessions: {', '.join(unreconciled)}")
+                else:
+                    gate_passes.append(f"INTEGRITY_CHECK_OK: All {len(sids)} contributing sessions are verified as RECONCILED")
 
         # Gate 1: Dependence-aware independent periods
         if n_independent < MIN_INDEPENDENT_PERIODS:
@@ -458,13 +496,14 @@ class ForwardValidationGate:
         model_id: str,
         symbol: str,
         justification: str,
-        operator: str = "QUANT_ARCHITECT"
+        operator: str = "QUANT_ARCHITECT",
+        session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Explicit, auditable model promotion workflow.
         Verifies that gate evaluation passed, writes an immutable audit record,
         and safely updates the ModelArtifact file approval status.
         """
-        eval_res = self.evaluate(model_id=model_id, symbol=symbol)
+        eval_res = self.evaluate(model_id=model_id, symbol=symbol, session_id=session_id)
         if not eval_res.gate_passed:
             return {
                 "success": False,

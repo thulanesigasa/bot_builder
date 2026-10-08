@@ -28,13 +28,18 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 
+import numpy as np
+import pandas as pd
+
 from forward_journal import ForwardPredictionJournal
 from forward_session import ForwardSessionRegistry, ForwardSession
 from forward_validation_gate import ForwardValidationGate
 from health_monitor import GLOBAL_HEALTH_MONITOR
 from model_manager import ModelManager
 from performance_tracker import PerformanceTracker
+from probability import stationary_block_bootstrap_ci, non_overlapping_sensitivity_analysis
 from quote_database import QuoteDatabase
+from session_reconciler import SessionReconciler
 
 REPORTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports")
 
@@ -49,7 +54,8 @@ class SessionReporter:
         registry: Optional[ForwardSessionRegistry] = None,
         tracker: Optional[PerformanceTracker] = None,
         gate: Optional[ForwardValidationGate] = None,
-        quote_db: Optional[QuoteDatabase] = None
+        quote_db: Optional[QuoteDatabase] = None,
+        reconciler: Optional[SessionReconciler] = None
     ):
         self.reports_dir = reports_dir or REPORTS_DIR
         os.makedirs(self.reports_dir, exist_ok=True)
@@ -58,6 +64,11 @@ class SessionReporter:
         self.tracker = tracker or PerformanceTracker()
         self.gate = gate or ForwardValidationGate()
         self.quote_db = quote_db or QuoteDatabase()
+        self.reconciler = reconciler or SessionReconciler(
+            registry_db_path=self.registry.db_path,
+            journal_db_path=self.journal.db_path,
+            quote_db_path=self.quote_db.db_path
+        )
 
     def _utc_now_str(self) -> str:
         return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -70,24 +81,39 @@ class SessionReporter:
 
     def generate_session_report(
         self,
-        session: ForwardSession,
+        session: Any,
         health_snapshot: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Generates a complete session report dictionary adhering to V1.6.1 Section 17."""
-        # Accuracy metrics from journal
-        accuracy = self.journal.get_accuracy_metrics(symbol=session.symbol)
+        """Generates a complete session report dictionary adhering to V1.6.2 Section 16 & 17."""
+        if isinstance(session, str):
+            sess_obj = self.registry.get_session(session)
+            if not sess_obj:
+                raise ValueError(f"Session '{session}' not found in registry.")
+            session = sess_obj
+        else:
+            # Refresh session from registry to get latest tick accounting and status
+            refreshed = self.registry.get_session(session.session_id)
+            if refreshed:
+                session = refreshed
 
-        # Economic performance
+        # Run automated reconciliation engine (V1.6.2 Section 12)
+        recon_report = self.reconciler.reconcile_session(session.session_id)
+
+        # Accuracy metrics from journal strictly filtered by session_id (V1.6.2 Section 10)
+        accuracy = self.journal.get_accuracy_metrics(symbol=session.symbol, session_id=session.session_id)
+
+        # Economic performance strictly filtered by session_id
         perf = self.tracker.compute_performance(
             symbol=session.symbol,
-            mode=session.mode
+            mode=session.mode,
+            session_id=session.session_id
         )
 
         # Health telemetry
         health = health_snapshot or GLOBAL_HEALTH_MONITOR.get_health_summary()
 
-        # Quotes count
-        quote_cov = self.quote_db.report_quote_coverage(session.symbol)
+        # Quotes count strictly filtered by session_id
+        quote_cov = self.quote_db.report_quote_coverage(session.symbol, session_id=session.session_id)
         quotes_recorded = quote_cov.get("total_quotes", 0)
 
         # Model info
@@ -116,6 +142,23 @@ class SessionReporter:
             except Exception:
                 pass
 
+        # Dependence-aware uncertainty (V1.6.2 Section 17)
+        session_preds = self.journal.get_session_predictions(session.session_id)
+        rh_wins = [float(r["runhigh_win"]) for r in session_preds if r.get("runhigh_win") is not None]
+        rl_wins = [float(r["runlow_win"]) for r in session_preds if r.get("runlow_win") is not None]
+
+        rh_boot_ci = None
+        rl_boot_ci = None
+        rh_non_overlapping = None
+        rl_non_overlapping = None
+
+        if len(rh_wins) >= 5:
+            rh_boot_ci = stationary_block_bootstrap_ci(np.array(rh_wins), num_resamples=500, mean_block_length=5)
+            rh_non_overlapping = non_overlapping_sensitivity_analysis(pd.Series(rh_wins), stride=5)
+        if len(rl_wins) >= 5:
+            rl_boot_ci = stationary_block_bootstrap_ci(np.array(rl_wins), num_resamples=500, mean_block_length=5)
+            rl_non_overlapping = non_overlapping_sensitivity_analysis(pd.Series(rl_wins), stride=5)
+
         total_preds = accuracy.get("total_predictions", 0)
 
         report = {
@@ -130,7 +173,10 @@ class SessionReporter:
                 "start_time_utc": session.start_datetime_utc,
                 "planned_duration_seconds": session.planned_duration_seconds,
                 "actual_duration_seconds": session.actual_duration_seconds,
+                "reconciliation_status": recon_report.status,
+                "is_verified": recon_report.is_verified,
             },
+            "reconciliation": recon_report.to_dict(),
             "safety": {
                 "live_money_trading_disabled": True,
                 "purchasing_allowed": False,
@@ -149,6 +195,10 @@ class SessionReporter:
             },
             "lifecycle_counts": {
                 "ticks_received": session.total_ticks,
+                "live_ticks": session.live_ticks,
+                "warmup_ticks": session.warmup_ticks,
+                "duplicate_ticks": session.duplicate_ticks,
+                "rejected_ticks": session.rejected_ticks,
                 "quotes_recorded": quotes_recorded,
                 "eligible_feature_windows": total_preds,
                 "predictions_generated": total_preds,
@@ -169,6 +219,13 @@ class SessionReporter:
                 "calibration_error_runhigh": accuracy.get("calibration_error_runhigh"),
                 "calibration_error_runlow": accuracy.get("calibration_error_runlow"),
                 "genuine_quote_coverage_pct": accuracy.get("quote_coverage_pct", 0.0),
+                "dependence_aware_uncertainty": {
+                    "method": "Politis & Romano Stationary Block Bootstrap (mean block length = 5)",
+                    "runhigh_bootstrap_95_ci": list(rh_boot_ci) if rh_boot_ci else None,
+                    "runlow_bootstrap_95_ci": list(rl_boot_ci) if rl_boot_ci else None,
+                    "runhigh_non_overlapping_sensitivity": rh_non_overlapping,
+                    "runlow_non_overlapping_sensitivity": rl_non_overlapping,
+                }
             },
             "economic_performance": perf.to_dict(),
             "health_telemetry": {
@@ -295,6 +352,10 @@ class SessionReporter:
         counts = report.get("lifecycle_counts", {})
         lines.append("--- LIFECYCLE & OBSERVATION COUNTS ---")
         lines.append(f"  Ticks Received      : {counts.get('ticks_received', 'N/A')}")
+        lines.append(f"  Live Genuine Ticks  : {counts.get('live_ticks', 0)}")
+        lines.append(f"  Warm-up Ticks       : {counts.get('warmup_ticks', 0)}")
+        lines.append(f"  Duplicate Ticks     : {counts.get('duplicate_ticks', 0)}")
+        lines.append(f"  Rejected Ticks      : {counts.get('rejected_ticks', 0)}")
         lines.append(f"  Quotes Recorded     : {counts.get('quotes_recorded', 0)}")
         lines.append(f"  Predictions Total   : {counts.get('predictions_persisted', 0)}")
         lines.append(f"  Outcomes Resolved   : {counts.get('outcomes_resolved', 0)}")
@@ -303,6 +364,20 @@ class SessionReporter:
         lines.append(f"  Outcomes Data Gap   : {counts.get('outcomes_data_gap', 0)}")
         lines.append(f"  Outcomes Unverified : {counts.get('outcomes_unverified', 0)}")
         lines.append("")
+
+        recon = report.get("reconciliation")
+        if recon:
+            lines.append("--- DATA INTEGRITY & RECONCILIATION ---")
+            lines.append(f"  Reconciliation Status: {recon.get('status')}")
+            lines.append(f"  Statistically Verified: {recon.get('is_verified')}")
+            lines.append(f"  Live Deriv Provenance : {recon.get('provenance', {}).get('is_live_deriv')}")
+            lines.append(f"  Chronology Violations : {recon.get('chronology', {}).get('chronology_errors', 0)}")
+            lines.append(f"  Future Quote Violations: {recon.get('chronology', {}).get('future_quote_errors', 0)}")
+            if recon.get("issues"):
+                lines.append("  Integrity Issues:")
+                for iss in recon["issues"]:
+                    lines.append(f"    [X] {iss}")
+            lines.append("")
 
         stat = report.get("statistical_evidence", {})
         lines.append("--- STATISTICAL EVIDENCE ---")
@@ -315,6 +390,10 @@ class SessionReporter:
         lines.append(f"  Calib Error RH      : {stat.get('calibration_error_runhigh')}")
         lines.append(f"  Calib Error RL      : {stat.get('calibration_error_runlow')}")
         lines.append(f"  Quote Coverage      : {stat.get('genuine_quote_coverage_pct')}%")
+        dep_unc = stat.get("dependence_aware_uncertainty", {})
+        if dep_unc and dep_unc.get("runhigh_bootstrap_95_ci"):
+            rh_ci = dep_unc.get("runhigh_bootstrap_95_ci")
+            lines.append(f"  RH Block Boot 95% CI: [{rh_ci[0]:.2%}, {rh_ci[1]:.2%}] (Politis & Romano, L=5)")
         lines.append("")
 
         perf_key = "economic_performance" if "economic_performance" in report else "aggregate_economic_performance"
