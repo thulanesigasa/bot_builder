@@ -175,6 +175,7 @@ class ModelArtifact:
 
             meta = {
                 "source": "STATE_CONDITIONAL_FROZEN",
+                "uncertainty_method": "WILSON_SCORE",
                 "sample_count": n,
                 "raw_runhigh_rate": (k_rh / n) if n > 0 else base_rh,
                 "raw_runlow_rate": (k_rl / n) if n > 0 else base_rl,
@@ -188,12 +189,13 @@ class ModelArtifact:
         # Unobserved state: evaluate empirical baseline with explicit metadata
         meta = {
             "source": "UNCONDITIONAL_BASELINE",
+            "uncertainty_method": "NONE",
             "sample_count": 0,
             "raw_runhigh_rate": base_rh,
             "raw_runlow_rate": base_rl,
             "smoothed_runhigh": base_rh,
             "smoothed_runlow": base_rl,
-            "lower_bound_runhigh": max(0.0, base_rh - 0.015),
-            "lower_bound_runlow": max(0.0, base_rl - 0.015)
+            "lower_bound_runhigh": None,
+            "lower_bound_runlow": None
         }
         return base_rh, base_rl, meta
