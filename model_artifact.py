@@ -80,6 +80,7 @@ class ModelArtifact:
     statistical_status: str
     approval_status: str
     model_hash: str = ""
+    required_lookback: int = 25
 
     def calculate_hash(self) -> str:
         """Computes deterministic SHA256 of the core specification and parameters."""
@@ -95,6 +96,12 @@ class ModelArtifact:
         }
         serialized = json.dumps(spec_dict, sort_keys=True)
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Converts artifact to dictionary representation."""
+        if not self.model_hash:
+            self.model_hash = self.calculate_hash()
+        return asdict(self)
 
     def to_json(self, indent: int = 2) -> str:
         """Serializes artifact to JSON string, injecting hash."""
@@ -135,7 +142,8 @@ class ModelArtifact:
             validation_metrics=dict(data.get("validation_metrics", {})),
             statistical_status=str(data.get("statistical_status", "UNKNOWN")),
             approval_status=str(data.get("approval_status", ModelStatus.RESEARCH_ONLY)),
-            model_hash=str(data.get("model_hash", ""))
+            model_hash=str(data.get("model_hash", "")),
+            required_lookback=int(data.get("required_lookback", data.get("model_parameters", {}).get("required_lookback", 25)))
         )
 
     @classmethod

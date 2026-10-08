@@ -35,7 +35,7 @@ class TradingConfig:
     # Asset & Contract
     symbol: str = os.environ.get("DEFAULT_SYMBOL", "R_75")
     duration_ticks: int = int(os.environ.get("DURATION_TICKS", "5"))
-    contract_family: str = "rise_fall"  # 'rise_fall' or 'high_payout'
+    contract_family: str = os.environ.get("CONTRACT_FAMILY", "RUNHIGH_RUNLOW")  # Canonical: 'RUNHIGH_RUNLOW'
     currency: str = os.environ.get("CURRENCY", "USD")
 
     # Direction-Specific Payouts (Default: 0.95 profit per $1 stake -> 1.95 total return)

@@ -1,0 +1,200 @@
+{
+  "report_type": "SESSION",
+  "generated_at": "2026-10-08T19:31:12+00:00",
+  "session": {
+    "session_id": "ea9e9e21-b660-43a3-8135-b4f4017fe123",
+    "symbol": "R_75",
+    "mode": "SHADOW",
+    "model_id": "M_R_75_5TICK_20261008_132512.json",
+    "status": "COMPLETED",
+    "start_time_utc": "2026-10-08T19:30:26.086936+00:00",
+    "planned_duration_seconds": 45.0,
+    "actual_duration_seconds": 45.93,
+    "reconciliation_status": "SOURCE_UNVERIFIED",
+    "is_verified": false
+  },
+  "reconciliation": {
+    "session_id": "ea9e9e21-b660-43a3-8135-b4f4017fe123",
+    "symbol": "R_75",
+    "status": "SOURCE_UNVERIFIED",
+    "is_verified": false,
+    "reconciled_at_utc": "2026-10-08T19:31:12+00:00",
+    "ticks": {
+      "session_counter_ticks": 20,
+      "live_ticks": 5,
+      "warmup_ticks": 15,
+      "duplicate_ticks": 0,
+      "rejected_ticks": 0,
+      "csv_ticks": 1811
+    },
+    "quotes": {
+      "quotes_recorded_in_db": 350,
+      "quotes_linked_to_session": 22,
+      "predictions_with_quotes": 5,
+      "quote_coverage_pct": 100.0
+    },
+    "predictions": {
+      "total_predictions": 5,
+      "unattributed_predictions": 0,
+      "cross_session_predictions": 0
+    },
+    "outcomes": {
+      "total_outcomes": 1,
+      "resolved_outcomes": 0,
+      "pending_outcomes": 0,
+      "incomplete_outcomes": 4,
+      "data_gap_outcomes": 1,
+      "orphan_outcomes": 0,
+      "orphan_predictions": 0
+    },
+    "provenance": {
+      "breakdown": {
+        "deriv_websocket_live": 5
+      },
+      "is_live_deriv": false
+    },
+    "chronology": {
+      "chronology_errors": 1,
+      "future_quote_errors": 1
+    },
+    "issues": [
+      "Timestamp inconsistencies detected: 1 chronological violations, 1 future quotes.",
+      "No predictions with verified LIVE_DERIV source provenance. Counts: {'deriv_websocket_live': 5}",
+      "Live ticks accounting mismatch: registry has 5 live ticks but CSV has 1811."
+    ],
+    "passed_checks": [
+      "Session found in registry with status 'COMPLETED'.",
+      "Live ticks CSV verified: 1811 lines recorded.",
+      "Prediction outcome sum matches: 5 == 5.",
+      "Registry prediction count reconciled (5 == 5)."
+    ]
+  },
+  "safety": {
+    "live_money_trading_disabled": true,
+    "purchasing_allowed": false,
+    "declaration": "REAL-MONEY TRADING DISABLED. All metrics are non-purchasing forward research observations."
+  },
+  "model": {
+    "model_id": "M_R_75_5TICK_20261008_132512",
+    "model_version": "1.5.3",
+    "approval_status": "RESEARCH_ONLY",
+    "validation_sample_count": 8630
+  },
+  "predictions": {
+    "total": 5,
+    "resolved": 0,
+    "pending": 0,
+    "unverified": 0,
+    "brier_score_runhigh": null,
+    "brier_score_runlow": null,
+    "realized_runhigh_win_rate": null,
+    "realized_runlow_win_rate": null
+  },
+  "lifecycle_counts": {
+    "ticks_received": 20,
+    "live_ticks": 5,
+    "warmup_ticks": 15,
+    "duplicate_ticks": 0,
+    "rejected_ticks": 0,
+    "quotes_recorded": 22,
+    "eligible_feature_windows": 5,
+    "predictions_generated": 5,
+    "predictions_persisted": 5,
+    "outcomes_resolved": 0,
+    "outcomes_pending": 0,
+    "outcomes_incomplete": 4,
+    "outcomes_data_gap": 1,
+    "outcomes_unverified": 0
+  },
+  "statistical_evidence": {
+    "runhigh_estimated_win_prob": null,
+    "runlow_estimated_win_prob": null,
+    "runhigh_observed_win_prob": null,
+    "runlow_observed_win_prob": null,
+    "brier_score_runhigh": null,
+    "brier_score_runlow": null,
+    "calibration_error_runhigh": null,
+    "calibration_error_runlow": null,
+    "genuine_quote_coverage_pct": 100.0,
+    "dependence_aware_uncertainty": {
+      "method": "Politis & Romano Stationary Block Bootstrap (mean block length = 5)",
+      "runhigh_bootstrap_95_ci": null,
+      "runlow_bootstrap_95_ci": null,
+      "runhigh_non_overlapping_sensitivity": null,
+      "runlow_non_overlapping_sensitivity": null
+    }
+  },
+  "economic_performance": {
+    "session_id": "ea9e9e21-b660-43a3-8135-b4f4017fe123",
+    "symbol": "R_75",
+    "mode": "SHADOW",
+    "total_predictions": 5,
+    "paper_trade_signals": 0,
+    "resolved_trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": null,
+    "cumulative_pnl": 0.0,
+    "mean_pnl_per_trade": null,
+    "std_pnl_per_trade": null,
+    "sharpe_ratio": null,
+    "max_drawdown": 0.0,
+    "quote_coverage_pct": 100.0,
+    "predicted_ev_mean": null,
+    "realized_ev_mean": null,
+    "ev_accuracy_error": null,
+    "brier_score_runhigh": null,
+    "brier_score_runlow": null,
+    "per_state_breakdown": {},
+    "generated_at": "2026-10-08T19:31:12.059542+00:00"
+  },
+  "health_telemetry": {
+    "ticks": {
+      "total_ticks": 40,
+      "tick_rate_per_sec": 0.67,
+      "last_tick_epoch": 1791487872,
+      "last_tick_age_seconds": 0.32,
+      "last_tick_latency_ms": -278.08,
+      "duplicate_ticks": 0,
+      "gap_count": 0
+    },
+    "quotes": {
+      "total_requests": 27,
+      "successful_quotes": 27,
+      "rejected_quotes": 0,
+      "success_rate_pct": 100.0,
+      "last_quote_age_seconds": 0.35,
+      "last_quote_latency_ms": 509.441614151001
+    },
+    "connectivity": {
+      "connection_status": "DISCONNECTED",
+      "reconnection_count": 0,
+      "last_reconnect_time": null,
+      "has_active_data_gap": false
+    }
+  },
+  "validation_gate": {
+    "model_id": "M_R_75_5TICK_20261008_132512.json",
+    "symbol": "R_75",
+    "evaluation_time": 1791487872.0650299,
+    "resolved_predictions": 0,
+    "independent_periods": 0,
+    "runhigh_win_rate": null,
+    "runlow_win_rate": null,
+    "runhigh_z_score": null,
+    "runlow_z_score": null,
+    "brier_rh": null,
+    "brier_rl": null,
+    "naive_brier": 0.0317,
+    "brier_improvement_pct": null,
+    "quote_coverage_pct": 0.0,
+    "cumulative_pnl": 0.0,
+    "max_drawdown": 0.0,
+    "gate_passed": false,
+    "demotion_triggered": false,
+    "gate_reasons": [
+      "INSUFFICIENT_DATA: only 0/200 resolved observations"
+    ],
+    "recommended_action": "INSUFFICIENT_DATA"
+  }
+}

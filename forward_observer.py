@@ -59,6 +59,23 @@ from quote_engine import QuoteEngine
 from risk import RiskManager, DEFAULT_RISK_DB
 
 
+# Pipeline Diagnostic Statuses (V1.6.3 Part B Section 7)
+PIPELINE_STATUS_WAITING_FOR_WARMUP = "WAITING_FOR_WARMUP"
+PIPELINE_STATUS_WARMUP_COMPLETE = "WARMUP_COMPLETE"
+PIPELINE_STATUS_MODEL_NOT_LOADED = "MODEL_NOT_LOADED"
+PIPELINE_STATUS_MODEL_INCOMPATIBLE = "MODEL_INCOMPATIBLE"
+PIPELINE_STATUS_FEATURE_NOT_READY = "FEATURE_NOT_READY"
+PIPELINE_STATUS_FEATURE_CALCULATION_FAILED = "FEATURE_CALCULATION_FAILED"
+PIPELINE_STATUS_INFERENCE_FAILED = "INFERENCE_FAILED"
+PIPELINE_STATUS_PREDICTION_GENERATED = "PREDICTION_GENERATED"
+PIPELINE_STATUS_JOURNAL_WRITE_FAILED = "JOURNAL_WRITE_FAILED"
+PIPELINE_STATUS_PREDICTION_PERSISTED = "PREDICTION_PERSISTED"
+PIPELINE_STATUS_WAITING_FOR_OUTCOME = "WAITING_FOR_OUTCOME"
+PIPELINE_STATUS_OUTCOME_RESOLVED = "OUTCOME_RESOLVED"
+PIPELINE_STATUS_OUTCOME_INCOMPLETE = "OUTCOME_INCOMPLETE"
+PIPELINE_STATUS_DATA_GAP_DETECTED = "DATA_GAP_DETECTED"
+
+
 class ForwardObserver:
     """Orchestrates live market tick ingestion, quote synchronization, frozen model inference, and shadow journaling."""
 
@@ -74,11 +91,13 @@ class ForwardObserver:
         duration_seconds: float = 120.0,
         quote_interval_seconds: float = 2.0,
         max_quote_age_seconds: float = 60.0,
-        model_version: str = "V1.6.1",
+        model_version: str = "V1.6.3",
         journal_db_path: Optional[str] = None,
         quote_db_path: Optional[str] = None,
         session_id: str = "",
-        risk_db_path: Optional[str] = None
+        risk_db_path: Optional[str] = None,
+        preload_warmup: bool = False,
+        warmup_csv_path: Optional[str] = None
     ):
         self.symbol = symbol
         self.mode = mode.upper()
@@ -103,6 +122,15 @@ class ForwardObserver:
         self.min_ticks_for_features: int = CANONICAL_FEATURE_LOOKBACK
         self.warmup_ticks_count: int = 0
         self.live_ticks_count: int = 0
+        self.historical_warmup_ticks: int = 0
+
+        # Diagnostics & Accounting State (V1.6.3 Part B Section 7)
+        self.warmup_status: str = PIPELINE_STATUS_WAITING_FOR_WARMUP
+        self.pipeline_status: str = PIPELINE_STATUS_WAITING_FOR_WARMUP
+        self.last_pipeline_event: str = "Initialized"
+        self.predictions_generated_count: int = 0
+        self.predictions_persisted_count: int = 0
+        self.skipped_reasons: Dict[str, int] = collections.defaultdict(int)
 
         # Model Manager & Frozen Model Loading
         self.model_manager = ModelManager()
@@ -112,8 +140,144 @@ class ForwardObserver:
         if self.mode in ("SHADOW", "PAPER"):
             self._init_frozen_model(model_path_or_id)
 
+        # Dynamic lookback from model artifact (V1.6.3 Part B Section 5)
+        if self.model_artifact:
+            self.min_ticks_for_features = getattr(self.model_artifact, "required_lookback", CANONICAL_FEATURE_LOOKBACK)
+
+        # Historical Warm-Up Activation (V1.6.3 Part B Section 4)
+        if preload_warmup:
+            self.preload_historical_warmup(source_csv_path=warmup_csv_path)
+
         self._running = False
         self._stop_event = asyncio.Event()
+
+    def preload_historical_warmup(
+        self,
+        source_csv_path: Optional[str] = None,
+        max_lookback: Optional[int] = None,
+        csv_path: Optional[str] = None,
+        lookback: Optional[int] = None
+    ) -> int:
+        """Preloads verified historical ticks into the feature buffer prior to live stream.
+        
+        Adheres to V1.6.3 Part B Section 4 & 5:
+        1. Determines model's required lookback dynamically.
+        2. Retrieves sufficient genuine historical ticks (strictly past, no future/lookahead).
+        3. Validates symbol, monotonic timestamps, ordering, removes duplicates.
+        4. Detects trailing gaps.
+        5. Populates self.tick_history without counting as live ticks or generating predictions.
+        6. Sets warmup_status to WARMUP_COMPLETE if count >= required_lookback.
+        """
+        source_csv_path = source_csv_path or csv_path
+        needed = max_lookback or lookback or self.min_ticks_for_features
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(script_dir, "data")
+
+        chosen_file = None
+        if source_csv_path and os.path.exists(source_csv_path) and os.path.getsize(source_csv_path) > 10:
+            chosen_file = source_csv_path
+        else:
+            candidates = [
+                os.path.join(data_dir, f"{self.symbol}_live_ticks.csv"),
+                os.path.join(data_dir, f"{self.symbol}_master.csv"),
+                os.path.join(data_dir, f"{self.symbol}_ticks.csv")
+            ]
+            for cand in candidates:
+                if os.path.exists(cand) and os.path.getsize(cand) > 100:
+                    chosen_file = cand
+                    break
+
+        if not chosen_file:
+            self.last_pipeline_event = f"No historical tick file found for {self.symbol}."
+            return 0
+
+        try:
+            df = pd.read_csv(chosen_file)
+            epoch_col = "server_timestamp" if "server_timestamp" in df.columns else ("epoch" if "epoch" in df.columns else None)
+            price_col = "price" if "price" in df.columns else ("quote" if "quote" in df.columns else None)
+
+            if not epoch_col or not price_col:
+                self.last_pipeline_event = f"Required columns missing in {chosen_file}."
+                return 0
+
+            if "symbol" in df.columns:
+                df = df[df["symbol"] == self.symbol]
+
+            df = df.dropna(subset=[epoch_col, price_col]).drop_duplicates(subset=[epoch_col])
+            df[epoch_col] = df[epoch_col].astype(float)
+            df[price_col] = df[price_col].astype(float)
+            df = df.sort_values(by=epoch_col, ascending=True)
+
+            now_epoch = time.time()
+            df = df[df[epoch_col] <= now_epoch]
+
+            if len(df) == 0:
+                return 0
+
+            tail_df = df.tail(needed + 10).copy()
+            epochs = tail_df[epoch_col].values
+            prices = tail_df[price_col].values
+
+            valid_ticks = []
+            for i in range(len(epochs)):
+                ep = int(epochs[i])
+                pr = float(prices[i])
+                if valid_ticks and (ep - valid_ticks[-1]["epoch"]) > 60:
+                    valid_ticks = []
+                valid_ticks.append({"epoch": ep, "price": pr})
+
+            valid_ticks = valid_ticks[-needed:]
+
+            self.tick_history = valid_ticks
+            self.historical_warmup_ticks = len(valid_ticks)
+
+            if len(self.tick_history) >= self.min_ticks_for_features:
+                self.warmup_status = PIPELINE_STATUS_WARMUP_COMPLETE
+                self.pipeline_status = PIPELINE_STATUS_WARMUP_COMPLETE
+                self.last_pipeline_event = f"Preloaded {self.historical_warmup_ticks} historical warmup ticks from {os.path.basename(chosen_file)}."
+            else:
+                self.warmup_status = PIPELINE_STATUS_WAITING_FOR_WARMUP
+                self.pipeline_status = PIPELINE_STATUS_WAITING_FOR_WARMUP
+                self.last_pipeline_event = f"Preloaded partial warmup: {self.historical_warmup_ticks}/{self.min_ticks_for_features} ticks."
+
+            return self.historical_warmup_ticks
+        except Exception as e:
+            self.last_pipeline_event = f"Historical warm-up error: {e}"
+            return 0
+
+    def get_diagnostics_report(self) -> Dict[str, Any]:
+        """Provides an auditable diagnostics summary of the prediction pipeline (V1.6.3 Part B Section 7)."""
+        remaining_warmup = max(0, self.min_ticks_for_features - len(self.tick_history))
+        blocker = None
+        if self.model_status_code not in ("MODEL_VALIDATED", "MODEL_UNVALIDATED"):
+            blocker = f"Model not ready: {self.model_status_code}"
+        elif remaining_warmup > 0:
+            blocker = f"Waiting for {remaining_warmup} more warm-up ticks ({len(self.tick_history)}/{self.min_ticks_for_features})"
+        elif self.pipeline_status in (PIPELINE_STATUS_FEATURE_CALCULATION_FAILED, PIPELINE_STATUS_INFERENCE_FAILED, PIPELINE_STATUS_JOURNAL_WRITE_FAILED):
+            blocker = f"Pipeline failure: {self.pipeline_status}"
+
+        return {
+            "symbol": self.symbol,
+            "mode": self.mode,
+            "pipeline_status": self.pipeline_status,
+            "warmup_status": self.warmup_status,
+            "required_lookback": self.min_ticks_for_features,
+            "ticks_in_buffer": len(self.tick_history),
+            "historical_warmup_ticks": self.historical_warmup_ticks,
+            "live_warmup_ticks": self.warmup_ticks_count,
+            "live_ticks_received": self.live_ticks_count,
+            "remaining_warmup_ticks": remaining_warmup,
+            "is_warmed_up": (len(self.tick_history) >= self.min_ticks_for_features),
+            "model_status": self.model_status_code,
+            "model_id": self.model_artifact.model_id if self.model_artifact else "NONE",
+            "model_version": self.model_version,
+            "predictions_generated": self.predictions_generated_count,
+            "predictions_persisted": self.predictions_persisted_count,
+            "skipped_reasons": dict(self.skipped_reasons),
+            "current_blocker": blocker,
+            "last_pipeline_event": self.last_pipeline_event,
+            "safety_status": "REAL-MONEY TRADING DISABLED"
+        }
 
     def _init_frozen_model(self, model_path_or_id: Optional[str]):
         """Discovers, validates, and loads the frozen prediction model."""
@@ -122,7 +286,6 @@ class ForwardObserver:
             target_model = self.model_manager.get_latest_model_for_symbol(self.symbol)
 
         if not target_model:
-            # Check if training data exists to produce an initial frozen research model
             script_dir = os.path.dirname(os.path.abspath(__file__))
             master_csv = os.path.join(script_dir, "data", f"{self.symbol}_master.csv")
             ticks_csv = os.path.join(script_dir, "data", f"{self.symbol}_ticks.csv")
@@ -140,6 +303,7 @@ class ForwardObserver:
 
         if not target_model:
             self.model_status_code = "MODEL_NOT_FOUND"
+            self.pipeline_status = PIPELINE_STATUS_MODEL_NOT_LOADED
             return
 
         is_valid, code, artifact = self.model_manager.validate_and_load_model(
@@ -155,6 +319,9 @@ class ForwardObserver:
             self.model_artifact = artifact
             if artifact:
                 self.model_version = f"{artifact.model_id} ({artifact.model_version})"
+                self.min_ticks_for_features = getattr(artifact, "required_lookback", CANONICAL_FEATURE_LOOKBACK)
+        else:
+            self.pipeline_status = PIPELINE_STATUS_MODEL_INCOMPATIBLE
 
     def process_incoming_tick(self, tick: LiveTickRecord) -> Optional[ForwardPredictionRecord]:
         """Handles a newly arrived tick: updates pending predictions and evaluates new candidate state."""
@@ -177,13 +344,35 @@ class ForwardObserver:
         # 3. Check if we have sufficient history for market state classification
         if len(self.tick_history) < self.min_ticks_for_features:
             self.warmup_ticks_count += 1
+            self.pipeline_status = PIPELINE_STATUS_WAITING_FOR_WARMUP
+            self.skipped_reasons[PIPELINE_STATUS_WAITING_FOR_WARMUP] += 1
+            self.last_pipeline_event = f"Awaiting {self.min_ticks_for_features - len(self.tick_history)} more warmup ticks."
             return None
+
+        if self.warmup_status != PIPELINE_STATUS_WARMUP_COMPLETE:
+            self.warmup_status = PIPELINE_STATUS_WARMUP_COMPLETE
+            self.pipeline_status = PIPELINE_STATUS_WARMUP_COMPLETE
+            self.last_pipeline_event = "Warmup completed."
 
         self.live_ticks_count += 1
 
+        if self.model_artifact is None:
+            self.pipeline_status = PIPELINE_STATUS_MODEL_NOT_LOADED
+            self.last_pipeline_event = f"Frozen model not loaded: {self.model_status_code}. Operating in SHADOW diagnostic mode."
+
         # 4. Compute features on strictly historical ticks with verified parity
-        feat_dict, market_state = extract_discrete_market_state(self.tick_history)
+        try:
+            feat_dict, market_state = extract_discrete_market_state(self.tick_history, min_ticks=self.min_ticks_for_features)
+        except Exception as e:
+            self.pipeline_status = PIPELINE_STATUS_FEATURE_CALCULATION_FAILED
+            self.skipped_reasons[PIPELINE_STATUS_FEATURE_CALCULATION_FAILED] += 1
+            self.last_pipeline_event = f"Feature calculation failed: {e}"
+            return None
+
         if market_state in ("INSUFFICIENT_TICKS", "UNCLASSIFIED"):
+            self.pipeline_status = PIPELINE_STATUS_FEATURE_NOT_READY
+            self.skipped_reasons[PIPELINE_STATUS_FEATURE_NOT_READY] += 1
+            self.last_pipeline_event = f"Market state not ready: {market_state}"
             return None
 
         # 5. Fetch most recent valid quote (Lookahead-free: quote.response_timestamp <= epoch)
@@ -207,17 +396,17 @@ class ForwardObserver:
         rl_lower: Optional[float] = None
 
         if self.model_artifact is not None:
-            rh_p, rl_p, pred_meta = self.model_artifact.predict_probabilities(market_state)
-            rh_pred = float(rh_p)
-            rl_pred = float(rl_p)
-            rh_lower = pred_meta.get("lower_bound_runhigh")
-            rl_lower = pred_meta.get("lower_bound_runlow")
-        else:
-            # Strictly NO fallback probabilities!
-            rh_pred = None
-            rl_pred = None
-            rh_lower = None
-            rl_lower = None
+            try:
+                rh_p, rl_p, pred_meta = self.model_artifact.predict_probabilities(market_state)
+                rh_pred = float(rh_p)
+                rl_pred = float(rl_p)
+                rh_lower = pred_meta.get("lower_bound_runhigh")
+                rl_lower = pred_meta.get("lower_bound_runlow")
+            except Exception as e:
+                self.pipeline_status = PIPELINE_STATUS_INFERENCE_FAILED
+                self.skipped_reasons[PIPELINE_STATUS_INFERENCE_FAILED] += 1
+                self.last_pipeline_event = f"Model inference error: {e}"
+                return None
 
         # 7. Quote Validation & Financial Metric Calculation (NO benchmark fallbacks, NO arbitrary conservative EV fallbacks)
         rh_ask: Optional[float] = None
@@ -346,12 +535,15 @@ class ForwardObserver:
                 target_dir = "NONE"
 
             combined_reasons = []
+            if self.model_artifact is None:
+                combined_reasons.append("MODEL_NOT_AVAILABLE")
             for r in gate_rh.rejection_reasons + gate_rl.rejection_reasons:
                 if r not in combined_reasons:
                     combined_reasons.append(r)
             reason_str = ";".join(combined_reasons) if combined_reasons else DecisionReason.NO_TRADE.value
 
         # 10. Construct and record prediction (SHADOW predictions recorded even if quotes are absent)
+        self.pipeline_status = PIPELINE_STATUS_PREDICTION_GENERATED
         rec = ForwardPredictionRecord(
             prediction_id=str(uuid.uuid4())[:8],
             session_id=self.session_id,
@@ -385,12 +577,24 @@ class ForwardObserver:
             hypothetical_pnl=0.0,
             execution_mode=self.mode,
             model_id=self.model_artifact.model_id if self.model_artifact else "NONE",
-            feature_schema_version=FEATURE_SCHEMA_VERSION
+            quote_id=(q_rh.proposal_id if q_rh else (q_rl.proposal_id if q_rl else "")) or "QUOTE_UNAVAILABLE",
+            feature_schema_version=FEATURE_SCHEMA_VERSION,
+            source_provenance=getattr(tick, "source", "LIVE_DERIV") or "LIVE_DERIV"
         )
 
-        self.journal.log_prediction(rec)
-        GLOBAL_HEALTH_MONITOR.record_prediction(resolved=False)
-        return rec
+        try:
+            self.journal.log_prediction(rec)
+            self.predictions_generated_count += 1
+            self.predictions_persisted_count += 1
+            self.pipeline_status = PIPELINE_STATUS_PREDICTION_PERSISTED
+            self.last_pipeline_event = f"Prediction {rec.prediction_id} persisted for state: {market_state[:30]}..."
+            GLOBAL_HEALTH_MONITOR.record_prediction(resolved=False)
+            return rec
+        except Exception as e:
+            self.pipeline_status = PIPELINE_STATUS_JOURNAL_WRITE_FAILED
+            self.skipped_reasons[PIPELINE_STATUS_JOURNAL_WRITE_FAILED] += 1
+            self.last_pipeline_event = f"Journal write error: {e}"
+            raise
 
     async def run_live_forward_observation(self):
         """Runs the live forward observation loop combining tick streamer and background quote recorder."""
