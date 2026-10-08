@@ -40,6 +40,8 @@ from performance_tracker import PerformanceTracker
 from probability import stationary_block_bootstrap_ci, non_overlapping_sensitivity_analysis
 from quote_database import QuoteDatabase
 from session_reconciler import SessionReconciler
+from statistical_evaluator import StatisticalEvaluator
+from economic_evaluator import EconomicEvaluator
 
 REPORTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports")
 
@@ -142,32 +144,62 @@ class SessionReporter:
             except Exception:
                 pass
 
-        # Dependence-aware uncertainty (V1.6.2 Section 17)
+        # V1.7 Statistical and Economic Evaluation Engines
+        stat_eval = StatisticalEvaluator(block_size=5, n_bootstraps=500)
+        econ_eval = EconomicEvaluator()
+
         session_preds = self.journal.get_session_predictions(session.session_id)
+        cal_rh = stat_eval.evaluate_calibration(session_preds, direction="RUNHIGH")
+        cal_rl = stat_eval.evaluate_calibration(session_preds, direction="RUNLOW")
+        dep_rh = stat_eval.evaluate_dependence_aware_uncertainty(session_preds, direction="RUNHIGH")
+        dep_rl = stat_eval.evaluate_dependence_aware_uncertainty(session_preds, direction="RUNLOW")
+        econ_rh = econ_eval.evaluate_quote_economic_performance(session_preds, direction="RUNHIGH")
+        econ_rl = econ_eval.evaluate_quote_economic_performance(session_preds, direction="RUNLOW")
+
         rh_wins = [float(r["runhigh_win"]) for r in session_preds if r.get("runhigh_win") is not None]
         rl_wins = [float(r["runlow_win"]) for r in session_preds if r.get("runlow_win") is not None]
 
-        rh_boot_ci = None
-        rl_boot_ci = None
-        rh_non_overlapping = None
-        rl_non_overlapping = None
-
-        if len(rh_wins) >= 5:
-            rh_boot_ci = stationary_block_bootstrap_ci(np.array(rh_wins), num_resamples=500, mean_block_length=5)
-            rh_non_overlapping = non_overlapping_sensitivity_analysis(pd.Series(rh_wins), stride=5)
-        if len(rl_wins) >= 5:
-            rl_boot_ci = stationary_block_bootstrap_ci(np.array(rl_wins), num_resamples=500, mean_block_length=5)
-            rl_non_overlapping = non_overlapping_sensitivity_analysis(pd.Series(rl_wins), stride=5)
+        rh_boot_ci = dep_rh.get("bootstrap_ci_95")
+        rl_boot_ci = dep_rl.get("bootstrap_ci_95")
+        rh_non_overlapping = dep_rh.get("non_overlapping")
+        rl_non_overlapping = dep_rl.get("non_overlapping")
 
         total_preds = accuracy.get("total_predictions", 0)
+        resolved_count = accuracy.get("resolved_predictions", 0)
+        stage = getattr(session, "research_stage", "EXPLORATORY_FORWARD")
+        be_pct = (econ_rh.get("mean_break_even_pct") or 3.277) / 100.0
+        obs_rh = cal_rh.get("observed_win_rate", 0.0) or 0.0
+
+        if resolved_count < 20:
+            s_verdict = "INSUFFICIENT_FORWARD_DATA"
+            s_rationale = f"Sample of {resolved_count} resolved predictions is below statistical significance threshold."
+        elif obs_rh > be_pct and (econ_rh.get("mean_ordinary_ev") or 0.0) > 0:
+            if stage == "CONFIRMATION_FORWARD":
+                s_verdict = "FORWARD_EDGE_CONFIRMED"
+                s_rationale = f"Observed win rate ({obs_rh:.4f}) exceeds break-even ({be_pct:.4f}) on confirmatory forward data."
+            elif stage == "VALIDATION_FORWARD":
+                s_verdict = "CONFIRMATION_REQUIRED"
+                s_rationale = "Validation edge detected. Independent pre-registered confirmation required."
+            else:
+                s_verdict = "EXPLORATORY_CANDIDATE"
+                s_rationale = "Exploratory edge detected. Formal validation required."
+        else:
+            s_verdict = "NO_VALIDATED_EDGE"
+            s_rationale = f"Observed win rate ({obs_rh:.4f}) does not exceed break-even hurdle ({be_pct:.4f})."
 
         report = {
             "report_type": "SESSION",
             "generated_at": self._utc_now_str(),
+            "research_verdict": {
+                "verdict": s_verdict,
+                "rationale": s_rationale,
+                "research_stage": stage
+            },
             "session": {
                 "session_id": session.session_id,
                 "symbol": session.symbol,
                 "mode": session.mode,
+                "research_stage": stage,
                 "model_id": session.model_id,
                 "status": session.status,
                 "start_time_utc": session.start_datetime_utc,
@@ -185,11 +217,16 @@ class SessionReporter:
             "model": model_info,
             "predictions": {
                 "total": total_preds,
-                "resolved": accuracy.get("resolved_predictions", 0),
+                "resolved": resolved_count,
                 "pending": accuracy.get("pending_predictions", 0),
                 "unverified": accuracy.get("unverified_predictions", 0),
-                "brier_score_runhigh": accuracy.get("brier_score_runhigh"),
-                "brier_score_runlow": accuracy.get("brier_score_runlow"),
+                "brier_score_runhigh": cal_rh.get("brier_score"),
+                "brier_score_runlow": cal_rl.get("brier_score"),
+                "brier_skill_score_runhigh": cal_rh.get("brier_skill_score"),
+                "brier_skill_score_runlow": cal_rl.get("brier_skill_score"),
+                "expected_calibration_error_runhigh": cal_rh.get("expected_calibration_error"),
+                "expected_calibration_error_runlow": cal_rl.get("expected_calibration_error"),
+                "effective_sample_size_runhigh": dep_rh.get("effective_sample_size"),
                 "realized_runhigh_win_rate": accuracy.get("realized_runhigh_win_rate"),
                 "realized_runlow_win_rate": accuracy.get("realized_runlow_win_rate"),
             },
@@ -203,7 +240,7 @@ class SessionReporter:
                 "eligible_feature_windows": total_preds,
                 "predictions_generated": total_preds,
                 "predictions_persisted": total_preds,
-                "outcomes_resolved": accuracy.get("resolved_predictions", 0),
+                "outcomes_resolved": resolved_count,
                 "outcomes_pending": accuracy.get("pending_predictions", 0),
                 "outcomes_incomplete": accuracy.get("incomplete_predictions", 0),
                 "outcomes_data_gap": accuracy.get("data_gap_predictions", 0),
@@ -214,20 +251,29 @@ class SessionReporter:
                 "runlow_estimated_win_prob": accuracy.get("runlow_estimated_mean_prob"),
                 "runhigh_observed_win_prob": accuracy.get("runhigh_observed_win_rate"),
                 "runlow_observed_win_prob": accuracy.get("runlow_observed_win_rate"),
-                "brier_score_runhigh": accuracy.get("brier_score_runhigh"),
-                "brier_score_runlow": accuracy.get("brier_score_runlow"),
-                "calibration_error_runhigh": accuracy.get("calibration_error_runhigh"),
-                "calibration_error_runlow": accuracy.get("calibration_error_runlow"),
-                "genuine_quote_coverage_pct": accuracy.get("quote_coverage_pct", 0.0),
+                "brier_score_runhigh": cal_rh.get("brier_score"),
+                "brier_score_runlow": cal_rl.get("brier_score"),
+                "brier_skill_score_runhigh": cal_rh.get("brier_skill_score"),
+                "brier_skill_score_runlow": cal_rl.get("brier_skill_score"),
+                "calibration_error_runhigh": cal_rh.get("expected_calibration_error"),
+                "calibration_error_runlow": cal_rl.get("expected_calibration_error"),
+                "effective_sample_size": dep_rh.get("effective_sample_size"),
+                "genuine_quote_coverage_pct": econ_rh.get("quote_coverage_pct", 0.0),
                 "dependence_aware_uncertainty": {
-                    "method": "Politis & Romano Stationary Block Bootstrap (mean block length = 5)",
+                    "method": "Moving Block Bootstrap (L=5) & Non-overlapping Sensitivity",
                     "runhigh_bootstrap_95_ci": list(rh_boot_ci) if rh_boot_ci else None,
                     "runlow_bootstrap_95_ci": list(rl_boot_ci) if rl_boot_ci else None,
                     "runhigh_non_overlapping_sensitivity": rh_non_overlapping,
                     "runlow_non_overlapping_sensitivity": rl_non_overlapping,
                 }
             },
-            "economic_performance": perf.to_dict(),
+            "economic_performance": {
+                **perf.to_dict(),
+                "runhigh_quote_coverage_pct": econ_rh.get("quote_coverage_pct"),
+                "runhigh_mean_break_even_pct": econ_rh.get("mean_break_even_pct"),
+                "runhigh_mean_ordinary_ev": econ_rh.get("mean_ordinary_ev"),
+                "runhigh_mean_conservative_ev": econ_rh.get("mean_conservative_ev"),
+            },
             "health_telemetry": {
                 "ticks": health.get("ticks", {}),
                 "quotes": health.get("quotes", {}),
@@ -340,9 +386,14 @@ class SessionReporter:
 
         if rtype == "SESSION":
             sess = report.get("session", {})
+            verd = report.get("research_verdict", {})
             lines.append(f"Session ID   : {sess.get('session_id', '')[:8]}")
             lines.append(f"Symbol       : {sess.get('symbol', '')}")
             lines.append(f"Mode         : {sess.get('mode', '')}")
+            lines.append(f"Stage        : {sess.get('research_stage', 'EXPLORATORY_FORWARD')}")
+            lines.append(f"Research Verd: {verd.get('verdict', 'INSUFFICIENT_FORWARD_DATA')}")
+            if verd.get('rationale'):
+                lines.append(f"Rationale    : {verd.get('rationale')}")
             lines.append(f"Model ID     : {sess.get('model_id', '')}")
             lines.append(f"Status       : {sess.get('status', '')}")
             lines.append(f"Start UTC    : {sess.get('start_time_utc', '')}")
@@ -387,13 +438,16 @@ class SessionReporter:
         lines.append(f"  RUNLOW Obs Prob     : {stat.get('runlow_observed_win_prob')}")
         lines.append(f"  Brier RH            : {stat.get('brier_score_runhigh')}")
         lines.append(f"  Brier RL            : {stat.get('brier_score_runlow')}")
-        lines.append(f"  Calib Error RH      : {stat.get('calibration_error_runhigh')}")
-        lines.append(f"  Calib Error RL      : {stat.get('calibration_error_runlow')}")
+        lines.append(f"  Brier Skill Score RH: {stat.get('brier_skill_score_runhigh')}")
+        lines.append(f"  Brier Skill Score RL: {stat.get('brier_skill_score_runlow')}")
+        lines.append(f"  Calib Error RH (ECE): {stat.get('calibration_error_runhigh')}")
+        lines.append(f"  Calib Error RL (ECE): {stat.get('calibration_error_runlow')}")
+        lines.append(f"  N Effective (RH)    : {stat.get('effective_sample_size')}")
         lines.append(f"  Quote Coverage      : {stat.get('genuine_quote_coverage_pct')}%")
         dep_unc = stat.get("dependence_aware_uncertainty", {})
         if dep_unc and dep_unc.get("runhigh_bootstrap_95_ci"):
             rh_ci = dep_unc.get("runhigh_bootstrap_95_ci")
-            lines.append(f"  RH Block Boot 95% CI: [{rh_ci[0]:.2%}, {rh_ci[1]:.2%}] (Politis & Romano, L=5)")
+            lines.append(f"  RH Block Boot 95% CI: [{rh_ci[0]:.2%}, {rh_ci[1]:.2%}] (Moving Block, L=5)")
         lines.append("")
 
         perf_key = "economic_performance" if "economic_performance" in report else "aggregate_economic_performance"
@@ -405,6 +459,12 @@ class SessionReporter:
         lines.append(f"  Cumulative PnL      : {perf.get('cumulative_pnl')}")
         lines.append(f"  Mean PnL/Trade      : {perf.get('mean_pnl_per_trade')}")
         lines.append(f"  Max Drawdown        : {perf.get('max_drawdown')}")
+        if perf.get("runhigh_mean_break_even_pct") is not None:
+            lines.append(f"  Break-Even Hurdle RH: {perf.get('runhigh_mean_break_even_pct')}%")
+        if perf.get("runhigh_mean_ordinary_ev") is not None:
+            lines.append(f"  Ordinary EV (RH)    : ${perf.get('runhigh_mean_ordinary_ev'):.3f}")
+        if perf.get("runhigh_mean_conservative_ev") is not None:
+            lines.append(f"  Conservative EV (RH): ${perf.get('runhigh_mean_conservative_ev'):.3f}")
         lines.append("")
 
         gate = report.get("validation_gate")

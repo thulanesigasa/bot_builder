@@ -58,7 +58,7 @@ def get_available_symbols():
     return sorted(list(symbols)) or ["R_75"]
 
 
-def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
+def generate_v17_payload(symbol: str = "R_75") -> Dict[str, Any]:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(script_dir, "data")
 
@@ -125,8 +125,8 @@ def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
     risk_snap = risk_mgr.get_state()
 
     # Economic EV calculations using genuine quotes
-    be_rh = (latest_rh.implied_probability * 100) if latest_rh else 0.0328
-    be_rl = (latest_rl.implied_probability * 100) if latest_rl else 0.0328
+    be_rh = (latest_rh.implied_probability * 100) if latest_rh else 3.28
+    be_rl = (latest_rl.implied_probability * 100) if latest_rl else 3.28
     p_rh_mean = fwd_metrics.get("runhigh_estimated_mean_prob") or 0.0
     p_rl_mean = fwd_metrics.get("runlow_estimated_mean_prob") or 0.0
 
@@ -154,15 +154,83 @@ def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
     elif buffer_ticks < req_lookback:
         current_blocker = f"Waiting for {req_lookback - buffer_ticks} more warm-up ticks ({buffer_ticks}/{req_lookback})"
 
-    # Outcome resolution progress (V1.6.4 Part J Section 24)
+    # Outcome resolution progress
     pending_summary = getattr(fwd_journal, "resolver", None).get_pending_summary() if hasattr(fwd_journal, "resolver") else {}
     session_outcomes = fwd_journal.get_session_outcomes(sess_id) if sess_id else []
     recent_outcomes = session_outcomes[-8:] if len(session_outcomes) > 8 else session_outcomes
     resolved_wins_rh = sum(1 for o in session_outcomes if o.get("runhigh_win") == 1.0)
     resolved_wins_rl = sum(1 for o in session_outcomes if o.get("runlow_win") == 1.0)
 
+    # 7. V1.7 Advanced Statistical & Economic Research Evaluation
+    v17_stat: Dict[str, Any] = {
+        "sample_size": len(session_outcomes),
+        "effective_sample_size": len(session_outcomes),
+        "brier_score_runhigh": None,
+        "brier_skill_score_runhigh": None,
+        "ece_runhigh": None,
+        "block_bootstrap_ci_runhigh": [None, None],
+        "brier_score_runlow": None,
+        "brier_skill_score_runlow": None,
+        "ece_runlow": None,
+        "block_bootstrap_ci_runlow": [None, None],
+    }
+    v17_econ: Dict[str, Any] = {
+        "quote_coverage_pct": fwd_metrics.get("quote_coverage_pct", 0.0),
+        "break_even_prob_runhigh": round(be_rh / 100.0, 4),
+        "ordinary_ev_runhigh": round(ord_ev_rh, 4) if p_rh_mean > 0 else None,
+        "conservative_ev_runhigh": None,
+        "cumulative_pnl": 0.0,
+        "max_drawdown": 0.0,
+        "hypothetical_trades": 0,
+    }
+    v17_qualification: Dict[str, Any] = {
+        "research_stage": getattr(active_session, "research_stage", "EXPLORATORY_FORWARD") if active_session else "EXPLORATORY_FORWARD",
+        "verdict": "INSUFFICIENT_FORWARD_DATA",
+        "verdict_reasons": ["Awaiting initial forward evaluation."]
+    }
+
+    if sess_id and session_outcomes and len(session_outcomes) > 0:
+        try:
+            from statistical_evaluator import StatisticalEvaluator
+            from economic_evaluator import EconomicEvaluator
+            from session_research_aggregator import SessionResearchAggregator
+
+            sess_all_preds = fwd_journal.get_session_predictions(sess_id)
+            stat_res = StatisticalEvaluator.evaluate_win_rates(session_outcomes, sess_all_preds)
+            sess_quotes = q_db.get_session_quotes(sess_id)
+            econ_res = EconomicEvaluator.evaluate_quote_economics(sess_all_preds, sess_quotes, session_outcomes)
+
+            rh_s = stat_res.get("runhigh", {})
+            rl_s = stat_res.get("runlow", {})
+            v17_stat["sample_size"] = rh_s.get("resolved_count", 0)
+            v17_stat["effective_sample_size"] = rh_s.get("effective_sample_size", 0)
+            v17_stat["brier_score_runhigh"] = rh_s.get("brier_score")
+            v17_stat["brier_skill_score_runhigh"] = rh_s.get("brier_skill_score")
+            v17_stat["ece_runhigh"] = rh_s.get("expected_calibration_error")
+            v17_stat["block_bootstrap_ci_runhigh"] = rh_s.get("block_bootstrap_ci", [None, None])
+            v17_stat["brier_score_runlow"] = rl_s.get("brier_score")
+            v17_stat["brier_skill_score_runlow"] = rl_s.get("brier_skill_score")
+            v17_stat["ece_runlow"] = rl_s.get("expected_calibration_error")
+            v17_stat["block_bootstrap_ci_runlow"] = rl_s.get("block_bootstrap_ci", [None, None])
+
+            rh_e = econ_res.get("runhigh", {})
+            v17_econ["quote_coverage_pct"] = econ_res.get("overall_quote_coverage_pct", 0.0)
+            v17_econ["break_even_prob_runhigh"] = rh_e.get("mean_break_even_prob", 0.0328)
+            v17_econ["ordinary_ev_runhigh"] = rh_e.get("ordinary_ev")
+            v17_econ["conservative_ev_runhigh"] = rh_e.get("conservative_ev")
+            v17_econ["cumulative_pnl"] = econ_res.get("cumulative_pnl", 0.0)
+            v17_econ["max_drawdown"] = econ_res.get("max_drawdown", 0.0)
+            v17_econ["hypothetical_trades"] = econ_res.get("hypothetical_trades_count", 0)
+
+            agg = SessionResearchAggregator()
+            multi_eval = agg.evaluate_multi_session_research(symbol=symbol)
+            v17_qualification["verdict"] = multi_eval.get("verdict", "INSUFFICIENT_FORWARD_DATA")
+            v17_qualification["verdict_reasons"] = multi_eval.get("verdict_reasons", [])
+        except Exception as e:
+            v17_qualification["verdict_reasons"] = [str(e)]
+
     return {
-        "version": "V1.6.4",
+        "version": "V1.7",
         "symbol": symbol,
         "available_symbols": get_available_symbols(),
         "safety_invariant": "REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)",
@@ -181,6 +249,7 @@ def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
             "mode": active_session.mode if active_session else "SHADOW",
             "status": active_session.status if active_session else "STANDBY",
             "symbol": active_session.symbol if active_session else symbol,
+            "research_stage": getattr(active_session, "research_stage", "EXPLORATORY_FORWARD") if active_session else "EXPLORATORY_FORWARD",
             "reconciliation_status": recon_report.status if recon_report else "UNRECONCILED",
             "is_verified": recon_report.is_verified if recon_report else False,
             "duration_seconds": active_session.planned_duration_seconds if active_session else 0,
@@ -197,6 +266,11 @@ def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
             "latest_received_timestamp": health.get("ticks", {}).get("latest_tick_time_utc", "N/A"),
             "data_gaps_count": health.get("ticks", {}).get("total_gaps", 0),
             "has_active_data_gap": health.get("has_active_data_gap", False)
+        },
+        "v17_validation": {
+            "statistics": v17_stat,
+            "economics": v17_econ,
+            "qualification": v17_qualification,
         },
         "outcome_progress": {
             "required_future_ticks": 6,
@@ -269,12 +343,17 @@ def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
     }
 
 
+def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
+    return generate_v17_payload(symbol)
+
+
+
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Deriv Quantitative Research — V1.6.2 Forward Observation Dashboard</title>
+<title>Deriv Quantitative Research — V1.7 Forward Statistical Validation Dashboard</title>
 <style>
   :root {
     --bg-base: #0B0F19;
@@ -393,8 +472,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="brand">
       <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
       <div>
-        <h1>Deriv Only Ups / Only Downs Forward Observation Dashboard</h1>
-        <div class="subtitle">V1.6.3 — System Integration, Forward Prediction Activation & Statistical Reliability</div>
+        <h1>Deriv Only Ups / Only Downs Forward Statistical Validation Dashboard</h1>
+        <div class="subtitle">V1.7 — Sustained Forward Observation, Calibration Analysis & Genuine Quote-Based Edge Assessment</div>
       </div>
     </div>
     <div>
@@ -425,10 +504,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="card">
       <div class="card-label">
         <svg viewBox="0 0 24 24"><path d="M13 2.05v3.03c3.39.49 6 3.39 6 6.92 0 .9-.18 1.75-.48 2.54l2.6 1.53c.56-1.24.88-2.62.88-4.07 0-5.18-3.95-9.45-9-9.95zM12 19c-3.87 0-7-3.13-7-7 0-3.53 2.61-6.43 6-6.92V2.05c-5.05.5-9 4.77-9 9.95 0 5.52 4.48 10 10 10 2.35 0 4.5-.82 6.2-2.19l-2.19-2.19c-1.15.9-2.52 1.44-4.01 1.44zm8.65-4.47l-1.55-.91c-.24.5-.55.96-.91 1.38l1.55.91c.36-.43.67-.89.91-1.38z"/></svg>
-        Prediction Readiness
+        Research Stage
       </div>
-      <div class="card-val" id="pred-readiness">WARMUP_PENDING</div>
-      <div class="card-desc" id="pred-desc">Lookback: 25 | Buffer: 0 | Ready</div>
+      <div class="card-val" id="research-stage">EXPLORATORY</div>
+      <div class="card-desc" id="research-verdict">Verdict: INSUFFICIENT_FORWARD_DATA</div>
     </div>
 
     <!-- 3. Data Accounting -->
@@ -441,27 +520,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="card-desc" id="live-quotes">Live: 0 | Warmup: 0 | Dup: 0</div>
     </div>
 
-    <!-- 3. Forward Performance -->
+    <!-- 4. Statistical Calibration -->
     <div class="card">
       <div class="card-label">
         <svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
-        Forward Performance
+        Calibration (BSS / ECE)
       </div>
-      <div class="card-val" id="stat-brier">Brier: N/A</div>
-      <div class="card-desc" id="stat-rates">RH Win: N/A | RL Win: N/A</div>
+      <div class="card-val" id="stat-bss">BSS: N/A</div>
+      <div class="card-desc" id="stat-ece">ECE: N/A | Brier: N/A</div>
     </div>
 
-    <!-- 4. Economic Performance -->
+    <!-- 5. Economic Evaluation -->
     <div class="card">
       <div class="card-label">
         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z"/></svg>
-        Economic Evaluation
+        Economic EV & Edge
       </div>
-      <div class="card-val" id="econ-coverage">Coverage: 0%</div>
-      <div class="card-desc" id="econ-ev">Break-Even: 3.28% | EV: $0.00</div>
+      <div class="card-val" id="econ-ev-val">EV: N/A</div>
+      <div class="card-desc" id="econ-be">BE: 3.28% | Cons EV: N/A</div>
     </div>
 
-    <!-- 5. Safety & Paper Eligibility -->
+    <!-- 6. Safety & Governance -->
     <div class="card">
       <div class="card-label">
         <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
@@ -469,6 +548,36 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </div>
       <div class="card-val" id="risk-status">RESEARCH_ONLY</div>
       <div class="card-desc" id="risk-desc">Paper: RESTRICTED | Losses: 0</div>
+    </div>
+  </div>
+
+  <!-- V1.7 Statistical Evidence & Economic Edge Panel -->
+  <div class="panel">
+    <div class="panel-title">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+      V1.7 Statistical Evidence, Dependence-Aware Calibration & Economic Edge Assessment
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px;">
+      <div style="background-color: var(--bg-base); padding: 14px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Probability Calibration (RUNHIGH)</div>
+        <div style="font-size: 13.5px; margin-top: 6px;" id="stat-calib-rh">Brier: N/A | BSS: N/A | ECE: N/A</div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;" id="stat-base-rh">Ref Baseline: 3.275% (SE=0.0009)</div>
+      </div>
+      <div style="background-color: var(--bg-base); padding: 14px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Dependence-Aware Uncertainty (L=5)</div>
+        <div style="font-size: 13.5px; margin-top: 6px;" id="stat-dep-rh">N: 0 | Neff: 0 | Block Boot CI: [N/A, N/A]</div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;">Moving Block Bootstrap B=1000 resamples</div>
+      </div>
+      <div style="background-color: var(--bg-base); padding: 14px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Proposal Economics & Edge Hurdle</div>
+        <div style="font-size: 13.5px; margin-top: 6px;" id="econ-edge-rh">BE Hurdle: 3.28% | Ord EV: N/A | Cons EV: N/A</div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;" id="econ-pnl-rh">Hypothetical Trades: 0 | PnL: $0.00 | Max DD: $0.00</div>
+      </div>
+      <div style="background-color: var(--bg-base); padding: 14px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Research Qualification Verdict</div>
+        <div style="font-size: 13.5px; font-weight: 700; margin-top: 6px;" id="research-verdict-full">INSUFFICIENT_FORWARD_DATA</div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;" id="research-blockers">Awaiting forward evaluation.</div>
+      </div>
     </div>
   </div>
 
@@ -483,7 +592,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- Outcome Resolution Progress Panel (V1.6.4 Part J Section 24) -->
+  <!-- Outcome Resolution Progress Panel -->
   <div class="panel">
     <div class="panel-title">
       <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z"/></svg>
@@ -610,33 +719,47 @@ function renderDashboard(data) {
   document.getElementById("sess-id").textContent = s.session_id !== "NONE" ? s.session_id.substring(0, 8) : "STANDBY";
   document.getElementById("sess-desc").textContent = `State: ${s.status} | Recon: ${s.reconciliation_status} | Verified: ${s.is_verified}`;
 
-  // 2. Prediction Readiness card
-  const pr = data.prediction_readiness || {};
-  document.getElementById("pred-readiness").textContent = pr.pipeline_status || "WAITING_FOR_WARMUP";
-  document.getElementById("pred-desc").textContent = `Lookback: ${pr.required_lookback || 25} | Buffer: ${pr.buffer_ticks || 0} | ${pr.current_blocker || 'Ready'}`;
+  // 2. Research Stage card
+  const v17 = data.v17_validation || {};
+  const qual = v17.qualification || {};
+  document.getElementById("research-stage").textContent = qual.research_stage || s.research_stage || "EXPLORATORY";
+  document.getElementById("research-verdict").textContent = `Verdict: ${qual.verdict || 'INSUFFICIENT_DATA'}`;
 
   // 3. Data Accounting card
   const ld = data.live_data || {};
   document.getElementById("live-ticks").textContent = `${(ld.total_ticks || 0).toLocaleString()} Ticks`;
   document.getElementById("live-quotes").textContent = `Live: ${ld.live_ticks || 0} | Warmup: ${ld.warmup_ticks || 0} | Dup: ${ld.duplicate_ticks || 0}`;
 
-  // 3. Forward Performance card
-  const stat = data.statistical_evidence || {};
-  const brierStr = stat.brier_score_runhigh ? `Brier: ${stat.brier_score_runhigh}` : "Brier: N/A";
-  document.getElementById("stat-brier").textContent = brierStr;
-  const rhRate = stat.observed_runhigh_prob !== null ? `${(stat.observed_runhigh_prob * 100).toFixed(1)}%` : "N/A";
-  const rlRate = stat.observed_runlow_prob !== null ? `${(stat.observed_runlow_prob * 100).toFixed(1)}%` : "N/A";
-  document.getElementById("stat-rates").textContent = `Obs RH: ${rhRate} | Obs RL: ${rlRate} (N=${stat.sample_counts || 0})`;
+  // 4. Calibration card
+  const stat17 = v17.statistics || {};
+  const bssVal = stat17.brier_skill_score_runhigh !== null && stat17.brier_skill_score_runhigh !== undefined ? Number(stat17.brier_skill_score_runhigh).toFixed(4) : "N/A";
+  const eceVal = stat17.ece_runhigh !== null && stat17.ece_runhigh !== undefined ? (Number(stat17.ece_runhigh) * 100).toFixed(2) + "%" : "N/A";
+  const bsVal = stat17.brier_score_runhigh !== null && stat17.brier_score_runhigh !== undefined ? Number(stat17.brier_score_runhigh).toFixed(4) : "N/A";
+  document.getElementById("stat-bss").textContent = `BSS: ${bssVal}`;
+  document.getElementById("stat-ece").textContent = `ECE: ${eceVal} | Brier: ${bsVal}`;
 
-  // 4. Economic Performance card
-  const econ = data.economic_performance || {};
-  document.getElementById("econ-coverage").textContent = `Coverage: ${econ.quote_coverage_pct || 0}%`;
-  document.getElementById("econ-ev").textContent = `BE: ${econ.break_even_rh_pct || 3.28}% | RH EV: $${econ.ordinary_ev_rh || 0.00}`;
+  // 5. Economic EV card
+  const econ17 = v17.economics || {};
+  const ordEv = econ17.ordinary_ev_runhigh !== null && econ17.ordinary_ev_runhigh !== undefined ? `$${Number(econ17.ordinary_ev_runhigh).toFixed(2)}` : "N/A";
+  const consEv = econ17.conservative_ev_runhigh !== null && econ17.conservative_ev_runhigh !== undefined ? `$${Number(econ17.conservative_ev_runhigh).toFixed(2)}` : "N/A";
+  const bePct = econ17.break_even_prob_runhigh ? (Number(econ17.break_even_prob_runhigh) * 100).toFixed(2) + "%" : "3.28%";
+  document.getElementById("econ-ev-val").textContent = `EV: ${ordEv}`;
+  document.getElementById("econ-be").textContent = `BE: ${bePct} | Cons EV: ${consEv}`;
 
-  // 5. Safety & Paper Eligibility card
+  // 6. Safety & Governance card
   const sr = data.safety_risk || {};
   document.getElementById("risk-status").textContent = sr.model_approval_status || "UNKNOWN";
   document.getElementById("risk-desc").textContent = `Paper: ${sr.paper_eligibility} | Losses: ${sr.consecutive_losses || 0}`;
+
+  // V1.7 Panel Details
+  document.getElementById("stat-calib-rh").textContent = `Brier: ${bsVal} | BSS: ${bssVal} | ECE: ${eceVal}`;
+  const bootCi = stat17.block_bootstrap_ci_runhigh || [null, null];
+  const ciStr = (bootCi[0] !== null && bootCi[1] !== null) ? `[${(bootCi[0]*100).toFixed(2)}%, ${(bootCi[1]*100).toFixed(2)}%]` : "[N/A, N/A]";
+  document.getElementById("stat-dep-rh").textContent = `N: ${stat17.sample_size || 0} | Neff: ${stat17.effective_sample_size || 0} | Block Boot CI: ${ciStr}`;
+  document.getElementById("econ-edge-rh").textContent = `BE Hurdle: ${bePct} | Ord EV: ${ordEv} | Cons EV: ${consEv}`;
+  document.getElementById("econ-pnl-rh").textContent = `Hypothetical Trades: ${econ17.hypothetical_trades || 0} | PnL: $${(econ17.cumulative_pnl || 0).toFixed(2)} | Max DD: $${(econ17.max_drawdown || 0).toFixed(2)}`;
+  document.getElementById("research-verdict-full").textContent = qual.verdict || "INSUFFICIENT_FORWARD_DATA";
+  document.getElementById("research-blockers").textContent = (qual.verdict_reasons && qual.verdict_reasons.length > 0) ? qual.verdict_reasons.join(" | ") : "Evaluating criteria.";
 
   // Reconciliation summary panel
   const recon = data.reconciliation;
@@ -656,7 +779,7 @@ function renderDashboard(data) {
     rdiv.innerHTML = html;
   }
 
-  // Outcome Resolution Progress (V1.6.4 Part J Section 24)
+  // Outcome Resolution Progress
   const op = data.outcome_progress || {};
   document.getElementById("outcomes-pending-count").textContent = op.active_pending_count || 0;
   document.getElementById("outcomes-resolved-count").textContent = op.resolved_outcomes_count || 0;
@@ -751,7 +874,7 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
             parsed = urllib.parse.urlparse(self.path)
             params = urllib.parse.parse_qs(parsed.query)
             sym = params.get("symbol", ["R_75"])[0]
-            payload = generate_v162_payload(sym)
+            payload = generate_v17_payload(sym)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -767,7 +890,7 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
 def run_dashboard():
     with socketserver.TCPServer((BIND_HOST, PORT), DashboardRequestHandler) as httpd:
         print(f"\n=======================================================")
-        print(f"      DERIV RESEARCH & OBSERVATION DASHBOARD (V1.6.4)")
+        print(f"      DERIV RESEARCH & OBSERVATION DASHBOARD (V1.7)")
         print(f"=======================================================")
         print(f"  URL:             http://{BIND_HOST}:{PORT}")
         print(f"  Design Standard: 60-30-10 Palette (#0B0F19, #131B2E, #0284C7)")

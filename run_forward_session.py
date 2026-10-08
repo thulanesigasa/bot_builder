@@ -91,7 +91,7 @@ def verify_environment(symbol: str, mode: str, model_path: Optional[str] = None)
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Deriv Forward Outcome Resolution & Evidence Collection Service (V1.6.4)"
+        description="Deriv Forward Statistical Validation & Research Collection Service (V1.7)"
     )
     parser.add_argument("--symbol", default="R_75", help="Deriv synthetic asset symbol (default: R_75)")
     parser.add_argument(
@@ -100,8 +100,15 @@ def main():
         choices=["DATA_COLLECTION_ONLY", "SHADOW", "PAPER"],
         help="Observation mode (default: SHADOW)"
     )
+    parser.add_argument(
+        "--stage",
+        default="EXPLORATORY",
+        choices=["EXPLORATORY", "VALIDATION", "CONFIRMATION"],
+        help="Research session stage (default: EXPLORATORY)"
+    )
     parser.add_argument("--duration", type=float, default=3600.0, help="Session duration in seconds (default: 3600; 0 for continuous)")
     parser.add_argument("--max-observations", type=int, default=None, help="Maximum predictions before graceful exit")
+    parser.add_argument("--target-resolved", type=int, default=None, help="Milestone target for resolved predictions before concluding session")
     parser.add_argument("--quote-interval", type=float, default=2.0, help="Quote polling interval in seconds (default: 2.0)")
     parser.add_argument("--buffer-capacity", type=int, default=500, help="In-memory tick buffer capacity (default: 500)")
     parser.add_argument("--flush-interval", type=int, default=50, help="Database stat flush frequency in ticks (default: 50)")
@@ -116,13 +123,21 @@ def main():
     parser.add_argument("--cutoff-seconds", type=float, default=20.0, help="Seconds before session end to halt new prediction creation (default: 20.0)")
     args = parser.parse_args()
 
+    stage_map = {
+        "EXPLORATORY": "EXPLORATORY_FORWARD",
+        "VALIDATION": "VALIDATION_FORWARD",
+        "CONFIRMATION": "CONFIRMATION_FORWARD"
+    }
+    stage_val = stage_map.get(args.stage.upper(), "EXPLORATORY_FORWARD")
+
     if args.diagnose:
         from forward_observer import ForwardObserver
         print("\n=======================================================")
-        print("  OPERATIONAL PREDICTION PIPELINE DIAGNOSTICS (V1.6.4)")
+        print("  OPERATIONAL PREDICTION PIPELINE DIAGNOSTICS (V1.7)")
         print("=======================================================")
         print(f"  Target Symbol       : {args.symbol}")
         print(f"  Mode                : {args.mode}")
+        print(f"  Research Stage      : {stage_val}")
         obs = ForwardObserver(
             symbol=args.symbol,
             mode=args.mode,
@@ -152,7 +167,7 @@ def main():
     # Smoke test preset
     duration = 30.0 if args.smoke_test else (args.duration if args.duration and args.duration > 0 else None)
     max_obs = 10 if args.smoke_test else args.max_observations
-    notes = "V1.6.4 Live Smoke Test" if args.smoke_test else args.notes
+    notes = "V1.7 Live Smoke Test" if args.smoke_test else args.notes
 
     print_banner(symbol=args.symbol, mode=args.mode, duration=duration, max_obs=max_obs)
 
@@ -176,7 +191,9 @@ def main():
         notes=notes,
         preload_warmup=not args.no_preload_warmup,
         prediction_cutoff_seconds=args.cutoff_seconds,
-        max_resolution_grace_seconds=args.grace_seconds
+        max_resolution_grace_seconds=args.grace_seconds,
+        research_stage=stage_val,
+        target_resolved_predictions=args.target_resolved
     )
 
     def handle_sig(sig, frame):
