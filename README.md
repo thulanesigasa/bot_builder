@@ -1,14 +1,14 @@
-# Deriv 5-Tick Quantitative Research & Real-Market Validation Framework (V1.5.3 Final Patch)
+# Deriv 5-Tick Quantitative Research & Real-Market Validation Framework (V1.6)
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Testing](https://img.shields.io/badge/pytest-97%20passed-success)
+![Testing](https://img.shields.io/badge/pytest-144%20passed-success)
 ![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-blue)
 ![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v3%208--Stage%20Verified-brightgreen)
 ![Model Integrity](https://img.shields.io/badge/Probability%20Integrity-Zero%20Fallbacks%20%7C%20Wilson%20Bounds-teal)
 ![Quote Integrity](https://img.shields.io/badge/Quote%20Integrity-Zero%20Fallbacks%20%7C%20Live%20Quotes%20Verified-orange)
-![Decision Gate](https://img.shields.io/badge/Decision%20Gate-Centralized%20%7C%20Conservative%20EV%20Enforced-purple)
+![Decision Gate](https://img.shields.io/badge/Decision%20Gate-Centralized%20%7C%20Conservative%20EV%20%7C%20Gap%20Aware-purple)
 ![Live Trading](https://img.shields.io/badge/Live%20Money-DISABLED%20(Zero%20Buy%20Orders)-red)
-![Architecture](https://img.shields.io/badge/Architecture-V1.5.3%20Final%20Safety%20%26%20Connectivity%20Patch-navy)
+![Architecture](https://img.shields.io/badge/Architecture-V1.6%20Sustained%20Forward%20Research-navy)
 
 A rigorous quantitative research, frozen model inference, and forward observation framework engineered for Deriv 5-tick contracts—specifically modeling RUNHIGH (Only Ups) and RUNLOW (Only Downs) where every successive tick after entry spot must move strictly in the chosen direction. The system guarantees scientific reproducibility, eliminates research placeholders, verifies genuine Deriv quote handling, and enforces strict non-purchasing observation protocols.
 
@@ -52,6 +52,51 @@ $$\text{Deriv Live Proposal Hurdle (\$2.00 Stake } \to \text{\$61.03 Total Payou
 Empirical results on Volatility 75 (`R_75`, 43,184 ticks, 43,178 contract windows):
 - **Empirical $P(\text{RUNHIGH})$**: $3.275\%$ ($SE = 0.0009$, $95\%$ Wald CI: $[3.107\%, 3.443\%]$)
 - **Empirical $P(\text{RUNLOW})$**: $2.971\%$ ($SE = 0.0008$, $95\%$ Wald CI: $[2.811\%, 3.132\%]$)
+
+---
+
+## V1.6 Sustained Forward Research Architecture
+
+V1.6 transitions from software development into genuine forward-market research.
+
+### New V1.6 Components
+
+| Component | Role |
+|---|---|
+| `forward_session.py` | Reproducible session registry — UUID, config snapshot, lifecycle state |
+| `performance_tracker.py` | Economic PnL attribution using genuine Deriv quote prices |
+| `forward_validation_gate.py` | Quantitative model promotion/demotion gating with audit trail |
+| `session_reporter.py` | Session and daily report generation (JSON + plain text) |
+| `forward_collection_service.py` | Long-running auto-reconnecting sustained collection service |
+
+### V1.6 Data Flow
+
+```
+ForwardCollectionService
+  ├── creates ForwardSession (SQLite registry)
+  ├── LiveTickStreamer ──[tick callback]──► ForwardObserver
+  │     ├── GLOBAL_HEALTH_MONITOR.has_active_data_gap()  [real gap state]
+  │     ├── evaluate_paper_trade_eligibility()           [decision_gate]
+  │     └── ForwardPredictionJournal.log_prediction()
+  ├── DerivQuoteRecorder ──► QuoteDatabase
+  ├── periodic: ForwardSessionRegistry.update_session_stats()
+  └── on shutdown:
+        ├── journal.mark_incomplete_as_unverified()
+        ├── registry.complete_session()
+        └── SessionReporter.generate_session_report()
+```
+
+### V1.6 Model Promotion Pathway
+
+```
+RESEARCH_ONLY  →  Accumulate ≥200 resolved predictions
+                   RH z-score ≥ 2.0 AND RL z-score ≥ 2.0
+                   Brier improvement ≥ 5% vs naive baseline
+                   Cumulative PnL ≥ 0
+                   Quote coverage ≥ 70%
+              →  APPROVED_FOR_PAPER
+                   (drawdown > $20 OR Brier worse than naive → DEMOTE)
+```
 
 ---
 
