@@ -1,4 +1,4 @@
-"""Configuration settings and direction-specific quote parameters for Deriv 5-Tick UP/DOWN Engine (V1.5.2).
+"""Configuration settings and direction-specific quote parameters for Deriv 5-Tick UP/DOWN Engine (V1.6).
 Supports standard Rise/Fall as well as asymmetric high-payout contracts ($2 -> $61.03).
 Provides secure environment variable loading with .env support and strict safety defaults.
 """
@@ -100,6 +100,22 @@ class TradingConfig:
     live_execution_disabled: bool = True  # Permanently locked: Real money execution is impossible
     demo_token: Optional[str] = os.environ.get("DERIV_DEMO_TOKEN", None)
     enable_demo_execution: bool = os.environ.get("ENABLE_DEMO_EXECUTION", "False").lower() in ("true", "1", "yes")
+
+    # V1.6: Session Registry & Reporting
+    sessions_db_path: str = os.environ.get("SESSIONS_DB_PATH", "data/sessions.db")
+    reports_dir: str = os.environ.get("REPORTS_DIR", "reports")
+    session_stat_flush_interval_ticks: int = int(os.environ.get("SESSION_STAT_FLUSH_INTERVAL_TICKS", "50"))
+    session_stat_flush_interval_secs: float = float(os.environ.get("SESSION_STAT_FLUSH_INTERVAL_SECS", "30.0"))
+
+    # V1.6: Forward Validation Gate Thresholds
+    validation_gate_min_resolved: int = int(os.environ.get("VALIDATION_GATE_MIN_RESOLVED", "200"))
+    validation_gate_min_z_score: float = float(os.environ.get("VALIDATION_GATE_MIN_Z_SCORE", "2.0"))
+    validation_gate_min_brier_improvement: float = float(os.environ.get("VALIDATION_GATE_MIN_BRIER_IMPROVEMENT", "0.05"))
+    validation_gate_min_quote_coverage_pct: float = float(os.environ.get("VALIDATION_GATE_MIN_QUOTE_COVERAGE_PCT", "70.0"))
+    validation_gate_max_drawdown_demotion: float = float(os.environ.get("VALIDATION_GATE_MAX_DRAWDOWN_DEMOTION", "20.0"))
+
+    # V1.6: Health monitor gap staleness window
+    gap_staleness_seconds: float = float(os.environ.get("GAP_STALENESS_SECONDS", "5.0"))
 
 
 DEFAULT_CONFIG = TradingConfig()

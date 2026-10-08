@@ -1,4 +1,4 @@
-"""Forward Observation Mode Service for Deriv RUNHIGH / RUNLOW (V1.5.3).
+"""Forward Observation Mode Service for Deriv RUNHIGH / RUNLOW (V1.6).
 
 Executes live, non-purchasing forward market observation:
 1. Subscribes to live Deriv tick stream or synchronized feed.
@@ -256,7 +256,7 @@ class ForwardObserver:
             min_validation_sample=DEFAULT_CONFIG.min_validation_sample,
             current_stake=rh_ask or DEFAULT_CONFIG.default_stake,
             max_stake=DEFAULT_CONFIG.max_stake,
-            has_data_gap=False
+            has_data_gap=GLOBAL_HEALTH_MONITOR.has_active_data_gap()
         )
 
         gate_rl = evaluate_paper_trade_eligibility(
@@ -279,7 +279,7 @@ class ForwardObserver:
             min_validation_sample=DEFAULT_CONFIG.min_validation_sample,
             current_stake=rl_ask or DEFAULT_CONFIG.default_stake,
             max_stake=DEFAULT_CONFIG.max_stake,
-            has_data_gap=False
+            has_data_gap=GLOBAL_HEALTH_MONITOR.has_active_data_gap()
         )
 
         decision = "NO_TRADE"
@@ -402,7 +402,7 @@ class ForwardObserver:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Deriv Forward Observation Service (V1.5.3)")
+    parser = argparse.ArgumentParser(description="Deriv Forward Observation Service (V1.6)")
     parser.add_argument("symbol", nargs="?", default="R_75", help="Asset symbol")
     parser.add_argument("--mode", default="SHADOW", choices=["DATA_COLLECTION_ONLY", "SHADOW", "PAPER"], help="Observation execution mode")
     parser.add_argument("--model", default=None, help="Path or ID of frozen model artifact")

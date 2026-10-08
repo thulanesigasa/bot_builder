@@ -1,4 +1,4 @@
-"""System, Market Data, and Proposal Quote Health Monitoring Service (V1.5.2).
+"""System, Market Data, and Proposal Quote Health Monitoring Service (V1.6).
 
 Tracks and reports operational health across:
 - WebSocket connection state & latency
@@ -25,11 +25,13 @@ from config import DEFAULT_CONFIG
 class HealthMonitor:
     """Centralized health metrics aggregator for live streaming and quote services."""
 
-    def __init__(self, window_seconds: float = 60.0):
+    def __init__(self, window_seconds: float = 60.0, gap_staleness_seconds: float = 5.0):
         self.window_seconds = window_seconds
+        self.gap_staleness_seconds = gap_staleness_seconds
         self.connection_status: str = "DISCONNECTED"
         self.reconnection_count: int = 0
         self.last_reconnect_time: Optional[float] = None
+        self.session_id: Optional[str] = None
 
         # Tick metrics
         self.total_ticks: int = 0
@@ -39,6 +41,7 @@ class HealthMonitor:
         self.last_tick_epoch: Optional[int] = None
         self.last_tick_latency_ms: float = 0.0
         self._tick_timestamps = collections.deque()
+        self._last_gap_time: Optional[float] = None   # Wall time of most recent gap
 
         # Quote metrics
         self.total_quote_requests: int = 0
@@ -60,6 +63,10 @@ class HealthMonitor:
             self.reconnection_count += 1
             self.last_reconnect_time = time.time()
 
+    def set_session_id(self, session_id: str):
+        """Associates the current collection session with this health monitor."""
+        self.session_id = session_id
+
     def record_tick(self, epoch: int, receipt_time: Optional[float] = None, is_duplicate: bool = False, is_gap: bool = False, latency_ms: float = 0.0):
         """Records an ingested tick event."""
         now = receipt_time or time.time()
@@ -72,9 +79,21 @@ class HealthMonitor:
             self.duplicate_ticks += 1
         if is_gap:
             self.gap_count += 1
+            self._last_gap_time = now
 
         self._tick_timestamps.append(now)
         self._prune_windows(now)
+
+    def has_active_data_gap(self) -> bool:
+        """Returns True if a data gap was detected within the last gap_staleness_seconds.
+
+        Used by ForwardObserver to propagate real market data gap state into the
+        centralized decision gate, preventing paper trade authorizations during
+        periods of degraded tick integrity.
+        """
+        if self._last_gap_time is None:
+            return False
+        return (time.time() - self._last_gap_time) <= self.gap_staleness_seconds
 
     def record_quote(self, success: bool, latency_ms: float = 0.0, receipt_time: Optional[float] = None):
         """Records a quote proposal request/response event."""
@@ -165,6 +184,7 @@ class HealthMonitor:
 
         return {
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "session_id": self.session_id,
             "safety": {
                 "live_money_disabled": True,
                 "purchasing_allowed": False,
@@ -173,7 +193,8 @@ class HealthMonitor:
             "connectivity": {
                 "connection_status": self.connection_status,
                 "reconnection_count": self.reconnection_count,
-                "last_reconnect_time": self.last_reconnect_time
+                "last_reconnect_time": self.last_reconnect_time,
+                "has_active_data_gap": self.has_active_data_gap()
             },
             "ticks": {
                 "total_ticks": self.total_ticks,
