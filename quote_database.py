@@ -1,8 +1,8 @@
-"""Persistent Historical Proposal Quote Database for Deriv RUNHIGH / RUNLOW (V1.5.1).
+"""Persistent Historical Proposal Quote Database for Deriv RUNHIGH / RUNLOW (V1.5.2).
 
 Stores genuinely observed proposal quotes in a high-performance, indexed SQLite database.
 Enforces strict timestamp synchronization, lookahead bias prevention, quote freshness bounds,
-and full data provenance.
+session ID tracking, and full data provenance.
 
 Architecture:
 - Table: quotes (Indexed by market_symbol, contract_type, response_timestamp)
@@ -11,6 +11,7 @@ Architecture:
 - Guaranteed Fallback: Returns None / QUOTE_UNAVAILABLE when valid quotes are missing.
 """
 import argparse
+import contextlib
 import csv
 import json
 import os
@@ -35,10 +36,14 @@ class QuoteDatabase:
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         self._init_db()
 
-    def _get_connection(self) -> sqlite3.Connection:
+    @contextlib.contextmanager
+    def _get_connection(self):
         conn = sqlite3.connect(self.db_path, timeout=10.0)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def _init_db(self):
         with self._get_connection() as conn:
@@ -60,9 +65,16 @@ class QuoteDatabase:
                     quote_latency_ms REAL NOT NULL,
                     collection_status TEXT NOT NULL,
                     api_response_metadata TEXT,
+                    session_id TEXT DEFAULT '',
                     created_at TEXT NOT NULL
                 )
             """)
+            # Check if session_id column exists (schema migration)
+            cur = conn.execute("PRAGMA table_info(quotes)")
+            cols = [r["name"] for r in cur.fetchall()]
+            if "session_id" not in cols:
+                conn.execute("ALTER TABLE quotes ADD COLUMN session_id TEXT DEFAULT ''")
+
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_quotes_lookup
                 ON quotes (market_symbol, contract_type, response_timestamp)
@@ -83,8 +95,8 @@ class QuoteDatabase:
                     request_timestamp, response_timestamp, market_symbol, contract_type,
                     contract_duration, duration_unit, stake, total_payout,
                     potential_net_profit, currency, proposal_id, quote_source,
-                    quote_latency_ms, collection_status, api_response_metadata, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    quote_latency_ms, collection_status, api_response_metadata, session_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 float(d.get("request_timestamp", 0.0)),
                 float(d.get("response_timestamp", 0.0)),
@@ -101,6 +113,7 @@ class QuoteDatabase:
                 float(d.get("quote_latency_ms", 0.0)),
                 str(d.get("collection_status", "QUOTE_AVAILABLE")),
                 str(d.get("api_response_metadata", "")),
+                str(d.get("session_id", "")),
                 created_at
             ))
             conn.commit()
@@ -130,6 +143,7 @@ class QuoteDatabase:
                 float(d.get("quote_latency_ms", 0.0)),
                 str(d.get("collection_status", "QUOTE_AVAILABLE")),
                 str(d.get("api_response_metadata", "")),
+                str(d.get("session_id", "")),
                 created_at
             ))
         with self._get_connection() as conn:
@@ -138,8 +152,8 @@ class QuoteDatabase:
                     request_timestamp, response_timestamp, market_symbol, contract_type,
                     contract_duration, duration_unit, stake, total_payout,
                     potential_net_profit, currency, proposal_id, quote_source,
-                    quote_latency_ms, collection_status, api_response_metadata, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    quote_latency_ms, collection_status, api_response_metadata, session_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, rows)
             conn.commit()
         return len(rows)
@@ -182,6 +196,7 @@ class QuoteDatabase:
             if row is None:
                 return None
 
+            sess_id = row["session_id"] if "session_id" in row.keys() else ""
             return ProposalRecord(
                 request_timestamp=row["request_timestamp"],
                 response_timestamp=row["response_timestamp"],
@@ -197,7 +212,8 @@ class QuoteDatabase:
                 quote_source=row["quote_source"],
                 quote_latency_ms=row["quote_latency_ms"],
                 collection_status=row["collection_status"],
-                api_response_metadata=row["api_response_metadata"]
+                api_response_metadata=row["api_response_metadata"],
+                session_id=sess_id
             )
 
     def inspect_quotes(self, symbol: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:

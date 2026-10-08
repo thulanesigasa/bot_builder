@@ -1,12 +1,15 @@
 """Download historical ticks from Deriv WebSocket API into data/<symbol>_ticks.csv
 with checkpoint recovery, automatic reconnection, duplicate detection, gap reporting,
-automatic data quarantine, and comprehensive provenance metadata.
+automatic data quarantine, comprehensive provenance metadata, and coverage reporting.
 
 Usage:  python collector.py [symbol] [total_ticks] [app_id]
+        python collector.py --coverage
         Example: python collector.py R_75 500000
 """
+import argparse
 import asyncio
 import csv
+import glob
 import hashlib
 import json
 import os
@@ -270,10 +273,54 @@ def write_provenance(
     print(f"\nProvenance saved to: {prov_path}")
 
 
+def report_all_historical_coverage(data_dir: str) -> List[Dict[str, Any]]:
+    """Scans and reports coverage, timestamps, and integrity across all tick datasets in data/."""
+    csv_files = glob.glob(os.path.join(data_dir, "*_ticks.csv")) + glob.glob(os.path.join(data_dir, "*_master.csv"))
+    reports = []
+    print("=== HISTORICAL TICK DATASET COVERAGE AUDIT ===")
+    for path in sorted(csv_files):
+        fname = os.path.basename(path)
+        try:
+            df = pd.read_csv(path)
+            if "epoch" not in df.columns or "price" not in df.columns:
+                continue
+            count = len(df)
+            if count == 0:
+                continue
+            min_epoch = int(df["epoch"].iloc[0])
+            max_epoch = int(df["epoch"].iloc[-1])
+            duration_days = round((max_epoch - min_epoch) / 86400.0, 2)
+            min_iso = datetime.fromtimestamp(min_epoch, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+            max_iso = datetime.fromtimestamp(max_epoch, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+            is_valid, issues = validate_data(df)
+
+            rep = {
+                "file": fname,
+                "ticks": count,
+                "start": min_iso,
+                "end": max_iso,
+                "days": duration_days,
+                "valid": is_valid,
+                "issues_count": len(issues)
+            }
+            reports.append(rep)
+            valid_tag = "VALID" if is_valid else "ISSUES"
+            print(f"[{fname}] Ticks: {count:,} | Timespan: {duration_days} days ({min_iso} to {max_iso}) | Status: {valid_tag}")
+        except Exception as e:
+            print(f"[{fname}] Error reading dataset: {e}")
+    return reports
+
+
 def main():
-    symbol = sys.argv[1] if len(sys.argv) > 1 else "R_75"
-    total = int(sys.argv[2]) if len(sys.argv) > 2 else 50_000
-    app_id = sys.argv[3] if len(sys.argv) > 3 else os.environ.get("DERIV_APP_ID", DEFAULT_APP_ID)
+    if "--coverage" in sys.argv:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(script_dir, "data")
+        report_all_historical_coverage(data_dir)
+        return
+
+    symbol = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else "R_75"
+    total = int(sys.argv[2]) if len(sys.argv) > 2 and not sys.argv[2].startswith("-") else 50_000
+    app_id = sys.argv[3] if len(sys.argv) > 3 and not sys.argv[3].startswith("-") else os.environ.get("DERIV_APP_ID", DEFAULT_APP_ID)
     custom_url = os.environ.get("DERIV_WS_URL")
 
     endpoints = []
