@@ -69,6 +69,16 @@ VALID_RECONCILIATION_STATUSES = {
     RECON_STATUS_SOURCE_UNVERIFIED,
 }
 
+# Explicit Research Session Stages (V1.7 Part G Section 17)
+STAGE_EXPLORATORY = "EXPLORATORY_FORWARD"
+STAGE_VALIDATION = "VALIDATION_FORWARD"
+STAGE_CONFIRMATION = "CONFIRMATION_FORWARD"
+VALID_RESEARCH_STAGES = {
+    STAGE_EXPLORATORY,
+    STAGE_VALIDATION,
+    STAGE_CONFIRMATION,
+}
+
 
 @dataclass
 class ForwardSession:
@@ -97,6 +107,7 @@ class ForwardSession:
     unverified_predictions: int = 0
     cumulative_pnl: float = 0.0
     reconciliation_status: str = "PENDING"
+    research_stage: str = STAGE_EXPLORATORY
     notes: str = ""
 
     @property
@@ -179,6 +190,7 @@ class ForwardSessionRegistry:
                     unverified_predictions INTEGER DEFAULT 0,
                     cumulative_pnl REAL DEFAULT 0.0,
                     reconciliation_status TEXT DEFAULT 'PENDING',
+                    research_stage TEXT DEFAULT 'EXPLORATORY_FORWARD',
                     notes TEXT DEFAULT '',
                     created_at TEXT NOT NULL
                 )
@@ -196,6 +208,8 @@ class ForwardSessionRegistry:
                 conn.execute("ALTER TABLE sessions ADD COLUMN rejected_ticks INTEGER DEFAULT 0")
             if "reconciliation_status" not in cols:
                 conn.execute("ALTER TABLE sessions ADD COLUMN reconciliation_status TEXT DEFAULT 'PENDING'")
+            if "research_stage" not in cols:
+                conn.execute(f"ALTER TABLE sessions ADD COLUMN research_stage TEXT DEFAULT '{STAGE_EXPLORATORY}'")
             conn.commit()
 
     def create_session(
@@ -209,9 +223,13 @@ class ForwardSessionRegistry:
         quote_db_path: Optional[str] = None,
         live_ticks_csv: Optional[str] = None,
         notes: str = "",
-        status: str = STATUS_ACTIVE
+        status: str = STATUS_ACTIVE,
+        research_stage: str = STAGE_EXPLORATORY
     ) -> ForwardSession:
-        """Creates and persists a new session record with specified initial status."""
+        """Creates and persists a new session record with specified initial status and research stage."""
+        if research_stage not in VALID_RESEARCH_STAGES:
+            research_stage = STAGE_EXPLORATORY
+
         script_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(script_dir, "data")
         sid = str(uuid.uuid4())
@@ -236,6 +254,7 @@ class ForwardSessionRegistry:
             quote_db_path=q_path,
             live_ticks_csv=t_csv,
             config_snapshot_json=_config_snapshot(),
+            research_stage=research_stage,
             notes=notes
         )
 
@@ -249,15 +268,15 @@ class ForwardSessionRegistry:
                     config_snapshot_json, total_ticks, live_ticks, warmup_ticks,
                     duplicate_ticks, rejected_ticks, total_predictions,
                     resolved_predictions, unverified_predictions, cumulative_pnl,
-                    reconciliation_status, notes, created_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    reconciliation_status, research_stage, notes, created_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 session.session_id, session.symbol, session.mode,
                 session.model_id, session.model_version, session.start_time,
                 None, session.planned_duration_seconds, None,
                 session.status, session.journal_db_path, session.quote_db_path,
                 session.live_ticks_csv, session.config_snapshot_json,
-                0, 0, 0, 0, 0, 0, 0, 0, 0.0, "PENDING", notes, created_at
+                0, 0, 0, 0, 0, 0, 0, 0, 0.0, "PENDING", session.research_stage, notes, created_at
             ))
             conn.commit()
 
@@ -486,6 +505,7 @@ class ForwardSessionRegistry:
             unverified_predictions=d.get("unverified_predictions", 0),
             cumulative_pnl=d.get("cumulative_pnl", 0.0),
             reconciliation_status=d.get("reconciliation_status", "PENDING"),
+            research_stage=d.get("research_stage", STAGE_EXPLORATORY),
             notes=d.get("notes", "")
         )
 

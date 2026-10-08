@@ -32,7 +32,7 @@ from typing import Optional
 from config import DEFAULT_CONFIG
 from forward_journal import ForwardPredictionJournal, STATUS_INCOMPLETE
 from forward_observer import ForwardObserver
-from forward_session import ForwardSessionRegistry, ForwardSession
+from forward_session import ForwardSessionRegistry, ForwardSession, STAGE_EXPLORATORY
 from health_monitor import GLOBAL_HEALTH_MONITOR
 from live_collector import LiveTickStreamer, LiveTickRecord
 from model_manager import ModelManager
@@ -44,7 +44,7 @@ LIVE_EXECUTION_DISABLED: bool = True
 
 
 class ForwardCollectionService:
-    """Long-running forward data collection and shadow prediction service (V1.6.1)."""
+    """Long-running forward data collection and shadow prediction service (V1.7)."""
 
     LIVE_EXECUTION_DISABLED: bool = True
 
@@ -67,7 +67,9 @@ class ForwardCollectionService:
         preload_warmup: bool = True,
         prediction_cutoff_seconds: float = 20.0,
         max_resolution_grace_seconds: float = 30.0,
-        resolve_on_shutdown: bool = True
+        resolve_on_shutdown: bool = True,
+        research_stage: str = STAGE_EXPLORATORY,
+        target_resolved_predictions: Optional[int] = None
     ):
         if LIVE_EXECUTION_DISABLED is not True:
             raise RuntimeError("Safety invariant violated: LIVE_EXECUTION_DISABLED must be True.")
@@ -92,6 +94,8 @@ class ForwardCollectionService:
         self.prediction_cutoff_seconds = max(0.0, prediction_cutoff_seconds)
         self.max_resolution_grace_seconds = max(0.0, max_resolution_grace_seconds)
         self.resolve_on_shutdown = resolve_on_shutdown
+        self.research_stage = research_stage
+        self.target_resolved_predictions = target_resolved_predictions
 
         # Resolve model ID for session registration
         mgr = ModelManager()
@@ -115,9 +119,10 @@ class ForwardCollectionService:
             model_id=self._model_id,
             model_version=self._model_version,
             planned_duration_seconds=duration_seconds or 0.0,
+            research_stage=self.research_stage,
             notes=notes
         )
-        print(f"[Service] Session created: {self.session.session_id[:8]} | Mode: {self.mode}")
+        print(f"[Service] Session created: {self.session.session_id[:8]} | Mode: {self.mode} | Stage: {self.research_stage}")
 
         # Components with session_id linkage
         self.journal = ForwardPredictionJournal(db_path=self.session.journal_db_path, enforce_session_id=True)
@@ -183,6 +188,19 @@ class ForwardCollectionService:
             self._running = False
             self._stop_event.set()
 
+        # Check target resolved predictions milestone (V1.7 Part C Section 5)
+        if self.target_resolved_predictions:
+            metrics = self.journal.get_accuracy_metrics(symbol=self.symbol, session_id=self.session.session_id)
+            res_cnt = metrics.get("resolved_predictions", 0)
+            if res_cnt >= self.target_resolved_predictions:
+                if not self.observer.prediction_cutoff_active:
+                    print(f"\n[Service] Milestone target of {self.target_resolved_predictions} resolved predictions reached. Halting new predictions.")
+                    self.observer.prediction_cutoff_active = True
+                if getattr(self.journal, "resolver", None) and self.journal.resolver.active_pending_count == 0:
+                    print(f"[Service] All target outcomes resolved ({res_cnt}/{self.target_resolved_predictions}). Stopping gracefully...")
+                    self._running = False
+                    self._stop_event.set()
+
         # Periodic stat flush to registry
         now = time.time()
         if (self._ticks_since_flush >= self.flush_interval_ticks or
@@ -234,10 +252,11 @@ class ForwardCollectionService:
         GLOBAL_HEALTH_MONITOR.update_connection_status("CONNECTING")
 
         print(f"\n{'=' * 65}")
-        print(f"  DERIV FORWARD COLLECTION SERVICE — V1.6.3")
+        print(f"  DERIV FORWARD COLLECTION SERVICE — V1.7")
         print(f"{'=' * 65}")
         print(f"  Symbol           : {self.symbol}")
         print(f"  Mode             : {self.mode}")
+        print(f"  Stage            : {self.research_stage}")
         print(f"  Model ID         : {self._model_id}")
         print(f"  Session ID       : {self.session.session_id[:8]}")
         print(f"  Warmup Preload   : {'ENABLED' if self.preload_warmup else 'DISABLED'}")
@@ -245,6 +264,8 @@ class ForwardCollectionService:
         print(f"  Duration         : {'Indefinite' if not self.duration_seconds else f'{self.duration_seconds}s'}")
         if self.max_observations:
             print(f"  Max Observations : {self.max_observations}")
+        if self.target_resolved_predictions:
+            print(f"  Target Resolved  : {self.target_resolved_predictions}")
         print(f"  Quote Polling    : Every {self.quote_interval_seconds}s")
         print(f"{'=' * 65}\n")
 
