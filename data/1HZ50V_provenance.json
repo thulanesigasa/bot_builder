@@ -1,0 +1,13 @@
+{
+  "symbol": "1HZ50V",
+  "requested_ticks": 200000,
+  "collected_ticks": 200000,
+  "request_time_utc": "2026-10-06T16:57:00.044672+00:00",
+  "endpoint": "wss://ws.derivws.com/websockets/v3",
+  "app_id": "1089",
+  "start_epoch": 1790893474,
+  "end_epoch": 1791099594,
+  "live_proposal_payout": 0.953,
+  "sha256_checksum": "277f6c2cc0a9f79b79d89fb8a50584601ef6f864769dde689da7bf564fa16707",
+  "verified_source": "developers.deriv.com v3 WebSocket API"
+}

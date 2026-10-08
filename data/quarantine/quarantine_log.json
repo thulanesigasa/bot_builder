@@ -1,0 +1,9 @@
+{
+  "quarantined_files": [
+    {
+      "filename": "forward_test_R_75_ticks.csv",
+      "quarantined_at": "2026-10-07T01:32:00Z",
+      "reason": "Suspicious provenance: future timestamps reaching 2026-10-07 16:34 UTC and price level mismatch (~98,500 vs live R_75 ~46,000)."
+    }
+  ]
+}

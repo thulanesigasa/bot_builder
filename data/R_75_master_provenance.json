@@ -1,0 +1,15 @@
+{
+  "symbol": "R_75",
+  "incoming_ticks": 43184,
+  "previous_master_ticks": 43184,
+  "new_ticks_added": 0,
+  "total_master_ticks": 43184,
+  "start_epoch": 1791237094,
+  "end_epoch": 1791323464,
+  "start_time_utc": "2026-10-05T21:51:34+00:00",
+  "end_time_utc": "2026-10-06T21:51:04+00:00",
+  "gaps_over_10s_count": 0,
+  "max_gap_seconds": 0.0,
+  "last_updated_utc": "2026-10-06T22:01:26.557467+00:00",
+  "sha256_checksum": "8273d215bf93f46d3e12d0d82e46f1ebfca59138180ebfcf8cda7d4a9bedd7a3"
+}

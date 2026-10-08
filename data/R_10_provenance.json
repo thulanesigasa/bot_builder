@@ -1,0 +1,13 @@
+{
+  "symbol": "R_10",
+  "requested_ticks": 200000,
+  "collected_ticks": 200000,
+  "request_time_utc": "2026-10-06T16:56:07.126625+00:00",
+  "endpoint": "wss://ws.derivws.com/websockets/v3",
+  "app_id": "1089",
+  "start_epoch": 1790893422,
+  "end_epoch": 1791273924,
+  "live_proposal_payout": 0.953,
+  "sha256_checksum": "cab4060020b56c0bc7e88d4715a6c3b9a0491ac7ddd2aff53c37c5d6829e77d2",
+  "verified_source": "developers.deriv.com v3 WebSocket API"
+}
