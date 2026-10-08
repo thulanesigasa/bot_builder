@@ -115,8 +115,13 @@ class ForwardSession:
         return datetime.fromtimestamp(self.start_time, tz=timezone.utc).isoformat()
 
     @property
+    def start_timestamp(self) -> float:
+        return self.start_time
+
+    @property
     def is_active(self) -> bool:
         return self.status in (STATUS_ACTIVE, STATUS_INITIALIZING)
+
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

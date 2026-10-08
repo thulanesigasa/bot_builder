@@ -108,6 +108,7 @@ class ForwardValidationGate:
         self,
         forward_db_path: Optional[str] = None,
         validation_db_path: Optional[str] = None,
+        session_db_path: Optional[str] = None,
         min_resolved: int = MIN_RESOLVED,
         min_z_score: float = MIN_Z_SCORE,
         min_brier_improvement_pct: float = MIN_BRIER_IMPROVEMENT_PCT,
@@ -117,6 +118,7 @@ class ForwardValidationGate:
     ):
         self.forward_db_path = forward_db_path or DEFAULT_FORWARD_DB
         self.validation_db_path = validation_db_path or DEFAULT_VALIDATION_DB
+        self.session_db_path = session_db_path
         self.min_resolved = min_resolved
         self.min_z_score = min_z_score
         self.min_brier_improvement_pct = min_brier_improvement_pct
@@ -344,7 +346,7 @@ class ForwardValidationGate:
 
         # Gate 0: Integrity & Reconciliation Verification (V1.6.2 Section 20)
         from forward_session import ForwardSessionRegistry
-        reg = ForwardSessionRegistry()
+        reg = ForwardSessionRegistry(db_path=self.session_db_path) if self.session_db_path else ForwardSessionRegistry()
         if session_id:
             sess = reg.get_session(session_id)
             if not sess:
@@ -497,18 +499,38 @@ class ForwardValidationGate:
         symbol: str,
         justification: str,
         operator: str = "QUANT_ARCHITECT",
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        require_confirmation: bool = False
     ) -> Dict[str, Any]:
-        """Explicit, auditable model promotion workflow.
+        """Explicit, auditable model promotion workflow (V1.7.1).
         Verifies that gate evaluation passed, writes an immutable audit record,
         and safely updates the ModelArtifact file approval status.
+        If require_confirmation is True, additionally checks that independent confirmation
+        sessions exist and pass all authoritative confirmation criteria.
         """
+        if require_confirmation:
+            from forward_confirmation_gate import evaluate_forward_edge_confirmation
+            conf_res = evaluate_forward_edge_confirmation(
+                symbol=symbol,
+                model_id=model_id,
+                forward_db_path=self.forward_db_path,
+                session_db_path=self.session_db_path
+            )
+            if not conf_res.confirmed:
+                return {
+                    "success": False,
+                    "reason": f"CONFIRMATION_REQUIRED: {conf_res.verdict}",
+                    "verdict": conf_res.verdict,
+                    "failures": conf_res.rejection_reasons,
+                    "recommended_action": conf_res.verdict
+                }
+
         eval_res = self.evaluate(model_id=model_id, symbol=symbol, session_id=session_id)
         if not eval_res.gate_passed:
             return {
                 "success": False,
                 "reason": "GATE_FAILED",
-                "failures": [r for r in eval_res.gate_reasons if "FAIL" in r or "LOW" in r or "NEGATIVE" in r],
+                "failures": [r for r in eval_res.gate_reasons if "FAIL" in r or "LOW" in r or "NEGATIVE" in r or "INTEGRITY" in r],
                 "recommended_action": eval_res.recommended_action
             }
 

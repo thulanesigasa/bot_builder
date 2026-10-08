@@ -24,6 +24,8 @@ from typing import Optional, Dict, Any, List, Tuple
 
 from quote_recorder import ProposalRecord
 
+QuoteRecord = ProposalRecord
+
 
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "quotes.db")
 
