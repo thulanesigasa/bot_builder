@@ -169,13 +169,19 @@ class ModelArtifact:
             p_rh = (k_rh + shrinkage_weight * base_rh) / (n + shrinkage_weight) if (n + shrinkage_weight) > 0 else base_rh
             p_rl = (k_rl + shrinkage_weight * base_rl) / (n + shrinkage_weight) if (n + shrinkage_weight) > 0 else base_rl
 
+            from probability import wilson_score_interval
+            rh_lo, rh_hi = wilson_score_interval(int(k_rh), int(n))
+            rl_lo, rl_hi = wilson_score_interval(int(k_rl), int(n))
+
             meta = {
                 "source": "STATE_CONDITIONAL_FROZEN",
                 "sample_count": n,
                 "raw_runhigh_rate": (k_rh / n) if n > 0 else base_rh,
                 "raw_runlow_rate": (k_rl / n) if n > 0 else base_rl,
                 "smoothed_runhigh": p_rh,
-                "smoothed_runlow": p_rl
+                "smoothed_runlow": p_rl,
+                "lower_bound_runhigh": rh_lo,
+                "lower_bound_runlow": rl_lo
             }
             return float(p_rh), float(p_rl), meta
 
@@ -186,6 +192,8 @@ class ModelArtifact:
             "raw_runhigh_rate": base_rh,
             "raw_runlow_rate": base_rl,
             "smoothed_runhigh": base_rh,
-            "smoothed_runlow": base_rl
+            "smoothed_runlow": base_rl,
+            "lower_bound_runhigh": max(0.0, base_rh - 0.015),
+            "lower_bound_runlow": max(0.0, base_rl - 0.015)
         }
         return base_rh, base_rl, meta

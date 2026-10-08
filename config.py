@@ -80,6 +80,22 @@ class TradingConfig:
     z_score_threshold: float = 3.0
     bonferroni_alpha: float = 0.05
 
+    # Connection Settings & Timeouts
+    connect_timeout: float = float(os.environ.get("DERIV_CONNECT_TIMEOUT", "10.0"))
+    handshake_timeout: float = float(os.environ.get("DERIV_HANDSHAKE_TIMEOUT", "5.0"))
+    request_timeout: float = float(os.environ.get("DERIV_REQUEST_TIMEOUT", "5.0"))
+    max_retries: int = int(os.environ.get("DERIV_MAX_RETRIES", "3"))
+    retry_backoff: float = float(os.environ.get("DERIV_RETRY_BACKOFF", "1.5"))
+    ping_interval: float = float(os.environ.get("DERIV_PING_INTERVAL", "15.0"))
+    ping_timeout: float = float(os.environ.get("DERIV_PING_TIMEOUT", "5.0"))
+
+    # Decision Gates & Conservative EV Thresholds
+    min_expected_ev: float = float(os.environ.get("MIN_EXPECTED_EV", "0.0"))
+    min_conservative_ev: float = float(os.environ.get("MIN_CONSERVATIVE_EV", "0.0"))
+    min_probability_margin: float = float(os.environ.get("MIN_PROBABILITY_MARGIN", "0.0"))
+    min_validation_sample: int = int(os.environ.get("MIN_VALIDATION_SAMPLE", "100"))
+    max_simulated_risk: float = float(os.environ.get("MAX_SIMULATED_RISK", "10.0"))
+
     # Safety Directives
     live_execution_disabled: bool = True  # Permanently locked: Real money execution is impossible
     demo_token: Optional[str] = os.environ.get("DERIV_DEMO_TOKEN", None)

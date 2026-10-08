@@ -75,13 +75,13 @@ class PaperTrader:
         symbol: str = "R_75",
         default_stake: float = 2.0,
         min_required_ev: float = 0.0,
-        min_required_conservative_ev: Optional[float] = None
+        min_required_conservative_ev: Optional[float] = 0.0
     ):
         self.quote_engine = quote_engine
         self.symbol = symbol
         self.default_stake = default_stake
         self.min_required_ev = min_required_ev
-        self.min_required_conservative_ev = min_required_conservative_ev
+        self.min_required_conservative_ev = min_required_conservative_ev if min_required_conservative_ev is not None else 0.0
         self.records: List[PaperTradeRecord] = []
         self.cumulative_pnl: float = 0.0
         self.contract_model = ContractOutcomeModel(duration_ticks=5, entry_offset=1)
@@ -90,7 +90,7 @@ class PaperTrader:
         self,
         epoch: int,
         signal: str,
-        estimated_prob: float,
+        estimated_prob: Optional[float],
         is_calibrated: bool = False,
         is_validated: bool = False,
         is_holdout_passed: bool = False,
@@ -107,9 +107,9 @@ class PaperTrader:
         
         Enforces the Dynamic EV & Validation Filter:
         Must satisfy:
-        - estimated_prob > break_even
+        - estimated_prob is not None and > break_even
         - EV > min_required_ev
-        - conservative_ev > 0 (if enforced)
+        - conservative_ev > min_required_conservative_ev (MANDATORY REQUIREMENT)
         - is_calibrated is True
         - is_validated is True
         - is_holdout_passed is True
@@ -118,9 +118,35 @@ class PaperTrader:
         Otherwise: records NO_TRADE with explicit taxonomic reason.
         """
         sig_id = str(uuid.uuid4())[:8]
-        sig_norm = signal.upper()
+        sig_norm = signal.upper() if signal else ""
         dir_key = "UP" if sig_norm in ("UP", "RUNHIGH", "RISE") else ("DOWN" if sig_norm in ("DOWN", "RUNLOW", "FALL") else None)
         contract_type = "RUNHIGH" if dir_key == "UP" else ("RUNLOW" if dir_key == "DOWN" else "NONE")
+
+        if estimated_prob is None:
+            rec = PaperTradeRecord(
+                timestamp=epoch,
+                symbol=self.symbol,
+                direction=sig_norm or "NONE",
+                contract_type=contract_type,
+                estimated_probability=0.0,
+                actual_quote=0.0,
+                break_even_probability=0.0,
+                EV=0.0,
+                decision="NO_TRADE",
+                actual_outcome=None,
+                profit_if_traded=0.0,
+                cumulative_PnL=round(self.cumulative_pnl, 2),
+                status_reason="MODEL_NOT_AVAILABLE",
+                market_state=market_state,
+                probability_uncertainty=(0.0, 0.0),
+                rejection_reason="MODEL_NOT_AVAILABLE",
+                signal_id=sig_id,
+                trade_mode=trade_mode,
+                settlement_certainty="CERTAIN"
+            )
+            self.records.append(rec)
+            return rec
+
         ci_bounds = uncertainty if uncertainty is not None else (max(0.0, estimated_prob - 0.02), min(1.0, estimated_prob + 0.02))
 
         if dir_key is None:
@@ -190,8 +216,14 @@ class PaperTrader:
             reasons.append("PROB_BELOW_BREAK_EVEN")
         if ev <= self.min_required_ev:
             reasons.append("NEGATIVE_EV")
-        if self.min_required_conservative_ev is not None and cons_ev <= self.min_required_conservative_ev:
+            reasons.append("NEGATIVE_EXPECTED_EV")
+
+        # Mandatory Conservative EV Gate
+        eff_min_cons_ev = self.min_required_conservative_ev if self.min_required_conservative_ev is not None else 0.0
+        if cons_ev <= eff_min_cons_ev:
             reasons.append("NEGATIVE_CONSERVATIVE_EV")
+            reasons.append("CONSERVATIVE_EV_TOO_LOW")
+
         if not is_calibrated:
             reasons.append("UNVERIFIED_CALIBRATION")
             reasons.append("MODEL_UNCALIBRATED")

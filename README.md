@@ -1,14 +1,14 @@
-# Deriv 5-Tick Quantitative Research & Real-Market Validation Framework (V1.5.3 Hotfix)
+# Deriv 5-Tick Quantitative Research & Real-Market Validation Framework (V1.5.3 Final Patch)
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Testing](https://img.shields.io/badge/pytest-84%20passed-success)
+![Testing](https://img.shields.io/badge/pytest-97%20passed-success)
 ![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-blue)
-![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v3-red)
-![Model Integrity](https://img.shields.io/badge/Frozen%20Model-ModelManager%20%7C%20JSON%20Artifact%20%7C%20Schema%201.5.3-teal)
-![Quote Integrity](https://img.shields.io/badge/Quote%20Integrity-Zero%20Fallbacks%20%7C%20QUOTE__UNAVAILABLE-orange)
-![Forward Observation](https://img.shields.io/badge/Forward%20Observer-DATA__COLLECTION%20%7C%20SHADOW%20%7C%20PAPER-purple)
+![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v3%208--Stage%20Verified-brightgreen)
+![Model Integrity](https://img.shields.io/badge/Probability%20Integrity-Zero%20Fallbacks%20%7C%20Wilson%20Bounds-teal)
+![Quote Integrity](https://img.shields.io/badge/Quote%20Integrity-Zero%20Fallbacks%20%7C%20Live%20Quotes%20Verified-orange)
+![Decision Gate](https://img.shields.io/badge/Decision%20Gate-Centralized%20%7C%20Conservative%20EV%20Enforced-purple)
 ![Live Trading](https://img.shields.io/badge/Live%20Money-DISABLED%20(Zero%20Buy%20Orders)-red)
-![Architecture](https://img.shields.io/badge/Architecture-V1.5.3%20Genuine%20Model%20%26%20Quote%20Integrity-navy)
+![Architecture](https://img.shields.io/badge/Architecture-V1.5.3%20Final%20Safety%20%26%20Connectivity%20Patch-navy)
 
 A rigorous quantitative research, frozen model inference, and forward observation framework engineered for Deriv 5-tick contracts—specifically modeling RUNHIGH (Only Ups) and RUNLOW (Only Downs) where every successive tick after entry spot must move strictly in the chosen direction. The system guarantees scientific reproducibility, eliminates research placeholders, verifies genuine Deriv quote handling, and enforces strict non-purchasing observation protocols.
 
@@ -170,6 +170,7 @@ bot_builder/
 ├── walk_forward.py                     # Purged 3-way split (Train 60% / Val 20% / Holdout 20%)
 ├── run_edge_research.py                # Research pipeline generating validation and hotfix reports
 ├── dashboard.py                        # Local web dashboard with 60-30-10 UI (http://127.0.0.1:8088)
+├── decision_gate.py                    # Centralized paper trade eligibility gate & reason codes
 ├── requirements.txt                    # Project dependency manifest
 ├── .env.example                        # Documented environment variable template
 ├── .gitignore                          # Git tracking exclusions (excludes .agents/ per Rule 22)
@@ -181,8 +182,9 @@ bot_builder/
 │   ├── V1_5_1_RESEARCH_REPORT.md       # V1.5.1 baseline statistical research report
 │   ├── V1_5_2_VALIDATION_REPORT.md     # V1.5.2 validation report
 │   ├── V1_5_3_VALIDATION_REPORT.md     # V1.5.3 validation report
-│   └── V1_5_3_HOTFIX_REPORT.md         # V1.5.3 hotfix validation report
-├── tests/                              # Automated test suite (84 passed)
+│   ├── V1_5_3_HOTFIX_REPORT.md         # V1.5.3 hotfix validation report
+│   └── V1_5_3_FINAL_PATCH_REPORT.md    # V1.5.3 final patch safety and connectivity report
+├── tests/                              # Automated test suite (97 passed)
 │   ├── test_outcome_rule.py
 │   ├── test_no_lookahead.py
 │   ├── test_null_test.py
@@ -195,7 +197,8 @@ bot_builder/
 │   ├── test_v15_advanced_validation.py
 │   ├── test_v151_statistical_integrity.py
 │   ├── test_v152_live_data_and_forward.py
-│   └── test_v153_hotfix_validation.py  # V1.5.3 hotfix regression and integration tests
+│   ├── test_v153_hotfix_validation.py  # V1.5.3 hotfix regression and integration tests
+│   └── test_v153_final_patch.py        # V1.5.3 final patch safety and connectivity tests
 └── data/                               # Historical tick storage & provenance logs
     ├── .gitkeep
     ├── quotes.db                       # Persistent SQLite historical quote database
@@ -213,7 +216,7 @@ bot_builder/
 
 ## Command Execution Instructions
 
-### 1. Run Complete Automated Test Suite (84 Passed)
+### 1. Run Complete Automated Test Suite (97 Passed)
 ```powershell
 python -m pytest -v
 ```
@@ -274,5 +277,5 @@ Navigate to `http://127.0.0.1:8088`.
 ## Safety Directives & Final Verdict
 
 - **Real-Money Trading:** Permanently disabled (`LIVE_EXECUTION_DISABLED = True`).
-- **Research Verdict:** `SOFTWARE_READY_API_UNVERIFIED` (System maintains strict `NO_TRADE` protection).
+- **Research Verdict:** `SHADOW_VALIDATION_READY` & `LIVE_DATA_COLLECTION_READY` (System enforces strict `NO_TRADE` until a frozen model with positive conservative EV after holdout testing is validated).
 - **Economic Hurdle:** All forward predictions are traceable to frozen models; financial calculations require genuine available quotes. Zero real capital is ever allocated.

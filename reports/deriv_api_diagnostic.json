@@ -1,34 +1,71 @@
 {
-  "timestamp_utc": "2026-10-08T14:20:59.121655+00:00",
+  "timestamp_utc": "2026-10-08T15:51:48.183796+00:00",
   "target_symbol": "R_75",
   "app_id": "1089",
-  "endpoint_url": "wss://ws.derivws.com/websockets/v3?app_id=1089",
+  "endpoint_url": "wss://api.derivws.com/trading/v1/options/ws/public?app_id=1089",
   "authenticated_session": false,
-  "preflight": {
-    "hostname": "ws.derivws.com",
-    "port": 443,
-    "dns_resolved": true,
-    "resolved_ips": [
-      "104.18.12.218",
-      "104.18.13.218"
-    ],
-    "dns_latency_ms": 11.17,
-    "tcp_connected": true,
-    "tcp_latency_ms": 11.11,
-    "tls_handshake": true,
-    "tls_latency_ms": 37.39,
-    "tls_version": "TLSv1.3",
-    "cipher": "TLS_AES_256_GCM_SHA384",
-    "preflight_status": "PREFLIGHT_SUCCESS",
-    "preflight_error": null
-  },
-  "steps": {
-    "websocket_connection": {
-      "success": false,
-      "error": "TimeoutError()"
+  "stages": {
+    "stage_1_dns": {
+      "status": "SUCCESS",
+      "latency_ms": 31.3,
+      "resolved_ips": [
+        "104.18.12.218",
+        "104.18.13.218"
+      ]
+    },
+    "stage_2_tcp": {
+      "status": "SUCCESS",
+      "latency_ms": 9.54,
+      "connected_ip": "104.18.12.218"
+    },
+    "stage_3_tls": {
+      "status": "SUCCESS",
+      "latency_ms": 65.36,
+      "version": "TLSv1.3",
+      "cipher": "TLS_AES_256_GCM_SHA384"
+    },
+    "stage_4_websocket_handshake": {
+      "status": "SUCCESS",
+      "endpoint": "wss://api.derivws.com/trading/v1/options/ws/public?app_id=1089",
+      "latency_ms": 1804.35
+    },
+    "stage_5_api_response": {
+      "status": "SUCCESS",
+      "ping_latency_ms": 731.75,
+      "server_epoch": 1791474711
+    },
+    "stage_6_tick_subscription": {
+      "status": "SUCCESS",
+      "sample_quote": 45732.6103,
+      "sample_epoch": 1791474712,
+      "server_symbol": "R_75",
+      "latency_ms": 1197.95
+    },
+    "stage_7_proposal_verification": {
+      "status": "SUCCESS",
+      "runhigh": {
+        "proposal_id": "88966e19-061e-888d-712c-177adba02be6",
+        "ask_price": 2.0,
+        "total_payout": 61.07,
+        "implied_break_even": 0.03275,
+        "latency_ms": 525.89
+      },
+      "runlow": {
+        "proposal_id": "f6081222-7320-99e0-faf7-976d3e09b0db",
+        "ask_price": 2.0,
+        "total_payout": 61.07,
+        "implied_break_even": 0.03275,
+        "latency_ms": 496.46
+      }
+    },
+    "stage_8_persistence": {
+      "status": "SUCCESS",
+      "quotes_stored": 2,
+      "retrieval_verified": true,
+      "session_id": "diag_1791474713"
     }
   },
-  "quotes_persisted": 0,
-  "status": "CONNECTION_FAILED",
-  "error_details": "Failed to connect to endpoints (wss://ws.derivws.com/websockets/v3?app_id=1089, wss://ws.binaryws.com/websockets/v3?app_id=1089, wss://frontend.binaryws.com/websockets/v3?app_id=1089): TimeoutError()"
+  "quotes_persisted": 2,
+  "status": "CONNECTION_SUCCESS",
+  "error_details": null
 }
