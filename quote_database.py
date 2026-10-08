@@ -355,17 +355,70 @@ class QuoteDatabase:
         }
 
 
+    def inspect_summary(self, symbol: Optional[str] = None) -> Dict[str, Any]:
+        """Provides high-level database inspection metrics for V1.5.3 audit compliance."""
+        cov = self.report_quote_coverage(symbol=symbol)
+        with self._get_connection() as conn:
+            cur_syms = conn.execute("SELECT DISTINCT market_symbol FROM quotes").fetchall()
+            distinct_symbols = [r[0] for r in cur_syms]
+            
+            cur_rej = conn.execute(
+                "SELECT COUNT(*) FROM quotes WHERE collection_status != 'QUOTE_AVAILABLE' OR total_payout <= 0 OR stake <= 0"
+            ).fetchone()
+            rejected = int(cur_rej[0]) if cur_rej else 0
+
+        total = cov["total_quotes"]
+        health = "HEALTHY" if total > 0 and rejected == 0 else ("DEGRADED" if rejected > 0 else "EMPTY")
+
+        return {
+            "total_records": total,
+            "runhigh_quotes": cov["runhigh_quotes"],
+            "runlow_quotes": cov["runlow_quotes"],
+            "first_observation": cov["earliest_iso"],
+            "latest_observation": cov["latest_iso"],
+            "symbol_coverage": distinct_symbols if distinct_symbols else [symbol or "NONE"],
+            "rejected_records": rejected,
+            "database_health": health
+        }
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Deriv Historical Quote Database Manager")
+    parser = argparse.ArgumentParser(description="Deriv Historical Quote Database Manager (V1.5.3)")
     parser.add_argument("--db", default=DEFAULT_DB_PATH, help="Path to SQLite quotes database")
     parser.add_argument("--symbol", default=None, help="Filter by symbol (e.g. R_75)")
-    parser.add_argument("--inspect", action="store_true", help="Inspect recent quotes")
+    parser.add_argument("--inspect", action="store_true", help="Inspect quote database summary & records")
     parser.add_argument("--validate", action="store_true", help="Validate quote records")
     parser.add_argument("--coverage", action="store_true", help="Print quote coverage report")
     parser.add_argument("--export", default=None, help="Export quotes to CSV path")
     args = parser.parse_args()
 
     db = QuoteDatabase(db_path=args.db)
+
+    if args.inspect:
+        summary = db.inspect_summary(symbol=args.symbol)
+        print("\n" + "=" * 60)
+        print("           QUOTE DATABASE INSPECTION SUMMARY")
+        print("=" * 60)
+        if summary["total_records"] == 0:
+            print("  Status:               NO_GENUINE_QUOTES_RECORDED")
+            print("  Total Records:        0")
+            print("  Database Health:      EMPTY")
+        else:
+            print(f"  Total Records:        {summary['total_records']:,}")
+            print(f"  RUNHIGH Quotes:       {summary['runhigh_quotes']:,}")
+            print(f"  RUNLOW Quotes:        {summary['runlow_quotes']:,}")
+            print(f"  First Observation:    {summary['first_observation']}")
+            print(f"  Latest Observation:   {summary['latest_observation']}")
+            print(f"  Symbol Coverage:      {', '.join(summary['symbol_coverage'])}")
+            print(f"  Rejected Records:     {summary['rejected_records']}")
+            print(f"  Database Health:      {summary['database_health']}")
+            quotes = db.inspect_quotes(symbol=args.symbol, limit=5)
+            if quotes:
+                print("\n  Sample Recent Observations:")
+                for q in quotes:
+                    print(f"    [{q['contract_type']}] TS: {q['response_timestamp']} | Stake: ${q['stake']:.2f} -> Payout: ${q['total_payout']:.2f} | Status: {q['collection_status']}")
+        print("=" * 60 + "\n")
+        return
 
     if args.validate:
         res = db.validate_quote_records(symbol=args.symbol)
@@ -381,21 +434,18 @@ def main():
 
     elif args.coverage or (not args.inspect and not args.export and not args.validate):
         cov = db.report_quote_coverage(symbol=args.symbol)
-        print("=== QUOTE DATABASE COVERAGE REPORT ===")
-        print(f"Symbol:           {cov['symbol']}")
-        print(f"Status:           {cov['status']}")
-        print(f"Total Quotes:     {cov['total_quotes']}")
-        print(f"Available Quotes: {cov['available_quotes']} (RUNHIGH: {cov['runhigh_quotes']}, RUNLOW: {cov['runlow_quotes']})")
-        print(f"Earliest Quote:   {cov['earliest_iso']}")
-        print(f"Latest Quote:     {cov['latest_iso']}")
-        print(f"Timespan:         {cov['time_span_hours']} hours")
-        print(f"Avg Latency:      {cov['avg_latency_ms']} ms")
-
-    if args.inspect:
-        quotes = db.inspect_quotes(symbol=args.symbol, limit=10)
-        print("\n=== RECENT QUOTES (Last 10) ===")
-        for q in quotes:
-            print(f"[{q['contract_type']}] TS: {q['response_timestamp']} | Stake: ${q['stake']:.2f} -> Payout: ${q['total_payout']:.2f} | Status: {q['collection_status']}")
+        if cov["total_quotes"] == 0:
+            print("NO_GENUINE_QUOTES_RECORDED")
+        else:
+            print("=== QUOTE DATABASE COVERAGE REPORT ===")
+            print(f"Symbol:           {cov['symbol']}")
+            print(f"Status:           {cov['status']}")
+            print(f"Total Quotes:     {cov['total_quotes']}")
+            print(f"Available Quotes: {cov['available_quotes']} (RUNHIGH: {cov['runhigh_quotes']}, RUNLOW: {cov['runlow_quotes']})")
+            print(f"Earliest Quote:   {cov['earliest_iso']}")
+            print(f"Latest Quote:     {cov['latest_iso']}")
+            print(f"Timespan:         {cov['time_span_hours']} hours")
+            print(f"Avg Latency:      {cov['avg_latency_ms']} ms")
 
     if args.export:
         n = db.export_quote_history(args.export, symbol=args.symbol)

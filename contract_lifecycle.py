@@ -61,6 +61,10 @@ class ContractVerificationReceipt:
     discrepancy_notes: str = ""
 
 
+# Module-level safety invariant: demo execution disabled by default
+ALLOW_DEMO_EXECUTION: bool = False
+
+
 class DemoSettlementHarness:
     """Isolated harness to verify Deriv official settlement against our 5-tick canonical model."""
 
