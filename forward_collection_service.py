@@ -1,14 +1,15 @@
-"""Sustained Forward Collection Service (V1.6).
+"""Sustained Forward Collection Service (V1.6.1).
 
 Provides a long-running, auto-reconnecting forward observation service that:
-  1. Creates and registers a new ForwardSession on startup.
-  2. Instantiates ForwardObserver with that session's paths.
+  1. Creates and registers a new ForwardSession on startup with unique session ID.
+  2. Instantiates ForwardObserver with that session's ID and database paths.
   3. Runs tick collection + quote recording + shadow/paper prediction in one loop.
-  4. Auto-reconnects with exponential backoff on WebSocket failures.
-  5. Restores all subscriptions on reconnect (ticks + proposal polling).
-  6. Periodically (every N ticks or T seconds) updates session stats in the registry.
-  7. Generates a session report via SessionReporter at clean shutdown.
-  8. Propagates real-time data-gap state from HealthMonitor into decision gate.
+  4. Auto-reconnects with exponential backoff on WebSocket failures up to configured attempts.
+  5. Enforces observation bounds (duration, maximum observations count, flush policy).
+  6. Restores all subscriptions on reconnect (ticks + proposal polling).
+  7. Periodically updates session stats in the registry.
+  8. Generates a session report via SessionReporter at clean shutdown.
+  9. Propagates real-time data-gap state from HealthMonitor into decision gate.
 
 Safety Directive:
   LIVE_EXECUTION_DISABLED is permanently True.
@@ -16,7 +17,7 @@ Safety Directive:
 
 Usage:
     python forward_collection_service.py [symbol] [--mode SHADOW] [--duration 3600]
-    python forward_collection_service.py R_75 --mode SHADOW --duration 7200
+    python forward_collection_service.py R_75 --mode SHADOW --duration 7200 --max-observations 500
     python forward_collection_service.py R_75 --mode DATA_COLLECTION_ONLY
 """
 import argparse
@@ -29,7 +30,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from config import DEFAULT_CONFIG
-from forward_journal import ForwardPredictionJournal
+from forward_journal import ForwardPredictionJournal, STATUS_INCOMPLETE
 from forward_observer import ForwardObserver
 from forward_session import ForwardSessionRegistry, ForwardSession
 from health_monitor import GLOBAL_HEALTH_MONITOR
@@ -43,20 +44,23 @@ LIVE_EXECUTION_DISABLED: bool = True
 
 
 class ForwardCollectionService:
-    """Long-running forward data collection and shadow prediction service."""
-
-    STAT_FLUSH_INTERVAL_TICKS = 50   # Update registry stats every N ticks
-    STAT_FLUSH_INTERVAL_SECS = 30.0  # Or every N seconds (whichever comes first)
+    """Long-running forward data collection and shadow prediction service (V1.6.1)."""
 
     def __init__(
         self,
         symbol: str = "R_75",
         mode: str = "SHADOW",
         duration_seconds: Optional[float] = None,  # None = run indefinitely
+        max_observations: Optional[int] = None,    # Max predictions before stopping
         quote_interval_seconds: float = 2.0,
         max_quote_age_seconds: float = 60.0,
         app_id: Optional[str] = None,
         model_path_or_id: Optional[str] = None,
+        max_reconnect_attempts: int = 10,
+        tick_buffer_capacity: int = 500,
+        flush_interval_ticks: int = 50,
+        flush_interval_secs: float = 30.0,
+        reports_dir: Optional[str] = None,
         notes: str = ""
     ):
         if LIVE_EXECUTION_DISABLED is not True:
@@ -67,10 +71,16 @@ class ForwardCollectionService:
         if self.mode not in ("DATA_COLLECTION_ONLY", "SHADOW", "PAPER"):
             self.mode = "SHADOW"
         self.duration_seconds = duration_seconds
-        self.quote_interval_seconds = quote_interval_seconds
+        self.max_observations = max_observations
+        self.quote_interval_seconds = max(1.0, quote_interval_seconds)  # Rate limit protection
         self.max_quote_age_seconds = max_quote_age_seconds
         self.app_id = app_id or DEFAULT_CONFIG.app_id
         self.model_path_or_id = model_path_or_id
+        self.max_reconnect_attempts = max_reconnect_attempts
+        self.tick_buffer_capacity = tick_buffer_capacity
+        self.flush_interval_ticks = flush_interval_ticks
+        self.flush_interval_secs = flush_interval_secs
+        self.reports_dir = reports_dir
         self.notes = notes
 
         # Resolve model ID for session registration
@@ -95,7 +105,7 @@ class ForwardCollectionService:
         )
         print(f"[Service] Session created: {self.session.session_id[:8]} | Mode: {self.mode}")
 
-        # Components
+        # Components with session_id linkage
         self.journal = ForwardPredictionJournal(db_path=self.session.journal_db_path)
         self.observer = ForwardObserver(
             symbol=symbol,
@@ -103,18 +113,24 @@ class ForwardCollectionService:
             model_path_or_id=model_path_or_id,
             app_id=self.app_id,
             duration_seconds=duration_seconds or 86400.0,
-            quote_interval_seconds=quote_interval_seconds,
+            quote_interval_seconds=self.quote_interval_seconds,
             max_quote_age_seconds=max_quote_age_seconds,
             journal_db_path=self.session.journal_db_path,
-            quote_db_path=self.session.quote_db_path
+            quote_db_path=self.session.quote_db_path,
+            session_id=self.session.session_id
         )
-        self.reporter = SessionReporter(journal=self.journal, registry=self.registry)
+        self.reporter = SessionReporter(
+            reports_dir=self.reports_dir,
+            journal=self.journal,
+            registry=self.registry
+        )
 
         self._running = False
         self._stop_event = asyncio.Event()
         self._ticks_since_flush = 0
         self._last_flush_time = time.time()
         self._total_ticks = 0
+        self._total_predictions = 0
 
     def _on_tick(self, tick: LiveTickRecord):
         """Tick callback — delegates to observer and tracks health."""
@@ -128,16 +144,24 @@ class ForwardCollectionService:
         if tick.data_quality_flags == "DUPLICATE_IGNORED":
             return
 
-        # Propagate real gap state into observer for decision gate
-        self.observer.process_incoming_tick(tick)
+        # Delegate to observer (evaluates features, inference, journal)
+        pred = self.observer.process_incoming_tick(tick)
+        if pred is not None:
+            self._total_predictions += 1
 
         self._total_ticks += 1
         self._ticks_since_flush += 1
 
+        # Check maximum observations control (V1.6.1 Section 14)
+        if self.max_observations and self._total_predictions >= self.max_observations:
+            print(f"[Service] Reached maximum observation target ({self._total_predictions}/{self.max_observations}). Stopping gracefully...")
+            self._running = False
+            self._stop_event.set()
+
         # Periodic stat flush to registry
         now = time.time()
-        if (self._ticks_since_flush >= self.STAT_FLUSH_INTERVAL_TICKS or
-                now - self._last_flush_time >= self.STAT_FLUSH_INTERVAL_SECS):
+        if (self._ticks_since_flush >= self.flush_interval_ticks or
+                now - self._last_flush_time >= self.flush_interval_secs):
             self._flush_stats()
 
     def _flush_stats(self):
@@ -178,16 +202,19 @@ class ForwardCollectionService:
         self._stop_event.clear()
         GLOBAL_HEALTH_MONITOR.update_connection_status("CONNECTING")
 
-        print(f"\n{'=' * 60}")
-        print(f"  DERIV FORWARD COLLECTION SERVICE — V1.6")
-        print(f"{'=' * 60}")
+        print(f"\n{'=' * 65}")
+        print(f"  DERIV FORWARD COLLECTION SERVICE — V1.6.1")
+        print(f"{'=' * 65}")
         print(f"  Symbol           : {self.symbol}")
         print(f"  Mode             : {self.mode}")
         print(f"  Model ID         : {self._model_id}")
-        print(f"  Session          : {self.session.session_id[:8]}")
+        print(f"  Session ID       : {self.session.session_id[:8]}")
         print(f"  Safety Guard     : LIVE_EXECUTION_DISABLED = True")
         print(f"  Duration         : {'Indefinite' if not self.duration_seconds else f'{self.duration_seconds}s'}")
-        print(f"{'=' * 60}\n")
+        if self.max_observations:
+            print(f"  Max Observations : {self.max_observations}")
+        print(f"  Quote Polling    : Every {self.quote_interval_seconds}s")
+        print(f"{'=' * 65}\n")
 
         end_t = (time.time() + self.duration_seconds) if self.duration_seconds else float("inf")
 
@@ -216,8 +243,11 @@ class ForwardCollectionService:
                     print(f"[Service] Streamer error: {e}")
                     GLOBAL_HEALTH_MONITOR.update_connection_status("RECONNECTING")
                     retry_count += 1
+                    if retry_count > self.max_reconnect_attempts:
+                        print(f"[Service] Max reconnect attempts reached ({self.max_reconnect_attempts}). Stopping...")
+                        break
                     backoff = min(max_backoff, 2.0 ** min(retry_count, 6))
-                    print(f"[Service] Reconnecting in {backoff:.1f}s (attempt {retry_count})...")
+                    print(f"[Service] Reconnecting in {backoff:.1f}s (attempt {retry_count}/{self.max_reconnect_attempts})...")
                     try:
                         await asyncio.wait_for(self._stop_event.wait(), timeout=backoff)
                     except asyncio.TimeoutError:
@@ -232,11 +262,11 @@ class ForwardCollectionService:
             self._running = False
             quote_task.cancel()
 
-            # Final stat flush and outcome marking
-            self.journal.mark_incomplete_as_unverified(symbol=self.symbol)
+            # Final stat flush and outcome marking (mark incomplete as OUTCOME_INCOMPLETE)
+            self.journal.mark_incomplete_as_unverified(symbol=self.symbol, target_status=STATUS_INCOMPLETE)
             self._flush_stats()
 
-            # Complete session
+            # Complete session in registry
             final_metrics = self.journal.get_accuracy_metrics(symbol=self.symbol)
             self.registry.complete_session(
                 session_id=self.session.session_id,
@@ -248,67 +278,52 @@ class ForwardCollectionService:
                 cumulative_pnl=final_metrics.get("cumulative_pnl", 0.0) or 0.0,
                 notes=self.notes
             )
-
             GLOBAL_HEALTH_MONITOR.update_connection_status("DISCONNECTED")
 
-            # Generate session report
-            updated_session = self.registry.get_session(self.session.session_id)
-            if updated_session:
-                health = GLOBAL_HEALTH_MONITOR.get_health_summary()
-                try:
-                    report = self.reporter.generate_session_report(
-                        session=updated_session,
-                        health_snapshot=health
-                    )
-                    print(self.reporter._render_text_report(report))
-                except Exception as e:
-                    print(f"[Service] Report generation error: {e}")
+            # Generate end-of-session report
+            try:
+                report = self.reporter.generate_session_report(
+                    session=self.session,
+                    health_snapshot=GLOBAL_HEALTH_MONITOR.get_health_summary()
+                )
+                print(f"[Service] End-of-session report generated in: {self.reporter.reports_dir}")
+            except Exception as e:
+                print(f"[Service] Warning: Could not generate session report: {e}")
 
-            print(f"\n[Service] Session {self.session.session_id[:8]} complete.")
-            print(f"[Service] Total ticks: {self._total_ticks}")
-            print(f"[Service] Total predictions: {final_metrics.get('total_predictions', 0)}")
-
-    def stop(self):
-        """Signals the service to stop gracefully."""
-        print("\n[Service] Shutdown requested.")
-        self._running = False
-        self._stop_event.set()
+            print(f"\n[Service] Forward collection session completed gracefully.")
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Deriv Sustained Forward Collection Service (V1.6)",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-    parser.add_argument("symbol", nargs="?", default="R_75",
-                        help="Asset symbol (e.g. R_75)")
-    parser.add_argument("--mode", default="SHADOW",
-                        choices=["DATA_COLLECTION_ONLY", "SHADOW", "PAPER"],
-                        help="Observation mode")
-    parser.add_argument("--duration", type=float, default=None,
-                        help="Session duration in seconds (omit for indefinite)")
-    parser.add_argument("--interval", type=float, default=2.0,
-                        help="Quote polling interval (seconds)")
-    parser.add_argument("--model", default=None,
-                        help="Frozen model path or ID")
-    parser.add_argument("--app-id", default=DEFAULT_CONFIG.app_id,
-                        help="Deriv App ID")
-    parser.add_argument("--notes", default="",
-                        help="Free-text notes for this session")
+    parser = argparse.ArgumentParser(description="Sustained Forward Collection Service (V1.6.1)")
+    parser.add_argument("symbol", nargs="?", default="R_75", help="Asset symbol (e.g. R_75)")
+    parser.add_argument("--mode", default="SHADOW", choices=["DATA_COLLECTION_ONLY", "SHADOW", "PAPER"], help="Observation mode")
+    parser.add_argument("--duration", type=float, default=None, help="Session duration in seconds (omitted = indefinite)")
+    parser.add_argument("--max-observations", type=int, default=None, help="Maximum predictions before stopping")
+    parser.add_argument("--interval", type=float, default=2.0, help="Quote polling interval in seconds")
+    parser.add_argument("--model", default=None, help="Path or ID of frozen model artifact")
+    parser.add_argument("--reconnect-attempts", type=int, default=10, help="Maximum reconnect attempts")
+    parser.add_argument("--flush-interval", type=int, default=50, help="Stat flush interval in ticks")
+    parser.add_argument("--report-dir", default=None, help="Directory for reports")
+    parser.add_argument("--notes", default="", help="Session notes")
     args = parser.parse_args()
 
     service = ForwardCollectionService(
         symbol=args.symbol,
         mode=args.mode,
         duration_seconds=args.duration,
+        max_observations=args.max_observations,
         quote_interval_seconds=args.interval,
         model_path_or_id=args.model,
-        app_id=args.app_id,
+        max_reconnect_attempts=args.reconnect_attempts,
+        flush_interval_ticks=args.flush_interval,
+        reports_dir=args.report_dir,
         notes=args.notes
     )
 
     def handle_sig(sig, frame):
-        service.stop()
+        print("\nShutdown signal received. Stopping collection service...")
+        service._running = False
+        service._stop_event.set()
 
     signal.signal(signal.SIGINT, handle_sig)
     signal.signal(signal.SIGTERM, handle_sig)
@@ -316,7 +331,7 @@ def main():
     try:
         asyncio.run(service.run())
     except KeyboardInterrupt:
-        service.stop()
+        pass
 
 
 if __name__ == "__main__":

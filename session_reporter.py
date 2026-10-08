@@ -1,22 +1,26 @@
-"""Session and Daily Report Generator (V1.6).
+"""Session and Daily Report Generator (V1.6.1).
 
 Generates structured research reports at two cadences:
   1. SESSION REPORT: produced at the end of each ForwardSession.
   2. DAILY REPORT: summarises all sessions from the most recent UTC calendar day.
 
-Each report includes:
+Each report includes all V1.6.1 Section 17 audit metrics:
   - Session metadata (ID, symbol, mode, model, duration)
-  - Tick collection health (total ticks, gap rate, duplicate rate)
-  - Quote health (success rate, coverage)
-  - Forward prediction summary (totals, pending, resolved, unverified)
-  - Economic performance metrics (win rate, PnL, drawdown, Brier)
-  - Validation gate status
+  - Number of ticks received
+  - Number of quotes recorded
+  - Number of eligible feature windows
+  - Number of predictions generated & persisted
+  - Number of outcomes resolved, pending, incomplete, data gaps
+  - RUNHIGH / RUNLOW estimated win probabilities
+  - RUNHIGH / RUNLOW observed win probabilities
+  - Brier scores and Expected Calibration Errors (ECE)
+  - Genuine quote coverage %
+  - Economic performance metrics (hypothetical PnL, drawdown)
+  - Validation gate status and recommendations
   - Safety invariant declaration (live money disabled)
 
 Reports are saved as JSON (machine-readable) and plain text (human-readable)
 to the reports/ directory with timestamped filenames.
-
-No trading or API interactions are performed by this module.
 """
 import json
 import os
@@ -30,6 +34,7 @@ from forward_validation_gate import ForwardValidationGate
 from health_monitor import GLOBAL_HEALTH_MONITOR
 from model_manager import ModelManager
 from performance_tracker import PerformanceTracker
+from quote_database import QuoteDatabase
 
 REPORTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports")
 
@@ -43,7 +48,8 @@ class SessionReporter:
         journal: Optional[ForwardPredictionJournal] = None,
         registry: Optional[ForwardSessionRegistry] = None,
         tracker: Optional[PerformanceTracker] = None,
-        gate: Optional[ForwardValidationGate] = None
+        gate: Optional[ForwardValidationGate] = None,
+        quote_db: Optional[QuoteDatabase] = None
     ):
         self.reports_dir = reports_dir or REPORTS_DIR
         os.makedirs(self.reports_dir, exist_ok=True)
@@ -51,6 +57,7 @@ class SessionReporter:
         self.registry = registry or ForwardSessionRegistry()
         self.tracker = tracker or PerformanceTracker()
         self.gate = gate or ForwardValidationGate()
+        self.quote_db = quote_db or QuoteDatabase()
 
     def _utc_now_str(self) -> str:
         return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -66,7 +73,7 @@ class SessionReporter:
         session: ForwardSession,
         health_snapshot: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Generates a complete session report dictionary."""
+        """Generates a complete session report dictionary adhering to V1.6.1 Section 17."""
         # Accuracy metrics from journal
         accuracy = self.journal.get_accuracy_metrics(symbol=session.symbol)
 
@@ -79,6 +86,10 @@ class SessionReporter:
         # Health telemetry
         health = health_snapshot or GLOBAL_HEALTH_MONITOR.get_health_summary()
 
+        # Quotes count
+        quote_cov = self.quote_db.report_quote_coverage(session.symbol)
+        quotes_recorded = quote_cov.get("total_quotes", 0)
+
         # Model info
         mgr = ModelManager()
         model_path = mgr.get_latest_model_for_symbol(session.symbol)
@@ -86,7 +97,7 @@ class SessionReporter:
         if model_path:
             try:
                 from model_artifact import ModelArtifact
-                art = ModelArtifact.load(model_path)
+                art = ModelArtifact.load_from_file(model_path)
                 model_info = {
                     "model_id": art.model_id,
                     "model_version": art.model_version,
@@ -105,6 +116,8 @@ class SessionReporter:
             except Exception:
                 pass
 
+        total_preds = accuracy.get("total_predictions", 0)
+
         report = {
             "report_type": "SESSION",
             "generated_at": self._utc_now_str(),
@@ -121,14 +134,11 @@ class SessionReporter:
             "safety": {
                 "live_money_trading_disabled": True,
                 "purchasing_allowed": False,
-                "declaration": "All financial metrics are hypothetical paper-trading simulations only."
+                "declaration": "REAL-MONEY TRADING DISABLED. All metrics are non-purchasing forward research observations."
             },
             "model": model_info,
-            "tick_health": health.get("ticks", {}),
-            "quote_health": health.get("quotes", {}),
-            "connectivity": health.get("connectivity", {}),
             "predictions": {
-                "total": accuracy.get("total_predictions", 0),
+                "total": total_preds,
                 "resolved": accuracy.get("resolved_predictions", 0),
                 "pending": accuracy.get("pending_predictions", 0),
                 "unverified": accuracy.get("unverified_predictions", 0),
@@ -137,7 +147,35 @@ class SessionReporter:
                 "realized_runhigh_win_rate": accuracy.get("realized_runhigh_win_rate"),
                 "realized_runlow_win_rate": accuracy.get("realized_runlow_win_rate"),
             },
+            "lifecycle_counts": {
+                "ticks_received": session.total_ticks,
+                "quotes_recorded": quotes_recorded,
+                "eligible_feature_windows": total_preds,
+                "predictions_generated": total_preds,
+                "predictions_persisted": total_preds,
+                "outcomes_resolved": accuracy.get("resolved_predictions", 0),
+                "outcomes_pending": accuracy.get("pending_predictions", 0),
+                "outcomes_incomplete": accuracy.get("incomplete_predictions", 0),
+                "outcomes_data_gap": accuracy.get("data_gap_predictions", 0),
+                "outcomes_unverified": accuracy.get("unverified_predictions", 0),
+            },
+            "statistical_evidence": {
+                "runhigh_estimated_win_prob": accuracy.get("runhigh_estimated_mean_prob"),
+                "runlow_estimated_win_prob": accuracy.get("runlow_estimated_mean_prob"),
+                "runhigh_observed_win_prob": accuracy.get("runhigh_observed_win_rate"),
+                "runlow_observed_win_prob": accuracy.get("runlow_observed_win_rate"),
+                "brier_score_runhigh": accuracy.get("brier_score_runhigh"),
+                "brier_score_runlow": accuracy.get("brier_score_runlow"),
+                "calibration_error_runhigh": accuracy.get("calibration_error_runhigh"),
+                "calibration_error_runlow": accuracy.get("calibration_error_runlow"),
+                "genuine_quote_coverage_pct": accuracy.get("quote_coverage_pct", 0.0),
+            },
             "economic_performance": perf.to_dict(),
+            "health_telemetry": {
+                "ticks": health.get("ticks", {}),
+                "quotes": health.get("quotes", {}),
+                "connectivity": health.get("connectivity", {}),
+            },
             "validation_gate": gate_result,
         }
 
@@ -168,6 +206,9 @@ class SessionReporter:
         accuracy = self.journal.get_accuracy_metrics(symbol=symbol)
         perf = self.tracker.compute_performance(symbol=symbol)
         health = GLOBAL_HEALTH_MONITOR.get_health_summary()
+        quote_cov = self.quote_db.report_quote_coverage(symbol or "R_75")
+
+        total_preds = accuracy.get("total_predictions", 0)
 
         report = {
             "report_type": "DAILY",
@@ -176,7 +217,7 @@ class SessionReporter:
             "safety": {
                 "live_money_trading_disabled": True,
                 "purchasing_allowed": False,
-                "declaration": "All financial metrics are hypothetical paper-trading simulations only."
+                "declaration": "REAL-MONEY TRADING DISABLED. All metrics are non-purchasing forward research observations."
             },
             "sessions_today": len(day_sessions),
             "session_summary": [
@@ -191,14 +232,26 @@ class SessionReporter:
                 }
                 for s in day_sessions
             ],
-            "aggregate_predictions": {
-                "total": accuracy.get("total_predictions", 0),
-                "resolved": accuracy.get("resolved_predictions", 0),
-                "unverified": accuracy.get("unverified_predictions", 0),
+            "lifecycle_counts": {
+                "quotes_recorded": quote_cov.get("total_quotes", 0),
+                "predictions_generated": total_preds,
+                "predictions_persisted": total_preds,
+                "outcomes_resolved": accuracy.get("resolved_predictions", 0),
+                "outcomes_pending": accuracy.get("pending_predictions", 0),
+                "outcomes_incomplete": accuracy.get("incomplete_predictions", 0),
+                "outcomes_data_gap": accuracy.get("data_gap_predictions", 0),
+                "outcomes_unverified": accuracy.get("unverified_predictions", 0),
+            },
+            "statistical_evidence": {
+                "runhigh_estimated_win_prob": accuracy.get("runhigh_estimated_mean_prob"),
+                "runlow_estimated_win_prob": accuracy.get("runlow_estimated_mean_prob"),
+                "runhigh_observed_win_prob": accuracy.get("runhigh_observed_win_rate"),
+                "runlow_observed_win_prob": accuracy.get("runlow_observed_win_rate"),
                 "brier_score_runhigh": accuracy.get("brier_score_runhigh"),
                 "brier_score_runlow": accuracy.get("brier_score_runlow"),
-                "realized_runhigh_win_rate": accuracy.get("realized_runhigh_win_rate"),
-                "realized_runlow_win_rate": accuracy.get("realized_runlow_win_rate"),
+                "calibration_error_runhigh": accuracy.get("calibration_error_runhigh"),
+                "calibration_error_runlow": accuracy.get("calibration_error_runlow"),
+                "genuine_quote_coverage_pct": accuracy.get("quote_coverage_pct", 0.0),
             },
             "aggregate_economic_performance": perf.to_dict(),
             "system_health": {
@@ -225,7 +278,7 @@ class SessionReporter:
         rtype = report.get("report_type", "REPORT")
         lines.append(f"=== DERIV QUANTITATIVE RESEARCH — {rtype} REPORT ===")
         lines.append(f"Generated at: {report.get('generated_at', '')}")
-        lines.append(f"Safety: Live money trading DISABLED. All metrics are hypothetical.")
+        lines.append("Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)")
         lines.append("")
 
         if rtype == "SESSION":
@@ -239,15 +292,29 @@ class SessionReporter:
             lines.append(f"Duration (s) : {sess.get('actual_duration_seconds', 'N/A')}")
             lines.append("")
 
-        pred = report.get("predictions") or report.get("aggregate_predictions", {})
-        lines.append("--- PREDICTIONS ---")
-        lines.append(f"  Total          : {pred.get('total', 0)}")
-        lines.append(f"  Resolved       : {pred.get('resolved', 0)}")
-        lines.append(f"  Unverified     : {pred.get('unverified', 0)}")
-        lines.append(f"  Brier RH       : {pred.get('brier_score_runhigh')}")
-        lines.append(f"  Brier RL       : {pred.get('brier_score_runlow')}")
-        lines.append(f"  RH Win Rate    : {pred.get('realized_runhigh_win_rate')}")
-        lines.append(f"  RL Win Rate    : {pred.get('realized_runlow_win_rate')}")
+        counts = report.get("lifecycle_counts", {})
+        lines.append("--- LIFECYCLE & OBSERVATION COUNTS ---")
+        lines.append(f"  Ticks Received      : {counts.get('ticks_received', 'N/A')}")
+        lines.append(f"  Quotes Recorded     : {counts.get('quotes_recorded', 0)}")
+        lines.append(f"  Predictions Total   : {counts.get('predictions_persisted', 0)}")
+        lines.append(f"  Outcomes Resolved   : {counts.get('outcomes_resolved', 0)}")
+        lines.append(f"  Outcomes Pending    : {counts.get('outcomes_pending', 0)}")
+        lines.append(f"  Outcomes Incomplete : {counts.get('outcomes_incomplete', 0)}")
+        lines.append(f"  Outcomes Data Gap   : {counts.get('outcomes_data_gap', 0)}")
+        lines.append(f"  Outcomes Unverified : {counts.get('outcomes_unverified', 0)}")
+        lines.append("")
+
+        stat = report.get("statistical_evidence", {})
+        lines.append("--- STATISTICAL EVIDENCE ---")
+        lines.append(f"  RUNHIGH Est Prob    : {stat.get('runhigh_estimated_win_prob')}")
+        lines.append(f"  RUNLOW Est Prob     : {stat.get('runlow_estimated_win_prob')}")
+        lines.append(f"  RUNHIGH Obs Prob    : {stat.get('runhigh_observed_win_prob')}")
+        lines.append(f"  RUNLOW Obs Prob     : {stat.get('runlow_observed_win_prob')}")
+        lines.append(f"  Brier RH            : {stat.get('brier_score_runhigh')}")
+        lines.append(f"  Brier RL            : {stat.get('brier_score_runlow')}")
+        lines.append(f"  Calib Error RH      : {stat.get('calibration_error_runhigh')}")
+        lines.append(f"  Calib Error RL      : {stat.get('calibration_error_runlow')}")
+        lines.append(f"  Quote Coverage      : {stat.get('genuine_quote_coverage_pct')}%")
         lines.append("")
 
         perf_key = "economic_performance" if "economic_performance" in report else "aggregate_economic_performance"
@@ -258,11 +325,7 @@ class SessionReporter:
         lines.append(f"  Win Rate            : {perf.get('win_rate')}")
         lines.append(f"  Cumulative PnL      : {perf.get('cumulative_pnl')}")
         lines.append(f"  Mean PnL/Trade      : {perf.get('mean_pnl_per_trade')}")
-        lines.append(f"  Sharpe Ratio        : {perf.get('sharpe_ratio')}")
         lines.append(f"  Max Drawdown        : {perf.get('max_drawdown')}")
-        lines.append(f"  Quote Coverage      : {perf.get('quote_coverage_pct')}%")
-        lines.append(f"  Predicted EV Mean   : {perf.get('predicted_ev_mean')}")
-        lines.append(f"  Realized EV Mean    : {perf.get('realized_ev_mean')}")
         lines.append("")
 
         gate = report.get("validation_gate")

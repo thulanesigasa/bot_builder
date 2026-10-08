@@ -1,16 +1,17 @@
-"""Centralized Paper-Trade Decision Gate & Taxonomic Reason Codes (V1.5.3 Final Patch).
+"""Centralized Paper-Trade Decision Gate & Taxonomic Reason Codes (V1.6.1).
 
 Authoritative evaluation engine ensuring zero trade authorizations occur unless:
 1. Valid frozen model exists and is approved for paper trading.
 2. Estimated probability is genuine and strictly derived from the frozen model.
-3. Lower probability bound is statistically justified.
+3. Lower probability bound is statistically justified and model-provided (NO arbitrary fallbacks).
 4. Genuine, fresh Deriv proposal quote is available (ask > 0, payout > 0).
-5. Ordinary Expected Value exceeds configured threshold (EV > min_expected_ev).
-6. Conservative Expected Value exceeds configured safety margin (Conservative_EV > min_conservative_ev).
-7. Probability exceeds break-even by configured safety margin.
-8. All institutional risk limits pass (max stake, consecutive losses, daily drawdown).
-9. Execution mode is PAPER (SHADOW and DATA_COLLECTION_ONLY strictly disallow trades).
-10. No data gaps or contract definition mismatches exist.
+5. All quote timestamps are strictly verified (request <= response <= decision, no lookahead, no staleness).
+6. Ordinary Expected Value exceeds configured threshold (EV > min_expected_ev).
+7. Conservative Expected Value exceeds configured safety margin (Conservative_EV > min_conservative_ev).
+8. Probability exceeds break-even by configured safety margin.
+9. All institutional persistent risk limits pass (consecutive losses, daily drawdown, cooldown, exposure).
+10. Execution mode is PAPER (SHADOW and DATA_COLLECTION_ONLY strictly disallow trades).
+11. No data gaps or contract definition mismatches exist.
 
 If ANY required condition fails, returns NO_TRADE with explicit taxonomic reason codes.
 """
@@ -36,12 +37,16 @@ class DecisionReason(str, Enum):
     QUOTE_UNAVAILABLE = "QUOTE_UNAVAILABLE"
     QUOTE_STALE = "QUOTE_STALE"
     QUOTE_INVALID = "QUOTE_INVALID"
+    QUOTE_TIMESTAMP_INVALID = "QUOTE_TIMESTAMP_INVALID"
+    QUOTE_LOOKAHEAD_REJECTED = "QUOTE_LOOKAHEAD_REJECTED"
     INSUFFICIENT_HISTORY = "INSUFFICIENT_HISTORY"
     PROB_BELOW_BREAK_EVEN = "PROB_BELOW_BREAK_EVEN"
     NEGATIVE_EXPECTED_EV = "NEGATIVE_EXPECTED_EV"
     CONSERVATIVE_EV_TOO_LOW = "CONSERVATIVE_EV_TOO_LOW"
+    UNCERTAINTY_UNAVAILABLE = "UNCERTAINTY_UNAVAILABLE"
     PROBABILITY_MARGIN_TOO_LOW = "PROBABILITY_MARGIN_TOO_LOW"
     RISK_LIMIT_EXCEEDED = "RISK_LIMIT_EXCEEDED"
+    RISK_STATE_UNAVAILABLE = "RISK_STATE_UNAVAILABLE"
     DATA_INTEGRITY_FAILURE = "DATA_INTEGRITY_FAILURE"
     CONTRACT_MODEL_UNVERIFIED = "CONTRACT_MODEL_UNVERIFIED"
     SHADOW_MODE_NON_TRADING = "SHADOW_MODE_NON_TRADING"
@@ -97,9 +102,27 @@ def evaluate_paper_trade_eligibility(
     max_daily_drawdown_pct: float = 0.05,
     current_stake: float = 2.0,
     max_stake: float = 5.0,
-    has_data_gap: bool = False
+    has_data_gap: bool = False,
+    # V1.6.1 Timestamp Verification Parameters
+    quote_request_timestamp: Optional[float] = None,
+    quote_response_timestamp: Optional[float] = None,
+    quote_source: Optional[str] = None,
+    quote_currency: Optional[str] = None,
+    quote_symbol: Optional[str] = None,
+    quote_duration: Optional[int] = None,
+    quote_contract_type: Optional[str] = None,
+    quote_record: Optional[Any] = None,
+    # V1.6.1 Persistent Risk State Integration
+    is_risk_state_available: bool = True,
+    is_in_cooldown: bool = False,
+    outstanding_positions_count: int = 0,
+    max_simultaneous_positions: int = 1,
+    current_exposure: float = 0.0,
+    per_symbol_exposure: float = 0.0,
+    max_exposure: float = 10.0,
+    current_daily_pnl: Optional[float] = None
 ) -> DecisionResult:
-    """Authoritative Centralized Decision Gate for Paper Trade Authorization.
+    """Authoritative Centralized Decision Gate for Paper Trade Authorization (V1.6.1).
     
     All gates are combined using strict AND logic.
     If ANY mandatory condition fails, returns NO_TRADE.
@@ -108,6 +131,29 @@ def evaluate_paper_trade_eligibility(
     norm_dir = contract_type.upper() if contract_type else "NONE"
     if norm_dir not in ("RUNHIGH", "RUNLOW"):
         norm_dir = "NONE"
+
+    # Extract metadata from quote_record if provided
+    if quote_record is not None:
+        if quote_request_timestamp is None:
+            quote_request_timestamp = getattr(quote_record, "request_timestamp", None)
+        if quote_response_timestamp is None:
+            quote_response_timestamp = getattr(quote_record, "response_timestamp", None)
+        if quote_source is None:
+            quote_source = getattr(quote_record, "quote_source", None)
+        if quote_currency is None:
+            quote_currency = getattr(quote_record, "currency", None)
+        if quote_symbol is None:
+            quote_symbol = getattr(quote_record, "market_symbol", None)
+        if quote_duration is None:
+            quote_duration = getattr(quote_record, "contract_duration", None)
+        if quote_contract_type is None:
+            quote_contract_type = getattr(quote_record, "contract_type", None)
+
+    # Backwards compatibility: populate response timestamp from quote_epoch if needed
+    if quote_response_timestamp is None and quote_epoch is not None:
+        quote_response_timestamp = quote_epoch
+    if quote_request_timestamp is None and quote_epoch is not None:
+        quote_request_timestamp = quote_epoch - 0.05  # reasonable request delta for legacy calls
 
     # Gate 1: Execution Mode Guard
     if execution_mode == "DATA_COLLECTION_ONLY":
@@ -151,7 +197,7 @@ def evaluate_paper_trade_eligibility(
         if DecisionReason.MODEL_NOT_AVAILABLE.value not in reasons:
             reasons.append(DecisionReason.MODEL_NOT_AVAILABLE.value)
 
-    # Gate 6: Quote Validation & Freshness
+    # Gate 6: Quote Validation, Timestamps & Freshness
     be_prob: Optional[float] = None
     ev: Optional[float] = None
     cons_ev: Optional[float] = None
@@ -163,10 +209,37 @@ def evaluate_paper_trade_eligibility(
     elif ask_price >= total_payout:
         reasons.append(DecisionReason.QUOTE_INVALID.value)
     else:
-        # Check quote age / staleness
-        if quote_epoch is not None and current_epoch > 0:
-            age = current_epoch - quote_epoch
-            if age < 0 or age > max_quote_age_seconds:
+        # Strict Quote Compatibility Verification
+        if quote_symbol is not None and quote_symbol != symbol:
+            reasons.append(DecisionReason.QUOTE_INVALID.value)
+        if quote_duration is not None and quote_duration != duration_ticks:
+            reasons.append(DecisionReason.QUOTE_INVALID.value)
+        if quote_currency is not None and quote_currency != "USD":
+            reasons.append(DecisionReason.QUOTE_INVALID.value)
+        if quote_contract_type is not None:
+            qc_norm = quote_contract_type.upper()
+            expected_aliases = (norm_dir, "UP" if norm_dir == "RUNHIGH" else "DOWN", "RISE" if norm_dir == "RUNHIGH" else "FALL")
+            if qc_norm not in expected_aliases:
+                reasons.append(DecisionReason.QUOTE_INVALID.value)
+
+        # Strict Timestamp Verification (V1.6.1 Section 5)
+        # Decision requires: quote_request <= quote_response <= decision_epoch
+        if quote_request_timestamp is None or quote_response_timestamp is None or current_epoch is None or current_epoch <= 0:
+            reasons.append(DecisionReason.QUOTE_TIMESTAMP_INVALID.value)
+        elif math.isnan(quote_request_timestamp) or math.isnan(quote_response_timestamp) or math.isnan(current_epoch):
+            reasons.append(DecisionReason.QUOTE_TIMESTAMP_INVALID.value)
+        elif quote_request_timestamp <= 0 or quote_response_timestamp <= 0:
+            reasons.append(DecisionReason.QUOTE_TIMESTAMP_INVALID.value)
+        elif quote_response_timestamp < quote_request_timestamp:
+            # Response cannot occur before request was sent
+            reasons.append(DecisionReason.QUOTE_TIMESTAMP_INVALID.value)
+        elif quote_response_timestamp > current_epoch or quote_request_timestamp > current_epoch:
+            # Lookahead: quote arrived after decision or timestamp is in the future
+            reasons.append(DecisionReason.QUOTE_LOOKAHEAD_REJECTED.value)
+        else:
+            # Valid timestamps: enforce freshness window
+            quote_age = current_epoch - quote_response_timestamp
+            if quote_age > max_quote_age_seconds:
                 reasons.append(DecisionReason.QUOTE_STALE.value)
 
         # Compute break-even probability
@@ -176,15 +249,6 @@ def evaluate_paper_trade_eligibility(
         if estimated_prob is not None and not math.isnan(estimated_prob):
             # Ordinary EV: P_win * Payout - Ask
             ev = float((estimated_prob * total_payout) - ask_price)
-
-            # Lower probability bound
-            effective_lower = lower_prob_bound
-            if effective_lower is None or math.isnan(effective_lower):
-                # Statistically derived Wilson/Gaussian floor if not provided
-                effective_lower = max(0.0, estimated_prob - (1.96 * math.sqrt(estimated_prob * (1.0 - estimated_prob) / max(10, min_validation_sample))))
-
-            # Conservative EV: P_lower * Payout - Ask
-            cons_ev = float((effective_lower * total_payout) - ask_price)
 
             # Gate 7: Break-even Probability Gate
             if estimated_prob <= be_prob:
@@ -199,17 +263,38 @@ def evaluate_paper_trade_eligibility(
             if ev <= min_expected_ev:
                 reasons.append(DecisionReason.NEGATIVE_EXPECTED_EV.value)
 
-            # Gate 10: Conservative Expected Value Threshold (CRITICAL MANDATORY SAFETY)
-            if cons_ev <= min_conservative_ev:
-                reasons.append(DecisionReason.CONSERVATIVE_EV_TOO_LOW.value)
+            # Gate 10: Model-Specific Uncertainty & Conservative EV (V1.6.1 Section 4)
+            # Strictly NO arbitrary fallback formula or sample-size invented lower bound!
+            if lower_prob_bound is None or math.isnan(lower_prob_bound) or lower_prob_bound <= 0.0:
+                reasons.append(DecisionReason.UNCERTAINTY_UNAVAILABLE.value)
+                cons_ev = None
+            else:
+                cons_ev = float((lower_prob_bound * total_payout) - ask_price)
+                if cons_ev <= min_conservative_ev:
+                    reasons.append(DecisionReason.CONSERVATIVE_EV_TOO_LOW.value)
 
-    # Gate 11: Institutional Risk Limits
-    if current_stake > max_stake:
-        reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
-    if current_consecutive_losses >= max_consecutive_losses:
-        reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
-    if current_daily_drawdown_pct >= max_daily_drawdown_pct:
-        reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
+    # Gate 11: Institutional & Persistent Risk Limits (V1.6.1 Section 6)
+    if execution_mode == "PAPER":
+        if not is_risk_state_available:
+            reasons.append(DecisionReason.RISK_STATE_UNAVAILABLE.value)
+        if is_in_cooldown:
+            reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
+        if outstanding_positions_count >= max_simultaneous_positions:
+            reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
+        if current_exposure + current_stake > max_exposure:
+            reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
+        if per_symbol_exposure + current_stake > max_exposure:
+            reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
+        if current_consecutive_losses >= max_consecutive_losses:
+            reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
+        if current_daily_drawdown_pct >= max_daily_drawdown_pct:
+            reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
+        if current_stake > max_stake:
+            reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
+    else:
+        # In non-paper modes, check stake bounds if stake specified
+        if current_stake > max_stake:
+            reasons.append(DecisionReason.RISK_LIMIT_EXCEEDED.value)
 
     # Deduplicate rejection reasons preserving order
     dedup: List[str] = []

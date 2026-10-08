@@ -1,0 +1,46 @@
+=== DERIV QUANTITATIVE RESEARCH — SESSION REPORT ===
+Generated at: 2026-10-08T17:19:46+00:00
+Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)
+
+Session ID   : e625c5fb
+Symbol       : R_75
+Mode         : SHADOW
+Model ID     : M_R_75_5TICK_20261008_132512.json
+Status       : ACTIVE
+Start UTC    : 2026-10-08T17:19:13.937765+00:00
+Duration (s) : None
+
+--- LIFECYCLE & OBSERVATION COUNTS ---
+  Ticks Received      : 0
+  Quotes Recorded     : 314
+  Predictions Total   : 1309
+  Outcomes Resolved   : 1300
+  Outcomes Pending    : 0
+  Outcomes Incomplete : 4
+  Outcomes Data Gap   : 5
+  Outcomes Unverified : 0
+
+--- STATISTICAL EVIDENCE ---
+  RUNHIGH Est Prob    : 0.03283
+  RUNLOW Est Prob     : 0.02975
+  RUNHIGH Obs Prob    : 0.04
+  RUNLOW Obs Prob     : 0.02615
+  Brier RH            : 0.03853
+  Brier RL            : 0.02545
+  Calib Error RH      : 0.00717
+  Calib Error RL      : 0.0036
+  Quote Coverage      : 43.77%
+
+--- ECONOMIC PERFORMANCE (HYPOTHETICAL) ---
+  Paper Trade Signals : 0
+  Resolved Trades     : 0
+  Win Rate            : None
+  Cumulative PnL      : 0.0
+  Mean PnL/Trade      : None
+  Max Drawdown        : 0.0
+
+--- VALIDATION GATE ---
+  Gate Passed         : False
+  Recommended Action  : INSUFFICIENT_DATA
+  Demotion Triggered  : False
+    - INSUFFICIENT_DATA: only 0/200 resolved observations
