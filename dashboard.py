@@ -229,11 +229,53 @@ def generate_v17_payload(symbol: str = "R_75") -> Dict[str, Any]:
         except Exception as e:
             v17_qualification["verdict_reasons"] = [str(e)]
 
+    # 8. V1.7.1 Authoritative Forward Edge Confirmation Gate Evaluation
+    try:
+        from confirmation_specification import ConfirmationManifest
+        from forward_confirmation_gate import evaluate_forward_edge_confirmation
+        conf_eval = evaluate_forward_edge_confirmation(
+            symbol=symbol,
+            model_id=model_info["model_id"],
+            forward_db_path=os.path.join(data_dir, "forward_predictions.db"),
+            quote_db_path=os.path.join(data_dir, "quotes.db"),
+            session_db_path=os.path.join(data_dir, "forward_sessions.db")
+        )
+        conf_data = {
+            "manifest_id": conf_eval.manifest_id,
+            "manifest_checksum": conf_eval.manifest_checksum[:16] + "..." if conf_eval.manifest_checksum else "N/A",
+            "criteria_frozen": conf_eval.criteria_frozen,
+            "confirmation_sessions_count": conf_eval.confirmation_sessions_count,
+            "confirmation_resolved_count": conf_eval.confirmation_resolved_count,
+            "verdict": conf_eval.verdict,
+            "confirmed": conf_eval.confirmed,
+            "gate_failures": conf_eval.gate_failures,
+            "rejection_reasons": conf_eval.rejection_reasons,
+            "min_quote_coverage_pct": conf_eval.manifest.min_quote_coverage_pct if conf_eval.manifest else 95.0,
+            "min_observations": conf_eval.manifest.min_confirmation_observations if conf_eval.manifest else 200,
+            "min_sessions": conf_eval.manifest.min_confirmation_sessions if conf_eval.manifest else 2,
+        }
+    except Exception as e:
+        conf_data = {
+            "manifest_id": "MANIFEST_NOT_INITIALIZED",
+            "manifest_checksum": "N/A",
+            "criteria_frozen": False,
+            "confirmation_sessions_count": 0,
+            "confirmation_resolved_count": 0,
+            "verdict": "NO_CONFIRMATION_SESSIONS",
+            "confirmed": False,
+            "gate_failures": [str(e)],
+            "rejection_reasons": ["Confirmation system awaiting initialization."],
+            "min_quote_coverage_pct": 95.0,
+            "min_observations": 200,
+            "min_sessions": 2,
+        }
+
     return {
-        "version": "V1.7",
+        "version": "V1.7.1",
         "symbol": symbol,
         "available_symbols": get_available_symbols(),
         "safety_invariant": "REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)",
+        "confirmation": conf_data,
         "prediction_readiness": {
             "required_lookback": req_lookback,
             "buffer_ticks": buffer_ticks,
@@ -343,6 +385,10 @@ def generate_v17_payload(symbol: str = "R_75") -> Dict[str, Any]:
     }
 
 
+def generate_v171_payload(symbol: str = "R_75") -> Dict[str, Any]:
+    return generate_v17_payload(symbol)
+
+
 def generate_v162_payload(symbol: str = "R_75") -> Dict[str, Any]:
     return generate_v17_payload(symbol)
 
@@ -353,7 +399,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Deriv Quantitative Research — V1.7 Forward Statistical Validation Dashboard</title>
+<title>Deriv Quantitative Research — V1.7.1 Forward Edge Confirmation Dashboard</title>
 <style>
   :root {
     --bg-base: #0B0F19;
@@ -473,7 +519,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
       <div>
         <h1>Deriv Only Ups / Only Downs Forward Statistical Validation Dashboard</h1>
-        <div class="subtitle">V1.7 — Sustained Forward Observation, Calibration Analysis & Genuine Quote-Based Edge Assessment</div>
+        <div class="subtitle">V1.7.1 — Confirmation Gate Hardening, Pre-Registered Criteria & Genuine Quote-Based Edge Assessment</div>
       </div>
     </div>
     <div>
@@ -548,6 +594,36 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </div>
       <div class="card-val" id="risk-status">RESEARCH_ONLY</div>
       <div class="card-desc" id="risk-desc">Paper: RESTRICTED | Losses: 0</div>
+    </div>
+  </div>
+
+  <!-- V1.7.1 Authoritative Edge Confirmation Gate Panel -->
+  <div class="panel">
+    <div class="panel-title">
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+      V1.7.1 Authoritative Forward Edge Confirmation Gate (13 Pre-Registered Conditions)
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px;">
+      <div style="background-color: var(--bg-base); padding: 14px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Pre-Registered Manifest</div>
+        <div style="font-size: 13.5px; margin-top: 6px;" id="conf-manifest-id">ID: N/A</div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;" id="conf-manifest-hash">Checksum: N/A</div>
+      </div>
+      <div style="background-color: var(--bg-base); padding: 14px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Independent Confirmation Sessions</div>
+        <div style="font-size: 13.5px; margin-top: 6px;" id="conf-sess-count">Sessions: 0 | Resolved: 0</div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;" id="conf-req-info">Required: &ge;2 sessions | &ge;200 obs</div>
+      </div>
+      <div style="background-color: var(--bg-base); padding: 14px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Quote Coverage Hurdle</div>
+        <div style="font-size: 13.5px; margin-top: 6px;" id="conf-quote-hurdle">Mandatory Coverage: &ge;95.0%</div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;">Zero synthetic / benchmark fallbacks permitted</div>
+      </div>
+      <div style="background-color: var(--bg-base); padding: 14px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Authoritative Gate Verdict</div>
+        <div style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); margin-top: 6px;" id="conf-verdict-val">NO_CONFIRMATION_SESSIONS</div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;" id="conf-reasons">No independent confirmation sessions registered.</div>
+      </div>
     </div>
   </div>
 
@@ -760,6 +836,17 @@ function renderDashboard(data) {
   document.getElementById("econ-pnl-rh").textContent = `Hypothetical Trades: ${econ17.hypothetical_trades || 0} | PnL: $${(econ17.cumulative_pnl || 0).toFixed(2)} | Max DD: $${(econ17.max_drawdown || 0).toFixed(2)}`;
   document.getElementById("research-verdict-full").textContent = qual.verdict || "INSUFFICIENT_FORWARD_DATA";
   document.getElementById("research-blockers").textContent = (qual.verdict_reasons && qual.verdict_reasons.length > 0) ? qual.verdict_reasons.join(" | ") : "Evaluating criteria.";
+
+  // V1.7.1 Confirmation Gate Panel
+  const c = data.confirmation || {};
+  document.getElementById("conf-manifest-id").textContent = `ID: ${c.manifest_id || 'NONE'}`;
+  document.getElementById("conf-manifest-hash").textContent = `SHA256: ${c.manifest_checksum || 'N/A'}`;
+  document.getElementById("conf-sess-count").textContent = `Sessions: ${c.confirmation_sessions_count || 0} | Resolved: ${c.confirmation_resolved_count || 0}`;
+  document.getElementById("conf-req-info").textContent = `Required: >=${c.min_sessions || 2} sessions | >=${c.min_observations || 200} obs`;
+  document.getElementById("conf-quote-hurdle").textContent = `Coverage Hurdle: >=${c.min_quote_coverage_pct || 95.0}%`;
+  document.getElementById("conf-verdict-val").textContent = c.verdict || "NO_CONFIRMATION_SESSIONS";
+  const rList = c.rejection_reasons || [];
+  document.getElementById("conf-reasons").textContent = rList.length > 0 ? rList.join(" | ") : "All confirmation gates passed.";
 
   // Reconciliation summary panel
   const recon = data.reconciliation;
