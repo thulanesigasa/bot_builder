@@ -27,6 +27,8 @@ from forward_session import (
 from forward_journal import ForwardPredictionJournal
 from statistical_evaluator import StatisticalEvaluator
 from economic_evaluator import EconomicEvaluator
+from research_metrics_engine import ResearchMetricsEngine
+from config import DEFAULT_CONFIG
 
 
 # Research Verdict Constants (V1.7.1 Part D & Part L Section 29)
@@ -67,9 +69,19 @@ class SessionResearchAggregator:
         else:
             self.journal = ForwardPredictionJournal()
 
-        self.min_confirmation_samples = min_confirmation_samples
-        self.stat_evaluator = StatisticalEvaluator(block_size=5, n_bootstraps=500)
+        self.session_registry_db = session_registry_db or getattr(self.registry, "db_path", "data/forward_sessions.db")
+        self.forward_journal_db = forward_journal_db or getattr(self.journal, "db_path", "data/forward_predictions.db")
+        self.quote_db_path = getattr(quote_db, "db_path", quote_db) if quote_db else DEFAULT_CONFIG.quotes_db_path
+        self.manifest = None
+        self.confirmation_gate = None
+        self.stat_evaluator = StatisticalEvaluator()
         self.econ_evaluator = EconomicEvaluator()
+        self.min_confirmation_samples = min_confirmation_samples
+        self.metrics_engine = ResearchMetricsEngine(
+            forward_db_path=self.forward_journal_db,
+            quote_db_path=self.quote_db_path,
+            session_db_path=self.session_registry_db
+        )
 
     def load_session_dataset(
         self,
@@ -180,6 +192,7 @@ class SessionResearchAggregator:
         verdict = VERDICT_INSUFFICIENT_DATA
         verdict_rationale = ""
         verdict_reasons = []
+        confirmation_gate_report = None
 
         if conf_sessions_count == 0:
             # Defect C Fix: Distinguish absent confirmation sessions from completed zero-win study
@@ -209,39 +222,25 @@ class SessionResearchAggregator:
                 verdict_rationale = "Zero forward prediction records available for research evaluation."
                 verdict_reasons.append(verdict_rationale)
         else:
-            # Confirmation sessions exist -> Run rigorous evaluation
-            if conf_be_pct is None or conf_econ.get("quote_coverage_pct", 0.0) < 95.0:
-                verdict = VERDICT_QUOTE_DATA_INSUFFICIENT
-                verdict_rationale = "Confirmation stage proposal quote coverage is insufficient (<95.0%) or missing genuine quotes."
-                verdict_reasons.append(verdict_rationale)
-            elif n_conf_resolved < self.min_confirmation_samples or n_conf_eff < (self.min_confirmation_samples * 0.5):
-                verdict = VERDICT_INSUFFICIENT_DATA
-                verdict_rationale = f"Confirmation stage observations ({n_conf_resolved} resolved, Neff={n_conf_eff:.1f}) below requirement ({self.min_confirmation_samples})."
-                verdict_reasons.append(verdict_rationale)
-            else:
-                # Check calibration
-                conf_cal = stage_metrics[STAGE_CONFIRMATION]["calibration_runhigh"]
-                bss = conf_cal.get("brier_skill_score")
-                ece = conf_cal.get("expected_calibration_error")
-                cons_ev = conf_econ.get("mean_conservative_ev")
-                ord_ev = conf_econ.get("mean_ordinary_ev")
+            # UNIFIED CONFIRMATION AUTHORITY (V1.7.2 Defect B Fix):
+            # SessionResearchAggregator delegates confirmed-edge decisions exclusively
+            # to ForwardConfirmationGate. No weaker bypass exists.
+            from forward_confirmation_gate import ForwardConfirmationGate
+            gate = self.confirmation_gate or ForwardConfirmationGate(
+                forward_db_path=self.forward_journal_db,
+                quote_db_path=self.quote_db_path,
+                session_db_path=self.session_registry_db,
+                manifest=self.manifest
+            )
+            gate_rep = gate.evaluate(symbol=symbol)
+            verdict = gate_rep.verdict
+            verdict_rationale = "; ".join(gate_rep.rejection_reasons) if not gate_rep.is_confirmed else "Authoritative confirmation gate passed all 13 mandatory categories."
+            verdict_reasons = gate_rep.rejection_reasons
+            confirmation_gate_report = gate_rep.to_dict()
 
-                if (bss is not None and bss <= 0.0) or (ece is not None and ece > 0.05):
-                    verdict = VERDICT_CALIBRATION_FAILED
-                    verdict_rationale = f"Probability calibration failed in confirmation data: BSS={bss}, ECE={ece}."
-                    verdict_reasons.append(verdict_rationale)
-                elif ord_ev is not None and ord_ev > 0 and (cons_ev is None or cons_ev <= 0):
-                    verdict = VERDICT_CONFIRMATION_REJECTED
-                    verdict_rationale = f"Ordinary EV is positive (${ord_ev:.3f}) but conservative EV is non-positive (${cons_ev if cons_ev is not None else 'N/A'})."
-                    verdict_reasons.append(verdict_rationale)
-                elif conf_rh_rate > conf_be_pct and cons_ev is not None and cons_ev > 0:
-                    verdict = VERDICT_FORWARD_EDGE_CONFIRMED
-                    verdict_rationale = f"Confirmatory win rate ({conf_rh_rate:.4f}) exceeds break-even ({conf_be_pct:.4f}) with positive conservative EV (${cons_ev:.3f})."
-                    verdict_reasons.append(verdict_rationale)
-                else:
-                    verdict = VERDICT_NO_VALIDATED_EDGE
-                    verdict_rationale = f"Confirmatory win rate ({conf_rh_rate:.4f}) fails to reliably beat proposal hurdle ({conf_be_pct:.4f})."
-                    verdict_reasons.append(verdict_rationale)
+        # Compute dataset integrity checksum
+        all_s_ids = [s.session_id for s_list in sess_stage.values() for s in s_list]
+        dataset_checksum = self.metrics_engine.compute_integrity_checksum(all_eligible_preds, all_s_ids, symbol)
 
         return {
             "symbol": symbol,
@@ -251,7 +250,9 @@ class SessionResearchAggregator:
             "verdict_reasons": verdict_reasons,
             "stage_metrics": stage_metrics,
             "session_level_stability": session_level_rates,
-            "total_independent_sessions": len(session_level_rates)
+            "total_independent_sessions": len(session_level_rates),
+            "integrity_checksum": dataset_checksum,
+            "confirmation_gate_report": confirmation_gate_report
         }
 
     def generate_markdown_report(self, report_data: Any) -> str:
@@ -269,6 +270,8 @@ class SessionResearchAggregator:
         md.append(f"**Generated:** {ts}  ")
         md.append(f"**Research Verdict:** `{verdict}`  ")
         md.append(f"**Rationale:** {rationale}  ")
+        if report_data.get("integrity_checksum"):
+            md.append(f"**Dataset Integrity Checksum:** `{report_data['integrity_checksum']}`  ")
         md.append("\n---\n")
 
         md.append("## 1. Research Stage Breakdown\n")

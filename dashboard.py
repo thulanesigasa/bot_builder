@@ -42,8 +42,19 @@ from risk import RiskManager
 from session_reconciler import SessionReconciler
 
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8088
-BIND_HOST = "127.0.0.1"
+import argparse
+
+_parser = argparse.ArgumentParser(description="Local Web Dashboard & Visual Analysis Engine (V1.7.2)")
+_parser.add_argument("port", nargs="?", type=int, default=8088, help="Server port (default: 8088)")
+_parser.add_argument("--port", dest="opt_port", type=int, default=None, help="Server port option")
+_parser.add_argument("--host", default="127.0.0.1", help="Binding host (default: 127.0.0.1)")
+
+if "--help" in sys.argv or "-h" in sys.argv:
+    _parser.parse_args()
+
+_args, _ = _parser.parse_known_args()
+PORT = _args.opt_port or _args.port or 8088
+BIND_HOST = _args.host
 
 
 def get_available_symbols():
@@ -229,6 +240,19 @@ def generate_v17_payload(symbol: str = "R_75") -> Dict[str, Any]:
         except Exception as e:
             v17_qualification["verdict_reasons"] = [str(e)]
 
+    # 9. V1.7.2 Canonical Research Metrics Engine & Integrity Checksum
+    try:
+        from research_metrics_engine import ResearchMetricsEngine
+        metrics_engine = ResearchMetricsEngine(
+            forward_db_path=os.path.join(data_dir, "forward_predictions.db"),
+            quote_db_path=os.path.join(data_dir, "quotes.db"),
+            session_db_path=os.path.join(data_dir, "forward_sessions.db")
+        )
+        canon_metrics = metrics_engine.compute_metrics(symbol=symbol, session_id=sess_id)
+        canon_data = canon_metrics.to_dict()
+    except Exception as e:
+        canon_data = {"error": str(e), "integrity_checksum": "UNAVAILABLE"}
+
     # 8. V1.7.1 Authoritative Forward Edge Confirmation Gate Evaluation
     try:
         from confirmation_specification import ConfirmationManifest
@@ -271,7 +295,9 @@ def generate_v17_payload(symbol: str = "R_75") -> Dict[str, Any]:
         }
 
     return {
-        "version": "V1.7.1",
+        "version": "V1.7.2",
+        "canonical_research_metrics": canon_data,
+        "integrity_checksum": canon_data.get("integrity_checksum", "UNAVAILABLE"),
         "symbol": symbol,
         "available_symbols": get_available_symbols(),
         "safety_invariant": "REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)",
@@ -519,7 +545,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
       <div>
         <h1>Deriv Only Ups / Only Downs Forward Statistical Validation Dashboard</h1>
-        <div class="subtitle">V1.7.1 — Confirmation Gate Hardening, Pre-Registered Criteria & Genuine Quote-Based Edge Assessment</div>
+        <div class="subtitle">V1.7.2 — Research Report Integrity, Unified Confirmation Authority, Operational Reliability & Independent Forward Validation Readiness</div>
       </div>
     </div>
     <div>

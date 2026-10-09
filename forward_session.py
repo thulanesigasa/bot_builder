@@ -217,6 +217,35 @@ class ForwardSessionRegistry:
                 conn.execute(f"ALTER TABLE sessions ADD COLUMN research_stage TEXT DEFAULT '{STAGE_EXPLORATORY}'")
             conn.commit()
 
+    def validate_confirmation_admission(
+        self,
+        symbol: str,
+        manifest: Optional[Any],
+        model_id: Optional[str] = None
+    ) -> Tuple[bool, str]:
+        """Validates that a session qualifies for CONFIRMATION_FORWARD admission (V1.7.2 Part F)."""
+        if manifest is None:
+            return False, "Missing confirmation manifest. Pre-registered ConfirmationManifest is strictly required."
+
+        if not hasattr(manifest, "verify_checksum") or not manifest.verify_checksum():
+            return False, "Confirmation manifest checksum invalid or tampered."
+
+        if getattr(manifest, "market_symbol", "") != symbol:
+            return False, f"Manifest symbol mismatch: manifest expects '{getattr(manifest, 'market_symbol', '')}' vs session symbol '{symbol}'."
+
+        m_id = getattr(manifest, "model_id", "")
+        if model_id and model_id not in ("NONE", "M_DEFAULT") and m_id and m_id != model_id:
+            return False, f"Manifest model mismatch: manifest expects '{m_id}' vs session model '{model_id}'."
+
+        return True, "Admission approved."
+
+    def update_research_stage(self, session_id: str, new_stage: str) -> None:
+        """Explicitly blocks retrospective stage manipulation (V1.7.2 Section 20)."""
+        raise PermissionError(
+            f"Retrospective research stage mutation for session '{session_id}' to '{new_stage}' is strictly prohibited. "
+            "Research stages are immutable once registered to protect audit integrity."
+        )
+
     def create_session(
         self,
         symbol: str,
@@ -229,11 +258,22 @@ class ForwardSessionRegistry:
         live_ticks_csv: Optional[str] = None,
         notes: str = "",
         status: str = STATUS_ACTIVE,
-        research_stage: str = STAGE_EXPLORATORY
+        research_stage: str = STAGE_EXPLORATORY,
+        confirmation_manifest: Optional[Any] = None,
+        enforce_confirmation_admission: bool = False
     ) -> ForwardSession:
         """Creates and persists a new session record with specified initial status and research stage."""
         if research_stage not in VALID_RESEARCH_STAGES:
             research_stage = STAGE_EXPLORATORY
+
+        # V1.7.2 Confirmation Admission Gate
+        if research_stage == STAGE_CONFIRMATION:
+            if enforce_confirmation_admission or confirmation_manifest is not None:
+                is_valid, reason = self.validate_confirmation_admission(symbol, confirmation_manifest, model_id)
+                if not is_valid:
+                    raise ValueError(f"Confirmation admission rejected: {reason}")
+                if confirmation_manifest and hasattr(confirmation_manifest, "specification_id"):
+                    notes = f"[Manifest: {confirmation_manifest.specification_id}] {notes}".strip()
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(script_dir, "data")

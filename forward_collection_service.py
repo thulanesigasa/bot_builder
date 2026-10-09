@@ -32,7 +32,7 @@ from typing import Optional
 from config import DEFAULT_CONFIG
 from forward_journal import ForwardPredictionJournal, STATUS_INCOMPLETE
 from forward_observer import ForwardObserver
-from forward_session import ForwardSessionRegistry, ForwardSession, STAGE_EXPLORATORY
+from forward_session import ForwardSessionRegistry, ForwardSession, STAGE_EXPLORATORY, STAGE_VALIDATION, STAGE_CONFIRMATION
 from health_monitor import GLOBAL_HEALTH_MONITOR
 from live_collector import LiveTickStreamer, LiveTickRecord
 from model_manager import ModelManager
@@ -69,7 +69,9 @@ class ForwardCollectionService:
         max_resolution_grace_seconds: float = 30.0,
         resolve_on_shutdown: bool = True,
         research_stage: str = STAGE_EXPLORATORY,
-        target_resolved_predictions: Optional[int] = None
+        target_resolved_predictions: Optional[int] = None,
+        confirmation_manifest: Optional[Any] = None,
+        enforce_confirmation_admission: bool = False
     ):
         if LIVE_EXECUTION_DISABLED is not True:
             raise RuntimeError("Safety invariant violated: LIVE_EXECUTION_DISABLED must be True.")
@@ -96,6 +98,8 @@ class ForwardCollectionService:
         self.resolve_on_shutdown = resolve_on_shutdown
         self.research_stage = research_stage
         self.target_resolved_predictions = target_resolved_predictions
+        self.confirmation_manifest = confirmation_manifest
+        self.enforce_confirmation_admission = enforce_confirmation_admission
 
         # Resolve model ID for session registration
         mgr = ModelManager()
@@ -120,7 +124,9 @@ class ForwardCollectionService:
             model_version=self._model_version,
             planned_duration_seconds=duration_seconds or 0.0,
             research_stage=self.research_stage,
-            notes=notes
+            notes=notes,
+            confirmation_manifest=self.confirmation_manifest,
+            enforce_confirmation_admission=self.enforce_confirmation_admission or (self.research_stage == STAGE_CONFIRMATION)
         )
         print(f"[Service] Session created: {self.session.session_id[:8]} | Mode: {self.mode} | Stage: {self.research_stage}")
 

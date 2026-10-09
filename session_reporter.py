@@ -173,11 +173,25 @@ class SessionReporter:
         if resolved_count < 20:
             s_verdict = "INSUFFICIENT_FORWARD_DATA"
             s_rationale = f"Sample of {resolved_count} resolved predictions is below statistical significance threshold."
+        elif stage == "CONFIRMATION_FORWARD":
+            try:
+                from forward_confirmation_gate import ForwardConfirmationGate
+                gate = ForwardConfirmationGate(
+                    forward_db_path=self.journal.db_path,
+                    quote_db_path=self.quote_db.db_path,
+                    session_db_path=self.registry.db_path
+                )
+                conf_eval = gate.evaluate(
+                    symbol=session.symbol,
+                    model_id=session.model_id or model_info.get("model_id")
+                )
+                s_verdict = conf_eval.verdict
+                s_rationale = "; ".join(conf_eval.gate_failures or conf_eval.rejection_reasons or [conf_eval.verdict])
+            except Exception as e:
+                s_verdict = "CONFIRMATION_GATE_FAILURE"
+                s_rationale = f"Confirmation gate evaluation failed: {e}"
         elif obs_rh > be_pct and (econ_rh.get("mean_ordinary_ev") or 0.0) > 0:
-            if stage == "CONFIRMATION_FORWARD":
-                s_verdict = "FORWARD_EDGE_CONFIRMED"
-                s_rationale = f"Observed win rate ({obs_rh:.4f}) exceeds break-even ({be_pct:.4f}) on confirmatory forward data."
-            elif stage == "VALIDATION_FORWARD":
+            if stage == "VALIDATION_FORWARD":
                 s_verdict = "CONFIRMATION_REQUIRED"
                 s_rationale = "Validation edge detected. Independent pre-registered confirmation required."
             else:
@@ -488,6 +502,16 @@ def run_daily_report(symbol: Optional[str] = None):
 
 
 if __name__ == "__main__":
-    import sys
-    sym = sys.argv[1] if len(sys.argv) > 1 else None
-    run_daily_report(symbol=sym)
+    import argparse
+    parser = argparse.ArgumentParser(description="Session & Daily Quantitative Research Report Generator (V1.7.2)")
+    parser.add_argument("symbol", nargs="?", default=None, help="Market symbol (e.g. R_75)")
+    parser.add_argument("--session", default=None, help="Generate report for a specific session ID")
+    parser.add_argument("--dir", default=None, help="Reports output directory")
+    args = parser.parse_args()
+    reporter = SessionReporter(reports_dir=args.dir)
+    if args.session:
+        rep = reporter.generate_session_report(session=args.session)
+        print(reporter._render_text_report(rep))
+    else:
+        rep = reporter.generate_daily_report(symbol=args.symbol)
+        print(reporter._render_text_report(rep))
