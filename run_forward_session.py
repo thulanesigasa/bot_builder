@@ -116,6 +116,7 @@ def main():
     parser.add_argument("--model", default=None, help="Explicit path or ID of frozen model artifact")
     parser.add_argument("--report-dir", default="reports", help="Directory for output reports (default: reports)")
     parser.add_argument("--notes", default="", help="Optional notes stored in session registry")
+    parser.add_argument("--manifest", default=None, help="Path to pre-registered ConfirmationManifest JSON file (mandatory for CONFIRMATION stage)")
     parser.add_argument("--smoke-test", action="store_true", help="Run a brief 30-second live smoke test session")
     parser.add_argument("--diagnose", action="store_true", help="Run prediction pipeline diagnostics and report current status without running collection")
     parser.add_argument("--no-preload-warmup", action="store_true", help="Disable preloading historical warmup ticks")
@@ -129,6 +130,22 @@ def main():
         "CONFIRMATION": "CONFIRMATION_FORWARD"
     }
     stage_val = stage_map.get(args.stage.upper(), "EXPLORATORY_FORWARD")
+
+    confirmation_manifest = None
+    if stage_val == "CONFIRMATION_FORWARD":
+        if not args.manifest:
+            print("[Error] Mandatory admission check failed: CONFIRMATION stage requires a pre-registered ConfirmationManifest file via --manifest <path>.")
+            sys.exit(1)
+        if not os.path.exists(args.manifest):
+            print(f"[Error] Specified confirmation manifest file does not exist: {args.manifest}")
+            sys.exit(1)
+        try:
+            from confirmation_specification import ConfirmationManifest
+            confirmation_manifest = ConfirmationManifest.load_from_file(args.manifest)
+            print(f"[Confirmation Preflight] Loaded pre-registered manifest: {confirmation_manifest.specification_id} (Checksum: {confirmation_manifest.manifest_checksum[:12]}...)")
+        except Exception as e:
+            print(f"[Error] Invalid or tampered confirmation manifest: {e}")
+            sys.exit(1)
 
     if args.diagnose:
         from forward_observer import ForwardObserver
@@ -193,7 +210,9 @@ def main():
         prediction_cutoff_seconds=args.cutoff_seconds,
         max_resolution_grace_seconds=args.grace_seconds,
         research_stage=stage_val,
-        target_resolved_predictions=args.target_resolved
+        target_resolved_predictions=args.target_resolved,
+        confirmation_manifest=confirmation_manifest,
+        enforce_confirmation_admission=(stage_val == "CONFIRMATION_FORWARD")
     )
 
     def handle_sig(sig, frame):

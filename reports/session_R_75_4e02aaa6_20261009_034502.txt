@@ -1,0 +1,64 @@
+=== DERIV QUANTITATIVE RESEARCH — SESSION REPORT ===
+Generated at: 2026-10-09T03:45:02+00:00
+Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)
+
+Session ID   : 4e02aaa6
+Symbol       : R_75
+Mode         : SHADOW
+Stage        : EXPLORATORY_FORWARD
+Research Verd: INSUFFICIENT_FORWARD_DATA
+Rationale    : Sample of 0 resolved predictions is below statistical significance threshold.
+Model ID     : M_R_75_5TICK_20261008_132512.json
+Status       : COMPLETED
+Start UTC    : 2026-10-09T03:44:50.654260+00:00
+Duration (s) : 11.52
+
+--- LIFECYCLE & OBSERVATION COUNTS ---
+  Ticks Received      : 2
+  Live Genuine Ticks  : 0
+  Warm-up Ticks       : 0
+  Duplicate Ticks     : 0
+  Rejected Ticks      : 0
+  Quotes Recorded     : 6
+  Predictions Total   : 0
+  Outcomes Resolved   : 0
+  Outcomes Pending    : 0
+  Outcomes Incomplete : 0
+  Outcomes Data Gap   : 0
+  Outcomes Unverified : 0
+
+--- DATA INTEGRITY & RECONCILIATION ---
+  Reconciliation Status: RECONCILED
+  Statistically Verified: True
+  Live Deriv Provenance : False
+  Chronology Violations : 0
+  Future Quote Violations: 0
+
+--- STATISTICAL EVIDENCE ---
+  RUNHIGH Est Prob    : None
+  RUNLOW Est Prob     : None
+  RUNHIGH Obs Prob    : None
+  RUNLOW Obs Prob     : None
+  Brier RH            : None
+  Brier RL            : None
+  Brier Skill Score RH: None
+  Brier Skill Score RL: None
+  Calib Error RH (ECE): None
+  Calib Error RL (ECE): None
+  N Effective (RH)    : 0.0
+  Quote Coverage      : 0.0%
+  RH Block Boot 95% CI: [0.00%, 0.00%] (Moving Block, L=5)
+
+--- ECONOMIC PERFORMANCE (HYPOTHETICAL) ---
+  Paper Trade Signals : 0
+  Resolved Trades     : 0
+  Win Rate            : None
+  Cumulative PnL      : 0.0
+  Mean PnL/Trade      : None
+  Max Drawdown        : 0.0
+
+--- VALIDATION GATE ---
+  Gate Passed         : False
+  Recommended Action  : INSUFFICIENT_DATA
+  Demotion Triggered  : False
+    - INSUFFICIENT_DATA: only 0/200 resolved observations

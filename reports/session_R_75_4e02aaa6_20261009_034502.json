@@ -1,0 +1,233 @@
+{
+  "report_type": "SESSION",
+  "generated_at": "2026-10-09T03:45:02+00:00",
+  "research_verdict": {
+    "verdict": "INSUFFICIENT_FORWARD_DATA",
+    "rationale": "Sample of 0 resolved predictions is below statistical significance threshold.",
+    "research_stage": "EXPLORATORY_FORWARD"
+  },
+  "session": {
+    "session_id": "4e02aaa6-dfab-4919-a620-54c06a63feed",
+    "symbol": "R_75",
+    "mode": "SHADOW",
+    "research_stage": "EXPLORATORY_FORWARD",
+    "model_id": "M_R_75_5TICK_20261008_132512.json",
+    "status": "COMPLETED",
+    "start_time_utc": "2026-10-09T03:44:50.654260+00:00",
+    "planned_duration_seconds": 10.0,
+    "actual_duration_seconds": 11.52,
+    "reconciliation_status": "RECONCILED",
+    "is_verified": true
+  },
+  "reconciliation": {
+    "session_id": "4e02aaa6-dfab-4919-a620-54c06a63feed",
+    "symbol": "R_75",
+    "status": "RECONCILED",
+    "is_verified": true,
+    "reconciled_at_utc": "2026-10-09T03:45:02+00:00",
+    "ticks": {
+      "session_counter_ticks": 2,
+      "live_ticks": 0,
+      "warmup_ticks": 0,
+      "duplicate_ticks": 0,
+      "rejected_ticks": 0,
+      "csv_ticks": 2
+    },
+    "quotes": {
+      "quotes_recorded_in_db": 384,
+      "quotes_linked_to_session": 6,
+      "predictions_with_quotes": 0,
+      "quote_coverage_pct": 0.0
+    },
+    "predictions": {
+      "total_predictions": 0,
+      "unattributed_predictions": 0,
+      "cross_session_predictions": 0
+    },
+    "outcomes": {
+      "total_outcomes": 0,
+      "resolved_outcomes": 0,
+      "pending_outcomes": 0,
+      "incomplete_outcomes": 0,
+      "data_gap_outcomes": 0,
+      "orphan_outcomes": 0,
+      "orphan_predictions": 0
+    },
+    "provenance": {
+      "breakdown": {},
+      "is_live_deriv": false
+    },
+    "chronology": {
+      "chronology_errors": 0,
+      "future_quote_errors": 0
+    },
+    "issues": [],
+    "passed_checks": [
+      "Session found in registry with status 'COMPLETED'.",
+      "Live ticks CSV verified: 2 lines recorded.",
+      "Prediction outcome sum matches: 0 == 0.",
+      "Registry prediction count reconciled (0 == 0).",
+      "Session ticks match CSV line count (2 vs 2)."
+    ]
+  },
+  "safety": {
+    "live_money_trading_disabled": true,
+    "purchasing_allowed": false,
+    "declaration": "REAL-MONEY TRADING DISABLED. All metrics are non-purchasing forward research observations."
+  },
+  "model": {
+    "model_id": "M_R_75_5TICK_20261008_132512",
+    "model_version": "1.5.3",
+    "approval_status": "RESEARCH_ONLY",
+    "validation_sample_count": 8630
+  },
+  "predictions": {
+    "total": 0,
+    "resolved": 0,
+    "pending": 0,
+    "unverified": 0,
+    "brier_score_runhigh": null,
+    "brier_score_runlow": null,
+    "brier_skill_score_runhigh": null,
+    "brier_skill_score_runlow": null,
+    "expected_calibration_error_runhigh": null,
+    "expected_calibration_error_runlow": null,
+    "effective_sample_size_runhigh": 0.0,
+    "realized_runhigh_win_rate": null,
+    "realized_runlow_win_rate": null
+  },
+  "lifecycle_counts": {
+    "ticks_received": 2,
+    "live_ticks": 0,
+    "warmup_ticks": 0,
+    "duplicate_ticks": 0,
+    "rejected_ticks": 0,
+    "quotes_recorded": 6,
+    "eligible_feature_windows": 0,
+    "predictions_generated": 0,
+    "predictions_persisted": 0,
+    "outcomes_resolved": 0,
+    "outcomes_pending": 0,
+    "outcomes_incomplete": 0,
+    "outcomes_data_gap": 0,
+    "outcomes_unverified": 0
+  },
+  "statistical_evidence": {
+    "runhigh_estimated_win_prob": null,
+    "runlow_estimated_win_prob": null,
+    "runhigh_observed_win_prob": null,
+    "runlow_observed_win_prob": null,
+    "brier_score_runhigh": null,
+    "brier_score_runlow": null,
+    "brier_skill_score_runhigh": null,
+    "brier_skill_score_runlow": null,
+    "calibration_error_runhigh": null,
+    "calibration_error_runlow": null,
+    "effective_sample_size": 0.0,
+    "genuine_quote_coverage_pct": 0.0,
+    "dependence_aware_uncertainty": {
+      "method": "Moving Block Bootstrap (L=5) & Non-overlapping Sensitivity",
+      "runhigh_bootstrap_95_ci": [
+        0.0,
+        0.0
+      ],
+      "runlow_bootstrap_95_ci": [
+        0.0,
+        0.0
+      ],
+      "runhigh_non_overlapping_sensitivity": {
+        "count": 0,
+        "observed_rate": 0.0,
+        "ci_95": [
+          0.0,
+          0.0
+        ]
+      },
+      "runlow_non_overlapping_sensitivity": {
+        "count": 0,
+        "observed_rate": 0.0,
+        "ci_95": [
+          0.0,
+          0.0
+        ]
+      }
+    }
+  },
+  "economic_performance": {
+    "session_id": "4e02aaa6-dfab-4919-a620-54c06a63feed",
+    "symbol": "R_75",
+    "mode": "SHADOW",
+    "total_predictions": 0,
+    "paper_trade_signals": 0,
+    "resolved_trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": null,
+    "cumulative_pnl": 0.0,
+    "mean_pnl_per_trade": null,
+    "std_pnl_per_trade": null,
+    "sharpe_ratio": null,
+    "max_drawdown": 0.0,
+    "quote_coverage_pct": 0.0,
+    "predicted_ev_mean": null,
+    "realized_ev_mean": null,
+    "ev_accuracy_error": null,
+    "brier_score_runhigh": null,
+    "brier_score_runlow": null,
+    "per_state_breakdown": {},
+    "generated_at": "2026-10-09T03:45:02.220536+00:00",
+    "runhigh_quote_coverage_pct": 0.0,
+    "runhigh_mean_break_even_pct": null,
+    "runhigh_mean_ordinary_ev": null,
+    "runhigh_mean_conservative_ev": null
+  },
+  "health_telemetry": {
+    "ticks": {
+      "total_ticks": 4,
+      "tick_rate_per_sec": 0.07,
+      "last_tick_epoch": 1791517502,
+      "last_tick_age_seconds": 0.35,
+      "last_tick_latency_ms": -143.09,
+      "duplicate_ticks": 0,
+      "gap_count": 0
+    },
+    "quotes": {
+      "total_requests": 7,
+      "successful_quotes": 7,
+      "rejected_quotes": 0,
+      "success_rate_pct": 100.0,
+      "last_quote_age_seconds": 1.07,
+      "last_quote_latency_ms": 409.0843200683594
+    },
+    "connectivity": {
+      "connection_status": "DISCONNECTED",
+      "reconnection_count": 0,
+      "last_reconnect_time": null,
+      "has_active_data_gap": false
+    }
+  },
+  "validation_gate": {
+    "model_id": "M_R_75_5TICK_20261008_132512.json",
+    "symbol": "R_75",
+    "evaluation_time": 1791517502.2278433,
+    "resolved_predictions": 0,
+    "independent_periods": 0,
+    "runhigh_win_rate": null,
+    "runlow_win_rate": null,
+    "runhigh_z_score": null,
+    "runlow_z_score": null,
+    "brier_rh": null,
+    "brier_rl": null,
+    "naive_brier": 0.0317,
+    "brier_improvement_pct": null,
+    "quote_coverage_pct": 0.0,
+    "cumulative_pnl": 0.0,
+    "max_drawdown": 0.0,
+    "gate_passed": false,
+    "demotion_triggered": false,
+    "gate_reasons": [
+      "INSUFFICIENT_DATA: only 0/200 resolved observations"
+    ],
+    "recommended_action": "INSUFFICIENT_DATA"
+  }
+}
