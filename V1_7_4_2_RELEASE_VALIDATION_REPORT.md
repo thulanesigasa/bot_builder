@@ -24,6 +24,7 @@ The release addresses the critical economic-provenance defect identified in prio
 - **Base Release**: V1.7.4.1
 - **Inspected Base Commit**: `d3881e31dbbbcb4934ea1ebfa0257f42e982164e`
 - **Target Release**: V1.7.4.2
+- **Target Release Commit**: `6c3e02c01f25f5a9989467b40690505ce33eac55`
 - **Test Suite Evolution**:
   - Baseline Test Count: **288 passed**
   - New Adversarial & Regression Tests: **+16 passed**
