@@ -1,20 +1,21 @@
-# Deriv 5-Tick Quantitative Research & Statistical Validation Framework (V1.7.2)
+# Deriv 5-Tick Quantitative Research & Statistical Validation Framework (V1.7.2.1)
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Testing](https://img.shields.io/badge/pytest-232%20passed%20(100%25)-0284C7)
+![Testing](https://img.shields.io/badge/pytest-244%20passed%20(100%25)-0284C7)
 ![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-0284C7)
 ![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v1%2Foptions%20Verified-0284C7)
 ![Safety](https://img.shields.io/badge/Safety-Real--Money%20Trading%20DISABLED-0F172A)
+![Economic Integrity](https://img.shields.io/badge/Economic%20Integrity-Zero%20Benchmark%20Fallbacks-0284C7)
 ![Metrics Engine](https://img.shields.io/badge/Metrics%20Engine-Canonical%20%7C%20SHA--256%20Checksummed-0284C7)
 ![Confirmation Authority](https://img.shields.io/badge/Confirmation%20Authority-Unified%20ForwardConfirmationGate-0284C7)
 ![Manifest Admission](https://img.shields.io/badge/Admission-Pre--Registered%20Frozen%20Manifest%20Mandatory-0284C7)
-![Research Stage](https://img.shields.io/badge/Stage%20Integrity-Immutable%20Registered%20Stages-0284C7)
+![Stage Integrity](https://img.shields.io/badge/Stage%20Integrity-Immutable%20Registered%20Stages-0284C7)
 ![Reconciliation](https://img.shields.io/badge/Reconciliation-6--Dimension%20Automated%20Engine-0284C7)
-![Architecture](https://img.shields.io/badge/Architecture-V1.7.2%20Research%20Integrity%20%26%20Reliability-0284C7)
+![Architecture](https://img.shields.io/badge/Architecture-V1.7.2.1%20Hotfix%20%26%20Economic%20Integrity-0284C7)
 
 A rigorous quantitative research, frozen model inference, and real-market forward observation system engineered for Deriv 5-tick contracts—specifically modeling RUNHIGH (Only Ups) and RUNLOW (Only Downs) where every successive tick after the entry spot must move strictly in the contract direction.
 
-V1.7.2 corrects research-integrity failures identified in earlier reporting, establishes a single canonical metrics engine (`ResearchMetricsEngine`) with cryptographic dataset checksumming, unifies confirmation authority under `ForwardConfirmationGate`, enforces pre-registered confirmation admission, and provides verified Windows-compatible operational entry points.
+V1.7.2.1 delivers a targeted release hotfix: resolves runtime typing import errors under Python 3.14 (`Tuple`, `Any`), completely purges residual economic benchmark fallbacks (`3.277%`, `3.28%`), reconciles authoritative database session counts (6 registered sessions), verifies single-authority confirmation gate integrity, and validates all operational CLI commands.
 
 ---
 

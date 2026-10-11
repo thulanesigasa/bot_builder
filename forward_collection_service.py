@@ -27,7 +27,7 @@ import signal
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Dict, Any, List, Tuple
 
 from config import DEFAULT_CONFIG
 from forward_journal import ForwardPredictionJournal, STATUS_INCOMPLETE

@@ -20,7 +20,7 @@ import time
 import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from config import DEFAULT_CONFIG
 

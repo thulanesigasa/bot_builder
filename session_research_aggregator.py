@@ -53,7 +53,8 @@ class SessionResearchAggregator:
         min_confirmation_samples: int = 100,
         session_registry_db: Optional[str] = None,
         forward_journal_db: Optional[str] = None,
-        quote_db: Optional[Any] = None
+        quote_db: Optional[Any] = None,
+        quote_db_path: Optional[str] = None
     ):
         if registry:
             self.registry = registry
@@ -71,7 +72,7 @@ class SessionResearchAggregator:
 
         self.session_registry_db = session_registry_db or getattr(self.registry, "db_path", "data/forward_sessions.db")
         self.forward_journal_db = forward_journal_db or getattr(self.journal, "db_path", "data/forward_predictions.db")
-        self.quote_db_path = getattr(quote_db, "db_path", quote_db) if quote_db else DEFAULT_CONFIG.quotes_db_path
+        self.quote_db_path = quote_db_path or (getattr(quote_db, "db_path", quote_db) if quote_db else DEFAULT_CONFIG.quotes_db_path)
         self.manifest = None
         self.confirmation_gate = None
         self.stat_evaluator = StatisticalEvaluator()
@@ -370,4 +371,24 @@ class SessionResearchAggregator:
         md.append(f"> - Independent confirmation sessions are mandatory before evaluating any edge confirmation claim.\n")
 
         return "\n".join(md)
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Multi-Session Research Aggregator & Qualification Engine (V1.7.2.1)")
+    parser.add_argument("symbol", nargs="?", default="R_75", help="Market symbol (default: R_75)")
+    parser.add_argument("--markdown", action="store_true", help="Output markdown research report")
+    args = parser.parse_args()
+    aggregator = SessionResearchAggregator()
+    if args.markdown:
+        print(aggregator.generate_markdown_summary(symbol=args.symbol))
+    else:
+        res = aggregator.evaluate_multi_session_research(symbol=args.symbol)
+        print(f"=== MULTI-SESSION RESEARCH EVALUATION ({res['symbol']}) ===")
+        print(f"Verdict         : {res['verdict']}")
+        print(f"Rationale       : {res['verdict_rationale']}")
+        if res.get("verdict_reasons"):
+            print("Verdict Reasons :")
+            for r in res["verdict_reasons"]:
+                print(f"  - {r}")
 

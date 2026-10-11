@@ -167,7 +167,8 @@ class SessionReporter:
         total_preds = accuracy.get("total_predictions", 0)
         resolved_count = accuracy.get("resolved_predictions", 0)
         stage = getattr(session, "research_stage", "EXPLORATORY_FORWARD")
-        be_pct = (econ_rh.get("mean_break_even_pct") or 3.277) / 100.0
+        raw_be = econ_rh.get("mean_break_even_pct")
+        be_pct = (raw_be / 100.0) if raw_be is not None else None
         obs_rh = cal_rh.get("observed_win_rate", 0.0) or 0.0
 
         if resolved_count < 20:
@@ -190,6 +191,9 @@ class SessionReporter:
             except Exception as e:
                 s_verdict = "CONFIRMATION_GATE_FAILURE"
                 s_rationale = f"Confirmation gate evaluation failed: {e}"
+        elif be_pct is None or econ_rh.get("mean_ordinary_ev") is None:
+            s_verdict = "NO_VALIDATED_EDGE"
+            s_rationale = "Economic proposal quotes unavailable; break-even hurdle and EV cannot be computed."
         elif obs_rh > be_pct and (econ_rh.get("mean_ordinary_ev") or 0.0) > 0:
             if stage == "VALIDATION_FORWARD":
                 s_verdict = "CONFIRMATION_REQUIRED"
@@ -199,7 +203,7 @@ class SessionReporter:
                 s_rationale = "Exploratory edge detected. Formal validation required."
         else:
             s_verdict = "NO_VALIDATED_EDGE"
-            s_rationale = f"Observed win rate ({obs_rh:.4f}) does not exceed break-even hurdle ({be_pct:.4f})."
+            s_rationale = f"Observed win rate ({obs_rh:.4f}) does not exceed break-even hurdle ({be_pct:.4f})." if be_pct is not None else "Break-even hurdle unavailable."
 
         report = {
             "report_type": "SESSION",
@@ -337,6 +341,14 @@ class SessionReporter:
                 "declaration": "REAL-MONEY TRADING DISABLED. All metrics are non-purchasing forward research observations."
             },
             "sessions_today": len(day_sessions),
+            "session_accounting": {
+                "total_registered_sessions": len(all_sessions),
+                "sessions_in_window": len(day_sessions),
+                "exploratory_sessions_count": sum(1 for s in all_sessions if getattr(s, "research_stage", "EXPLORATORY_FORWARD") == "EXPLORATORY_FORWARD"),
+                "confirmation_sessions_count": sum(1 for s in all_sessions if getattr(s, "research_stage", "") == "CONFIRMATION_FORWARD"),
+                "completed_sessions_count": sum(1 for s in all_sessions if s.status == "COMPLETED"),
+                "reconciled_sessions_count": sum(1 for s in all_sessions if getattr(s, "reconciliation_status", "") == "RECONCILED"),
+            },
             "session_summary": [
                 {
                     "session_id": s.session_id[:8],
@@ -397,6 +409,17 @@ class SessionReporter:
         lines.append(f"Generated at: {report.get('generated_at', '')}")
         lines.append("Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)")
         lines.append("")
+
+        if rtype == "DAILY" and "session_accounting" in report:
+            acc = report["session_accounting"]
+            lines.append("--- AUTHORITATIVE SESSION REGISTRY ---")
+            lines.append(f"  Total Registered Sessions: {acc.get('total_registered_sessions', 0)}")
+            lines.append(f"  Sessions in Window (24h) : {acc.get('sessions_in_window', 0)}")
+            lines.append(f"  Exploratory Sessions     : {acc.get('exploratory_sessions_count', 0)}")
+            lines.append(f"  Confirmation Sessions    : {acc.get('confirmation_sessions_count', 0)}")
+            lines.append(f"  Completed Sessions       : {acc.get('completed_sessions_count', 0)}")
+            lines.append(f"  Reconciled Sessions      : {acc.get('reconciled_sessions_count', 0)}")
+            lines.append("")
 
         if rtype == "SESSION":
             sess = report.get("session", {})
@@ -503,7 +526,7 @@ def run_daily_report(symbol: Optional[str] = None):
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Session & Daily Quantitative Research Report Generator (V1.7.2)")
+    parser = argparse.ArgumentParser(description="Session & Daily Quantitative Research Report Generator (V1.7.2.1)")
     parser.add_argument("symbol", nargs="?", default=None, help="Market symbol (e.g. R_75)")
     parser.add_argument("--session", default=None, help="Generate report for a specific session ID")
     parser.add_argument("--dir", default=None, help="Reports output directory")

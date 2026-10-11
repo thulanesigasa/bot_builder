@@ -1,0 +1,145 @@
+{
+  "report_type": "DAILY",
+  "period_utc": "2026-10-09 (last 24h)",
+  "generated_at": "2026-10-09T04:45:49+00:00",
+  "safety": {
+    "live_money_trading_disabled": true,
+    "purchasing_allowed": false,
+    "declaration": "REAL-MONEY TRADING DISABLED. All metrics are non-purchasing forward research observations."
+  },
+  "sessions_today": 6,
+  "session_accounting": {
+    "total_registered_sessions": 6,
+    "sessions_in_window": 6,
+    "exploratory_sessions_count": 6,
+    "confirmation_sessions_count": 0,
+    "completed_sessions_count": 6,
+    "reconciled_sessions_count": 4
+  },
+  "session_summary": [
+    {
+      "session_id": "4e02aaa6",
+      "mode": "SHADOW",
+      "status": "COMPLETED",
+      "ticks": 2,
+      "predictions": 0,
+      "resolved": 0,
+      "pnl": 0.0
+    },
+    {
+      "session_id": "a381a4d3",
+      "mode": "SHADOW",
+      "status": "COMPLETED",
+      "ticks": 28,
+      "predictions": 13,
+      "resolved": 13,
+      "pnl": 0.0
+    },
+    {
+      "session_id": "ea9e9e21",
+      "mode": "SHADOW",
+      "status": "COMPLETED",
+      "ticks": 20,
+      "predictions": 5,
+      "resolved": 0,
+      "pnl": 0.0
+    },
+    {
+      "session_id": "21414146",
+      "mode": "SHADOW",
+      "status": "COMPLETED",
+      "ticks": 9,
+      "predictions": 0,
+      "resolved": 0,
+      "pnl": 0.0
+    },
+    {
+      "session_id": "e625c5fb",
+      "mode": "SHADOW",
+      "status": "COMPLETED",
+      "ticks": 10,
+      "predictions": 1309,
+      "resolved": 1300,
+      "pnl": 0.0
+    },
+    {
+      "session_id": "aad12986",
+      "mode": "SHADOW",
+      "status": "COMPLETED",
+      "ticks": 1792,
+      "predictions": 1744,
+      "resolved": 1725,
+      "pnl": 0.0
+    }
+  ],
+  "lifecycle_counts": {
+    "quotes_recorded": 384,
+    "predictions_generated": 1763,
+    "predictions_persisted": 1763,
+    "outcomes_resolved": 1742,
+    "outcomes_pending": 0,
+    "outcomes_incomplete": 8,
+    "outcomes_data_gap": 7,
+    "outcomes_unverified": 6
+  },
+  "statistical_evidence": {
+    "runhigh_estimated_win_prob": 0.03278,
+    "runlow_estimated_win_prob": 0.02978,
+    "runhigh_observed_win_prob": 0.03731,
+    "runlow_observed_win_prob": 0.02124,
+    "brier_score_runhigh": 0.036,
+    "brier_score_runlow": 0.02083,
+    "calibration_error_runhigh": 0.00453,
+    "calibration_error_runlow": 0.00854,
+    "genuine_quote_coverage_pct": 35.05
+  },
+  "aggregate_economic_performance": {
+    "session_id": null,
+    "symbol": "R_75",
+    "mode": "ALL",
+    "total_predictions": 1763,
+    "paper_trade_signals": 0,
+    "resolved_trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": null,
+    "cumulative_pnl": 0.0,
+    "mean_pnl_per_trade": null,
+    "std_pnl_per_trade": null,
+    "sharpe_ratio": null,
+    "max_drawdown": 0.0,
+    "quote_coverage_pct": 35.05,
+    "predicted_ev_mean": null,
+    "realized_ev_mean": null,
+    "ev_accuracy_error": null,
+    "brier_score_runhigh": 0.036,
+    "brier_score_runlow": 0.02083,
+    "per_state_breakdown": {},
+    "generated_at": "2026-10-09T04:45:49.287736+00:00"
+  },
+  "system_health": {
+    "ticks": {
+      "total_ticks": 0,
+      "tick_rate_per_sec": 0.0,
+      "last_tick_epoch": null,
+      "last_tick_age_seconds": null,
+      "last_tick_latency_ms": 0.0,
+      "duplicate_ticks": 0,
+      "gap_count": 0
+    },
+    "quotes": {
+      "total_requests": 0,
+      "successful_quotes": 0,
+      "rejected_quotes": 0,
+      "success_rate_pct": 100.0,
+      "last_quote_age_seconds": null,
+      "last_quote_latency_ms": 0.0
+    },
+    "connectivity": {
+      "connection_status": "DISCONNECTED",
+      "reconnection_count": 0,
+      "last_reconnect_time": null,
+      "has_active_data_gap": false
+    }
+  }
+}

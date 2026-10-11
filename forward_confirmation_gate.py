@@ -233,6 +233,7 @@ class ForwardConfirmationGate:
         reasons: List[str] = []
 
         # 1. Manifest verification
+        manifest = manifest or self.manifest
         manifest_verified = False
         if manifest:
             manifest_verified = manifest.verify_checksum()
@@ -241,6 +242,8 @@ class ForwardConfirmationGate:
             elif manifest.model_id != model_id or manifest.market_symbol != symbol:
                 manifest_verified = False
                 reasons.append(f"Manifest model/symbol mismatch: expected {model_id}/{symbol}, got {manifest.model_id}/{manifest.market_symbol}.")
+        else:
+            reasons.append("Missing confirmation manifest. Pre-registered ConfirmationManifest is strictly required.")
         gate_checks["manifest_valid"] = manifest_verified
 
         # 2. Check for Confirmation Sessions
@@ -551,4 +554,27 @@ def evaluate_forward_edge_confirmation(
         contract_type=contract_type,
         manifest=manifest
     )
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Authoritative Forward Edge Confirmation Gate (V1.7.2.1)")
+    parser.add_argument("symbol", nargs="?", default="R_75", help="Market symbol (default: R_75)")
+    parser.add_argument("--model", default="LATEST", help="Model artifact ID (default: LATEST)")
+    parser.add_argument("--contract", default="RUNHIGH", help="Contract type (default: RUNHIGH)")
+    args = parser.parse_args()
+    gate = ForwardConfirmationGate()
+    rep = gate.evaluate_forward_edge_confirmation(model_id=args.model, symbol=args.symbol, contract_type=args.contract)
+    print(f"=== FORWARD CONFIRMATION GATE EVALUATION ({rep.symbol} - {rep.contract_type}) ===")
+    print(f"Verdict          : {rep.verdict}")
+    print(f"Confirmed        : {rep.is_confirmed}")
+    print(f"Sessions Count   : {rep.confirmation_sessions_count} (Reconciled: {rep.confirmation_sessions_reconciled})")
+    print(f"Sample Size      : {rep.nominal_sample_size} (Neff: {rep.effective_sample_size})")
+    print(f"Observed Win Rate: {rep.observed_win_rate}")
+    print(f"Break-Even Hurdle: {rep.break_even_hurdle}")
+    print(f"Quote Coverage   : {rep.quote_coverage_pct}%")
+    if rep.rejection_reasons:
+        print("Rejection Reasons:")
+        for reason in rep.rejection_reasons:
+            print(f"  [X] {reason}")
 
