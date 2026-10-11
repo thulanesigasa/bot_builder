@@ -1,14 +1,14 @@
 === DERIV QUANTITATIVE RESEARCH — DAILY REPORT ===
-Generated at: 2026-10-11T18:07:49+00:00
+Generated at: 2026-10-11T20:11:57+00:00
 Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)
 
 --- AUTHORITATIVE SESSION REGISTRY ---
-  Total Registered Sessions: 8
-  Sessions in Window (24h) : 2
-  Exploratory Sessions     : 8
+  Total Registered Sessions: 10
+  Sessions in Window (24h) : 4
+  Exploratory Sessions     : 10
   Confirmation Sessions    : 0
-  Completed Sessions       : 8
-  Reconciled Sessions      : 6
+  Completed Sessions       : 10
+  Reconciled Sessions      : 8
 
 --- LIFECYCLE & OBSERVATION COUNTS ---
   Ticks Received      : N/A
@@ -16,27 +16,27 @@ Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)
   Warm-up Ticks       : 0
   Duplicate Ticks     : 0
   Rejected Ticks      : 0
-  Quotes Recorded     : 544
-  Predictions Total   : 1897
-  Outcomes Resolved   : 1871
+  Quotes Recorded     : 766
+  Predictions Total   : 2203
+  Outcomes Resolved   : 2177
   Outcomes Pending    : 0
   Outcomes Incomplete : 8
   Outcomes Data Gap   : 12
   Outcomes Unverified : 6
 
 --- STATISTICAL EVIDENCE ---
-  RUNHIGH Est Prob    : 0.03278
-  RUNLOW Est Prob     : 0.02978
-  RUNHIGH Obs Prob    : 0.03741
-  RUNLOW Obs Prob     : 0.02245
-  Brier RH            : 0.0361
-  Brier RL            : 0.02197
+  RUNHIGH Est Prob    : 0.04849
+  RUNLOW Est Prob     : 0.04436
+  RUNHIGH Obs Prob    : 0.0565
+  RUNLOW Obs Prob     : 0.03307
+  Brier RH            : 0.04973
+  Brier RL            : 0.03085
   Brier Skill Score RH: None
   Brier Skill Score RL: None
-  Calib Error RH (ECE): 0.00463
-  Calib Error RL (ECE): 0.00733
+  Calib Error RH (ECE): 0.00801
+  Calib Error RL (ECE): 0.01129
   N Effective (RH)    : None
-  Quote Coverage      : 39.64%
+  Quote Coverage      : 48.03%
 
 --- ECONOMIC PERFORMANCE (HYPOTHETICAL) ---
   Paper Trade Signals : 0

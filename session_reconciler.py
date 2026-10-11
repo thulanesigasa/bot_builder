@@ -438,6 +438,7 @@ class SessionReconciler:
         # Build multi-instance index of session quotes for exact proposal and database ID matching
         quotes_by_proposal_id = defaultdict(list)
         quotes_by_db_id = defaultdict(list)
+        quotes_by_record_id = defaultdict(list)
         for q in session_quotes:
             pid = q.get("proposal_id")
             if pid:
@@ -445,6 +446,9 @@ class SessionReconciler:
             db_id = q.get("id")
             if db_id is not None:
                 quotes_by_db_id[str(db_id)].append(q)
+            qrid = q.get("quote_record_id")
+            if qrid:
+                quotes_by_record_id[str(qrid)].append(q)
 
         # Build index of session outcomes for authoritative outcome chronology (V1.6.3 Section 13)
         outcome_by_pred_id = {
@@ -458,7 +462,7 @@ class SessionReconciler:
 
             # Check quote response received before prediction timestamp
             if qid:
-                candidate_quotes = quotes_by_proposal_id.get(qid, []) or quotes_by_db_id.get(qid, [])
+                candidate_quotes = quotes_by_record_id.get(qid, []) or quotes_by_proposal_id.get(qid, []) or quotes_by_db_id.get(qid, [])
                 if candidate_quotes:
                     # Check for missing response timestamp
                     # Rule B.5: Never fall back to request_timestamp for quote availability

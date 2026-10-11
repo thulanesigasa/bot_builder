@@ -1,0 +1,256 @@
+{
+  "report_type": "SESSION",
+  "generated_at": "2026-10-11T20:02:14+00:00",
+  "research_verdict": {
+    "verdict": "NO_VALIDATED_EDGE",
+    "rationale": "Observed win rate (0.0294) does not exceed break-even hurdle (0.1474).",
+    "research_stage": "EXPLORATORY_FORWARD"
+  },
+  "session": {
+    "session_id": "7b82fef5-fc65-4b38-9750-251aae55395d",
+    "symbol": "R_75",
+    "mode": "SHADOW",
+    "research_stage": "EXPLORATORY_FORWARD",
+    "model_id": "M_R_75_2TICK_20261011_120000.json",
+    "status": "COMPLETED",
+    "start_time_utc": "2026-10-11T20:01:12.648013+00:00",
+    "planned_duration_seconds": 60.0,
+    "actual_duration_seconds": 61.97,
+    "reconciliation_status": "RECONCILED",
+    "is_verified": true
+  },
+  "reconciliation": {
+    "session_id": "7b82fef5-fc65-4b38-9750-251aae55395d",
+    "symbol": "R_75",
+    "status": "RECONCILED",
+    "is_verified": true,
+    "reconciled_at_utc": "2026-10-11T20:02:14+00:00",
+    "ticks": {
+      "session_counter_ticks": 28,
+      "live_ticks": 17,
+      "warmup_ticks": 0,
+      "duplicate_ticks": 0,
+      "rejected_ticks": 0,
+      "csv_ticks": 28
+    },
+    "quotes": {
+      "quotes_recorded_in_db": 582,
+      "quotes_linked_to_session": 38,
+      "predictions_with_quotes": 34,
+      "quote_coverage_pct": 100.0,
+      "raw_quote_coverage_pct": 100.0,
+      "valid_chronological_quotes_count": 34,
+      "valid_chronological_quote_coverage_pct": 100.0,
+      "economic_eligible_predictions_count": 34,
+      "economic_eligible_coverage_pct": 100.0,
+      "execution_quality_quotes_count": 25,
+      "execution_quality_coverage_pct": 73.53,
+      "missing_response_time_errors": 0,
+      "stale_quote_errors": 0
+    },
+    "predictions": {
+      "total_predictions": 34,
+      "unattributed_predictions": 0,
+      "cross_session_predictions": 0
+    },
+    "outcomes": {
+      "total_outcomes": 34,
+      "resolved_outcomes": 34,
+      "pending_outcomes": 0,
+      "incomplete_outcomes": 0,
+      "data_gap_outcomes": 0,
+      "orphan_outcomes": 0,
+      "orphan_predictions": 0
+    },
+    "provenance": {
+      "breakdown": {
+        "deriv_websocket_live": 34
+      },
+      "is_live_deriv": true
+    },
+    "chronology": {
+      "chronology_errors": 0,
+      "future_quote_errors": 0,
+      "missing_response_time_errors": 0
+    },
+    "verification_dimensions": {
+      "data_counts_reconciled": true,
+      "prediction_chronology_verified": true,
+      "outcome_reconstruction_verified": true,
+      "quote_chronology_verified": true,
+      "contract_mapping_verified": true,
+      "economic_evidence_eligible": true
+    },
+    "issues": [],
+    "passed_checks": [
+      "Session found in registry with status 'COMPLETED'.",
+      "Live ticks CSV verified: 28 lines recorded.",
+      "All 34 predictions verified as live Deriv provenance.",
+      "Prediction outcome sum matches: 34 == 34.",
+      "Registry prediction count reconciled (34 == 34).",
+      "Session ticks match CSV line count (28 vs 28)."
+    ]
+  },
+  "safety": {
+    "live_money_trading_disabled": true,
+    "purchasing_allowed": false,
+    "declaration": "REAL-MONEY TRADING DISABLED. All metrics are non-purchasing forward research observations."
+  },
+  "model": {
+    "model_id": "M_R_75_2TICK_20261011_120000",
+    "model_version": "1.7.4.1",
+    "approval_status": "RESEARCH_ONLY",
+    "validation_sample_count": 8631
+  },
+  "predictions": {
+    "total": 34,
+    "resolved": 34,
+    "pending": 0,
+    "unverified": 0,
+    "brier_score_runhigh": 0.047607,
+    "brier_score_runlow": 0.217475,
+    "brier_skill_score_runhigh": -0.66702,
+    "brier_skill_score_runlow": 0.21637,
+    "expected_calibration_error_runhigh": 0.11281,
+    "expected_calibration_error_runlow": 0.16306,
+    "effective_sample_size_runhigh": 34.0,
+    "realized_runhigh_win_rate": 0.02941,
+    "realized_runlow_win_rate": 0.29412
+  },
+  "lifecycle_counts": {
+    "ticks_received": 28,
+    "live_ticks": 17,
+    "warmup_ticks": 0,
+    "duplicate_ticks": 0,
+    "rejected_ticks": 0,
+    "quotes_recorded": 38,
+    "eligible_feature_windows": 34,
+    "predictions_generated": 34,
+    "predictions_persisted": 34,
+    "outcomes_resolved": 34,
+    "outcomes_pending": 0,
+    "outcomes_incomplete": 0,
+    "outcomes_data_gap": 0,
+    "outcomes_unverified": 0
+  },
+  "statistical_evidence": {
+    "runhigh_estimated_win_prob": 0.14223,
+    "runlow_estimated_win_prob": 0.13106,
+    "runhigh_observed_win_prob": 0.02941,
+    "runlow_observed_win_prob": 0.29412,
+    "brier_score_runhigh": 0.047607,
+    "brier_score_runlow": 0.217475,
+    "brier_skill_score_runhigh": -0.66702,
+    "brier_skill_score_runlow": 0.21637,
+    "calibration_error_runhigh": 0.11281,
+    "calibration_error_runlow": 0.16306,
+    "effective_sample_size": 34.0,
+    "genuine_quote_coverage_pct": 100.0,
+    "dependence_aware_uncertainty": {
+      "method": "Moving Block Bootstrap (L=5) & Non-overlapping Sensitivity",
+      "runhigh_bootstrap_95_ci": [
+        0.0,
+        0.08824
+      ],
+      "runlow_bootstrap_95_ci": [
+        0.05882,
+        0.58824
+      ],
+      "runhigh_non_overlapping_sensitivity": {
+        "count": 6,
+        "wins": 0,
+        "observed_rate": 0.0,
+        "ci_95": [
+          0.0,
+          0.39033
+        ]
+      },
+      "runlow_non_overlapping_sensitivity": {
+        "count": 6,
+        "wins": 2,
+        "observed_rate": 0.33333,
+        "ci_95": [
+          0.09677,
+          0.70001
+        ]
+      }
+    }
+  },
+  "economic_performance": {
+    "session_id": "7b82fef5-fc65-4b38-9750-251aae55395d",
+    "symbol": "R_75",
+    "mode": "SHADOW",
+    "total_predictions": 34,
+    "paper_trade_signals": 0,
+    "resolved_trades": 0,
+    "wins": 0,
+    "losses": 0,
+    "win_rate": null,
+    "cumulative_pnl": 0.0,
+    "mean_pnl_per_trade": null,
+    "std_pnl_per_trade": null,
+    "sharpe_ratio": null,
+    "max_drawdown": 0.0,
+    "quote_coverage_pct": 100.0,
+    "predicted_ev_mean": null,
+    "realized_ev_mean": null,
+    "ev_accuracy_error": null,
+    "brier_score_runhigh": 0.04761,
+    "brier_score_runlow": 0.21747,
+    "per_state_breakdown": {},
+    "generated_at": "2026-10-11T20:02:14.684970+00:00",
+    "runhigh_quote_coverage_pct": 100.0,
+    "runhigh_mean_break_even_pct": 14.744,
+    "runhigh_mean_ordinary_ev": -0.0522,
+    "runhigh_mean_conservative_ev": null
+  },
+  "health_telemetry": {
+    "ticks": {
+      "total_ticks": 84,
+      "tick_rate_per_sec": 1.4,
+      "last_tick_epoch": 1791748934,
+      "last_tick_age_seconds": 0.32,
+      "last_tick_latency_ms": 333.11,
+      "duplicate_ticks": 0,
+      "gap_count": 0
+    },
+    "quotes": {
+      "total_requests": 48,
+      "successful_quotes": 48,
+      "rejected_quotes": 0,
+      "success_rate_pct": 100.0,
+      "last_quote_age_seconds": 0.38,
+      "last_quote_latency_ms": 380.21135330200195
+    },
+    "connectivity": {
+      "connection_status": "DISCONNECTED",
+      "reconnection_count": 0,
+      "last_reconnect_time": null,
+      "has_active_data_gap": false
+    }
+  },
+  "validation_gate": {
+    "model_id": "M_R_75_2TICK_20261011_120000.json",
+    "symbol": "R_75",
+    "evaluation_time": 1791748934.6933177,
+    "resolved_predictions": 0,
+    "independent_periods": 0,
+    "runhigh_win_rate": null,
+    "runlow_win_rate": null,
+    "runhigh_z_score": null,
+    "runlow_z_score": null,
+    "brier_rh": null,
+    "brier_rl": null,
+    "naive_brier": 0.0317,
+    "brier_improvement_pct": null,
+    "quote_coverage_pct": 0.0,
+    "cumulative_pnl": 0.0,
+    "max_drawdown": 0.0,
+    "gate_passed": false,
+    "demotion_triggered": false,
+    "gate_reasons": [
+      "INSUFFICIENT_DATA: only 0/200 resolved observations"
+    ],
+    "recommended_action": "INSUFFICIENT_DATA"
+  }
+}

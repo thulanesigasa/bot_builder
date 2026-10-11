@@ -29,7 +29,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Tuple
 
-from config import DEFAULT_CONFIG
+from config import DEFAULT_CONFIG, run_startup_safety_preflight
 from forward_journal import ForwardPredictionJournal, STATUS_INCOMPLETE
 from forward_observer import ForwardObserver, PairedForwardObserver
 from forward_session import ForwardSessionRegistry, ForwardSession, STAGE_EXPLORATORY, STAGE_VALIDATION, STAGE_CONFIRMATION
@@ -78,6 +78,8 @@ class ForwardCollectionService:
     ):
         if LIVE_EXECUTION_DISABLED is not True:
             raise RuntimeError("Safety invariant violated: LIVE_EXECUTION_DISABLED must be True.")
+
+        self.safety_preflight = run_startup_safety_preflight(mode)
 
         self.symbol = symbol
         self.mode = mode.upper()

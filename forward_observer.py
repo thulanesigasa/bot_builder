@@ -605,10 +605,14 @@ class ForwardObserver:
             hypothetical_pnl=0.0,
             execution_mode=self.mode,
             model_id=self.model_artifact.model_id if self.model_artifact else "NONE",
+            model_checksum=getattr(self.model_artifact, "model_checksum", getattr(self.model_artifact, "checksum", "")) if self.model_artifact else "",
             quote_id=(q_rh.proposal_id if q_rh else (q_rl.proposal_id if q_rl else "")) or "QUOTE_UNAVAILABLE",
             feature_schema_version=FEATURE_SCHEMA_VERSION,
             source_provenance=getattr(tick, "source", "LIVE_DERIV") or "LIVE_DERIV",
-            contract_duration=self.contract_duration
+            contract_duration=self.contract_duration,
+            last_feature_tick_id=int(tick.server_timestamp),
+            feature_cutoff_timestamp=float(getattr(tick, "local_receipt_timestamp", None) or tick.server_timestamp),
+            inference_completion_timestamp=time.time()
         )
 
         try:

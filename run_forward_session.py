@@ -34,7 +34,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional, List
 
-from config import DEFAULT_CONFIG
+from config import DEFAULT_CONFIG, run_startup_safety_preflight
 from forward_collection_service import ForwardCollectionService, LIVE_EXECUTION_DISABLED
 from model_manager import ModelManager
 from model_artifact import ModelArtifact, ModelStatus
@@ -49,7 +49,7 @@ SUPPORTED_SYMBOLS: List[str] = [
 def print_banner(symbol: str, mode: str, duration: Optional[float], max_obs: Optional[int]):
     print("\n" + "=" * 70)
     print("  DERIV ONLY UPS / ONLY DOWNS QUANTITATIVE RESEARCH ENGINE")
-    print("  FORWARD OBSERVATION, RECONCILIATION & EVIDENCE SYSTEM (V1.6.4)")
+    print("  FORWARD OBSERVATION, RECONCILIATION & EVIDENCE SYSTEM (V1.7.4.3)")
     print("=" * 70)
     print(f"  Target Symbol       : {symbol}")
     print(f"  Execution Mode      : {mode}")
@@ -62,6 +62,9 @@ def print_banner(symbol: str, mode: str, duration: Optional[float], max_obs: Opt
 
 def verify_environment(symbol: str, mode: str, model_path: Optional[str] = None):
     """Verifies symbol support, API endpoint configuration, and frozen model availability."""
+    print("[Preflight] 0. Executing strict startup safety preflight...")
+    run_startup_safety_preflight()
+
     print("[Preflight] 1. Verifying symbol compatibility...")
     if symbol not in SUPPORTED_SYMBOLS:
         print(f"[Preflight] WARNING: {symbol} is not in the canonical tested symbol list ({SUPPORTED_SYMBOLS}). Proceeding anyway.")
@@ -122,6 +125,7 @@ def main():
     parser.add_argument("--no-preload-warmup", action="store_true", help="Disable preloading historical warmup ticks")
     parser.add_argument("--grace-seconds", type=float, default=30.0, help="Max grace window seconds to resolve pending outcomes at session end (default: 30.0)")
     parser.add_argument("--cutoff-seconds", type=float, default=20.0, help="Seconds before session end to halt new prediction creation (default: 20.0)")
+    parser.add_argument("--dual-duration", action="store_true", help="Run concurrent paired 2T and 5T forward observation on a single tick stream")
     args = parser.parse_args()
 
     stage_map = {
@@ -212,7 +216,8 @@ def main():
         research_stage=stage_val,
         target_resolved_predictions=args.target_resolved,
         confirmation_manifest=confirmation_manifest,
-        enforce_confirmation_admission=(stage_val == "CONFIRMATION_FORWARD")
+        enforce_confirmation_admission=(stage_val == "CONFIRMATION_FORWARD"),
+        dual_duration=args.dual_duration
     )
 
     def handle_sig(sig, frame):

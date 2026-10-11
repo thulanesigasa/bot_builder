@@ -96,6 +96,11 @@ class ForwardPredictionRecord:
     unresolved_reason: str = ""
     forward_epochs_json: str = "[]"
     contract_duration: int = 5
+    model_checksum: str = ""
+    last_feature_tick_id: Optional[int] = None
+    feature_cutoff_timestamp: Optional[float] = None
+    inference_completion_timestamp: Optional[float] = None
+    journal_commit_timestamp: Optional[float] = None
 
 
 class ForwardPredictionJournal:
@@ -202,6 +207,16 @@ class ForwardPredictionJournal:
                 conn.execute("ALTER TABLE forward_predictions ADD COLUMN source_provenance TEXT DEFAULT 'LIVE_DERIV'")
             if "contract_duration" not in cols:
                 conn.execute("ALTER TABLE forward_predictions ADD COLUMN contract_duration INTEGER DEFAULT 5")
+            if "model_checksum" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN model_checksum TEXT DEFAULT ''")
+            if "last_feature_tick_id" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN last_feature_tick_id INTEGER")
+            if "feature_cutoff_timestamp" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN feature_cutoff_timestamp REAL")
+            if "inference_completion_timestamp" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN inference_completion_timestamp REAL")
+            if "journal_commit_timestamp" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN journal_commit_timestamp REAL")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_fwd_status
@@ -230,6 +245,8 @@ class ForwardPredictionJournal:
         provenance = getattr(record, "source_provenance", "LIVE_DERIV") or "LIVE_DERIV"
         created_at = datetime.now(timezone.utc).isoformat()
         dur = getattr(record, "contract_duration", 5) or 5
+        if not getattr(record, "journal_commit_timestamp", None):
+            record.journal_commit_timestamp = time.time()
 
         with self._get_conn() as conn:
             # Check duplicate prediction ID
@@ -256,8 +273,9 @@ class ForwardPredictionJournal:
                     expiry_epoch, forward_prices_json, forward_ticks_count,
                     outcome_status, runhigh_win, runlow_win, hypothetical_pnl,
                     execution_mode, model_id, quote_id, feature_schema_version, source_provenance, created_at,
-                    contract_duration
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    contract_duration, model_checksum, last_feature_tick_id,
+                    feature_cutoff_timestamp, inference_completion_timestamp, journal_commit_timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 record.prediction_id, sess_id, record.timestamp, record.symbol, record.model_version,
                 record.market_state, record.features_json, record.runhigh_pred_prob,
@@ -272,7 +290,11 @@ class ForwardPredictionJournal:
                 record.hypothetical_pnl, record.execution_mode, record.model_id,
                 getattr(record, "quote_id", "") or "",
                 getattr(record, "feature_schema_version", "1.0") or "1.0", provenance, created_at,
-                dur
+                dur, getattr(record, "model_checksum", "") or "",
+                getattr(record, "last_feature_tick_id", None),
+                getattr(record, "feature_cutoff_timestamp", None),
+                getattr(record, "inference_completion_timestamp", None),
+                getattr(record, "journal_commit_timestamp", None)
             ))
             conn.commit()
 

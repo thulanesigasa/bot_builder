@@ -1,0 +1,67 @@
+=== DERIV QUANTITATIVE RESEARCH — SESSION REPORT ===
+Generated at: 2026-10-11T20:08:47+00:00
+Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)
+
+Session ID   : c14ac5fb
+Symbol       : R_75
+Mode         : SHADOW
+Stage        : EXPLORATORY_FORWARD
+Research Verd: EXPLORATORY_CANDIDATE
+Rationale    : Exploratory edge detected. Formal validation required.
+Model ID     : M_R_75_2TICK_20261011_120000.json
+Status       : COMPLETED
+Start UTC    : 2026-10-11T20:03:45.291199+00:00
+Duration (s) : 301.43
+
+--- LIFECYCLE & OBSERVATION COUNTS ---
+  Ticks Received      : 147
+  Live Genuine Ticks  : 136
+  Warm-up Ticks       : 0
+  Duplicate Ticks     : 0
+  Rejected Ticks      : 0
+  Quotes Recorded     : 184
+  Predictions Total   : 272
+  Outcomes Resolved   : 272
+  Outcomes Pending    : 0
+  Outcomes Incomplete : 0
+  Outcomes Data Gap   : 0
+  Outcomes Unverified : 0
+
+--- DATA INTEGRITY & RECONCILIATION ---
+  Reconciliation Status: RECONCILED
+  Statistically Verified: True
+  Live Deriv Provenance : True
+  Chronology Violations : 0
+  Future Quote Violations: 0
+
+--- STATISTICAL EVIDENCE ---
+  RUNHIGH Est Prob    : 0.14487
+  RUNLOW Est Prob     : 0.13384
+  RUNHIGH Obs Prob    : 0.19118
+  RUNLOW Obs Prob     : 0.07353
+  Brier RH            : 0.143729
+  Brier RL            : 0.068554
+  Brier Skill Score RH: 0.20029
+  Brier Skill Score RL: 0.02125
+  Calib Error RH (ECE): 0.0463
+  Calib Error RL (ECE): 0.06032
+  N Effective (RH)    : 90.78
+  Quote Coverage      : 100.0%
+  RH Block Boot 95% CI: [13.23%, 26.10%] (Moving Block, L=5)
+
+--- ECONOMIC PERFORMANCE (HYPOTHETICAL) ---
+  Paper Trade Signals : 0
+  Resolved Trades     : 0
+  Win Rate            : None
+  Cumulative PnL      : 0.0
+  Mean PnL/Trade      : None
+  Max Drawdown        : 0.0
+  Break-Even Hurdle RH: 14.744%
+  Ordinary EV (RH)    : $0.005
+  Conservative EV (RH): $1.585
+
+--- VALIDATION GATE ---
+  Gate Passed         : False
+  Recommended Action  : INSUFFICIENT_DATA
+  Demotion Triggered  : False
+    - INSUFFICIENT_DATA: only 0/200 resolved observations

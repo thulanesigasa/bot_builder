@@ -71,11 +71,15 @@ class QuoteDatabase:
                     created_at TEXT NOT NULL
                 )
             """)
-            # Check if session_id column exists (schema migration)
+            # Check if session_id, quote_record_id, and basis columns exist (schema migration)
             cur = conn.execute("PRAGMA table_info(quotes)")
             cols = [r["name"] for r in cur.fetchall()]
             if "session_id" not in cols:
                 conn.execute("ALTER TABLE quotes ADD COLUMN session_id TEXT DEFAULT ''")
+            if "quote_record_id" not in cols:
+                conn.execute("ALTER TABLE quotes ADD COLUMN quote_record_id TEXT DEFAULT ''")
+            if "basis" not in cols:
+                conn.execute("ALTER TABLE quotes ADD COLUMN basis TEXT DEFAULT 'stake'")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_quotes_lookup
@@ -120,7 +124,12 @@ class QuoteDatabase:
                 created_at
             ))
             conn.commit()
-            return cur.lastrowid or 0
+            row_id = cur.lastrowid or 0
+            if hasattr(record, "id"):
+                record.id = row_id
+            if hasattr(record, "quote_record_id") and not getattr(record, "quote_record_id", None):
+                record.quote_record_id = f"{row_id}_{d.get('proposal_id', '')}"
+            return row_id
 
     def store_quotes_batch(self, records: List[Any]) -> int:
         """Stores multiple quotes in a single transaction."""
@@ -227,6 +236,10 @@ class QuoteDatabase:
                 return None
 
             sess_id = row["session_id"] if "session_id" in row.keys() else ""
+            row_keys = row.keys()
+            row_id = row["id"] if "id" in row_keys else None
+            rec_id = row["quote_record_id"] if ("quote_record_id" in row_keys and row["quote_record_id"]) else (f"{row_id}_{row['proposal_id']}" if row_id else None)
+            basis_val = row["basis"] if "basis" in row_keys else "stake"
             return ProposalRecord(
                 request_timestamp=row["request_timestamp"],
                 response_timestamp=row["response_timestamp"],
@@ -243,7 +256,10 @@ class QuoteDatabase:
                 quote_latency_ms=row["quote_latency_ms"],
                 collection_status=row["collection_status"],
                 api_response_metadata=row["api_response_metadata"],
-                session_id=sess_id
+                session_id=sess_id,
+                id=row_id,
+                quote_record_id=rec_id,
+                basis=basis_val
             )
 
     def get_session_quotes(self, session_id: str) -> List[ProposalRecord]:
@@ -254,8 +270,13 @@ class QuoteDatabase:
                 (session_id,)
             )
             rows = cur.fetchall()
-            return [
-                ProposalRecord(
+            result = []
+            for r in rows:
+                r_keys = r.keys()
+                row_id = r["id"] if "id" in r_keys else None
+                rec_id = r["quote_record_id"] if ("quote_record_id" in r_keys and r["quote_record_id"]) else (f"{row_id}_{r['proposal_id']}" if row_id else None)
+                basis_val = r["basis"] if "basis" in r_keys else "stake"
+                result.append(ProposalRecord(
                     request_timestamp=r["request_timestamp"],
                     response_timestamp=r["response_timestamp"],
                     market_symbol=r["market_symbol"],
@@ -271,10 +292,51 @@ class QuoteDatabase:
                     quote_latency_ms=r["quote_latency_ms"],
                     collection_status=r["collection_status"],
                     api_response_metadata=r["api_response_metadata"],
-                    session_id=r["session_id"]
-                )
-                for r in rows
-            ]
+                    session_id=r["session_id"],
+                    id=row_id,
+                    quote_record_id=rec_id,
+                    basis=basis_val
+                ))
+            return result
+
+    def get_all_quotes(self, symbol: Optional[str] = None) -> List[ProposalRecord]:
+        """Returns all recorded quotes, optionally filtered by symbol."""
+        with self._get_connection() as conn:
+            where_sql = "WHERE market_symbol = ?" if symbol else ""
+            params = (symbol,) if symbol else ()
+            cur = conn.execute(
+                f"SELECT * FROM quotes {where_sql} ORDER BY response_timestamp ASC",
+                params
+            )
+            rows = cur.fetchall()
+            result = []
+            for r in rows:
+                r_keys = r.keys()
+                row_id = r["id"] if "id" in r_keys else None
+                rec_id = r["quote_record_id"] if ("quote_record_id" in r_keys and r["quote_record_id"]) else (f"{row_id}_{r['proposal_id']}" if row_id else None)
+                basis_val = r["basis"] if "basis" in r_keys else "stake"
+                result.append(ProposalRecord(
+                    request_timestamp=r["request_timestamp"],
+                    response_timestamp=r["response_timestamp"],
+                    market_symbol=r["market_symbol"],
+                    contract_type=r["contract_type"],
+                    contract_duration=r["contract_duration"],
+                    duration_unit=r["duration_unit"],
+                    stake=r["stake"],
+                    total_payout=r["total_payout"],
+                    potential_net_profit=r["potential_net_profit"],
+                    currency=r["currency"],
+                    proposal_id=r["proposal_id"],
+                    quote_source=r["quote_source"],
+                    quote_latency_ms=r["quote_latency_ms"],
+                    collection_status=r["collection_status"],
+                    api_response_metadata=r["api_response_metadata"],
+                    session_id=r["session_id"],
+                    id=row_id,
+                    quote_record_id=rec_id,
+                    basis=basis_val
+                ))
+            return result
 
 
     def inspect_quotes(self, symbol: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:

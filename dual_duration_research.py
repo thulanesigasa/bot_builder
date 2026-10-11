@@ -21,6 +21,7 @@ Core Research Protocol:
 """
 import collections
 from enum import Enum
+import json
 import math
 import os
 from dataclasses import dataclass, field
@@ -51,6 +52,26 @@ class EvaluationMode(str, Enum):
     """Mode of economic valuation."""
     REFERENCE_SCENARIO = "REFERENCE_SCENARIO"  # Illustrative hypothetical payouts
     QUOTE_VERIFIED = "QUOTE_VERIFIED"          # Genuine matched proposal quotes
+
+
+class QuoteEvidenceStatus(str, Enum):
+    """Hierarchy of quote evidence classifications (V1.7.4.3 Section 3.5)."""
+    CONTRACT_AVAILABLE = "CONTRACT_AVAILABLE"
+    PROPOSAL_RECEIVED = "PROPOSAL_RECEIVED"
+    QUOTE_CHRONOLOGICALLY_VALID = "QUOTE_CHRONOLOGICALLY_VALID"
+    QUOTE_ECONOMICALLY_EVALUABLE = "QUOTE_ECONOMICALLY_EVALUABLE"
+    QUOTE_EXECUTION_QUALITY_VERIFIED = "QUOTE_EXECUTION_QUALITY_VERIFIED"
+    QUOTE_VALIDITY_UNVERIFIED = "QUOTE_VALIDITY_UNVERIFIED"
+    QUOTE_REJECTED = "QUOTE_REJECTED"
+
+
+class ResearchEdgeLadder(str, Enum):
+    """Authoritative Positive-EV Evidence Ladder (V1.7.4.3 Section 9)."""
+    NO_VALIDATED_POSITIVE_EV_EDGE = "NO_VALIDATED_POSITIVE_EV_EDGE"                 # Level 0
+    EXPLORATORY_POSITIVE_EV_SIGNAL = "EXPLORATORY_POSITIVE_EV_SIGNAL"               # Level 1
+    QUOTE_VERIFIED_RESEARCH_CANDIDATE = "QUOTE_VERIFIED_RESEARCH_CANDIDATE"         # Level 2
+    CONFIRMATION_REGISTERED = "CONFIRMATION_REGISTERED"                             # Level 3
+    POSITIVE_EV_EDGE_INDEPENDENTLY_CONFIRMED = "POSITIVE_EV_EDGE_INDEPENDENTLY_CONFIRMED" # Level 4
 
 
 @dataclass
@@ -95,6 +116,20 @@ class DurationMetricSummary:
     eligible_quote_decisions_count: int = 0
     missing_ev_count: int = 0
     quote_rejection_reasons: Dict[str, int] = field(default_factory=dict)
+    total_decision_points: int = 0
+    total_quotes_collected: int = 0
+    missing_quote_count: int = 0
+    future_quote_count: int = 0
+    missing_timestamp_count: int = 0
+    stale_quote_count: int = 0
+    wrong_symbol_count: int = 0
+    wrong_direction_count: int = 0
+    wrong_duration_count: int = 0
+    wrong_currency_count: int = 0
+    wrong_session_count: int = 0
+    ambiguous_proposal_count: int = 0
+    invalidated_quote_count: int = 0
+    quote_validity_unverified_count: int = 0
 
 
 @dataclass
@@ -159,12 +194,28 @@ class DualDurationEvaluator:
         evaluation_mode: EvaluationMode = EvaluationMode.REFERENCE_SCENARIO,
         quote_records: Optional[List[Any]] = None,
         min_ordinary_ev: Optional[float] = None,
-        min_conservative_ev: Optional[float] = None
+        min_conservative_ev: Optional[float] = None,
+        session_manifest: Optional[Dict[str, Any]] = None,
+        prospective_journal_records: Optional[List[Any]] = None,
+        expected_session_id: Optional[str] = None,
+        tick_records: Optional[List[Any]] = None
     ) -> DualDurationComparisonReport:
         """Evaluates all 4 configurations (2T RH, 2T RL, 5T RH, 5T RL) on the price series."""
         n = len(prices)
         if n < 35:
             raise ValueError(f"Insufficient ticks for dual duration evaluation: {n} < 35 required.")
+
+        # Section 4.1: Structural separation of replay and forward modes (Evidence Authority)
+        effective_evidence_class = evidence_class
+        evidence_authority_warning = None
+        if evidence_class in (EvidenceClass.PROSPECTIVE_SHADOW, EvidenceClass.INDEPENDENT_CONFIRMATION):
+            if not prospective_journal_records or not session_manifest:
+                effective_evidence_class = EvidenceClass.HISTORICAL_REPLAY
+                evidence_authority_warning = (
+                    f"EVIDENCE AUTHORITY FAIL-CLOSED: External claim '{evidence_class.value}' rejected. "
+                    "Historical price arrays cannot self-certify as prospective evidence without authentic pre-outcome "
+                    "journal records and verified session manifest."
+                )
 
         min_ord = self.min_ordinary_ev if min_ordinary_ev is None else min_ordinary_ev
         min_cons = self.min_conservative_ev if min_conservative_ev is None else min_conservative_ev
@@ -247,12 +298,14 @@ class DualDurationEvaluator:
                 pred_probs=y_prob,
                 payout=payout,
                 hurdle=hurdle,
-                evidence_class=evidence_class,
+                evidence_class=effective_evidence_class,
                 evaluation_mode=evaluation_mode,
                 decision_timestamps=decision_timestamps,
                 quote_records=quote_records,
                 min_ordinary_ev=min_ord,
-                min_conservative_ev=min_cons
+                min_conservative_ev=min_cons,
+                expected_session_id=expected_session_id,
+                tick_records=tick_records
             )
             metrics_dict[label] = summary
 
@@ -271,12 +324,13 @@ class DualDurationEvaluator:
         top_summary = metrics_dict[top]
         winning = top if top_summary.is_economically_positive else None
 
-        warning = (
+        bias_text = (
             "PREVENTING SELECTION BIAS: Do NOT select the winning duration based on win rate. "
             "2-tick contracts win ~25% vs 5-tick contracts ~3%, but 2-tick payouts are ~8x smaller ($7.63 vs $61.07). "
-            f"Evidence Class: {evidence_class.value}. Evaluation Mode: {evaluation_mode.value}. "
+            f"Evidence Class: {effective_evidence_class.value}. Evaluation Mode: {evaluation_mode.value}. "
             "Any candidate selected on exploratory data must be frozen and confirmed on untouched future sessions."
         )
+        warning = f"{evidence_authority_warning} {bias_text}" if evidence_authority_warning else bias_text
 
         ord_ev_str = f"${top_summary.ordinary_ev:+.4f}" if top_summary.ordinary_ev is not None else "UNAVAILABLE"
         cons_ev_str = f"{top_summary.conservative_ev_bootstrap}" if top_summary.conservative_ev_bootstrap is not None else "UNAVAILABLE"
@@ -295,7 +349,7 @@ class DualDurationEvaluator:
             winning_candidate=winning,
             selection_bias_warning=warning,
             recommendation=rec,
-            evidence_class=evidence_class.value,
+            evidence_class=effective_evidence_class.value,
             evaluation_mode=evaluation_mode.value
         )
 
@@ -313,7 +367,9 @@ class DualDurationEvaluator:
         decision_timestamps: List[float],
         quote_records: Optional[List[Any]],
         min_ordinary_ev: float = 0.0,
-        min_conservative_ev: float = 0.0
+        min_conservative_ev: float = 0.0,
+        expected_session_id: Optional[str] = None,
+        tick_records: Optional[List[Any]] = None
     ) -> DurationMetricSummary:
         n = len(outcomes)
         wins = int(sum(outcomes))
@@ -332,6 +388,8 @@ class DualDurationEvaluator:
 
         # Wilson 95% Confidence Interval for win rate
         ci_lo, ci_hi = wilson_score_interval(wins, n, confidence=0.95)
+
+        tot_quotes = len(quote_records) if quote_records else 0
 
         # Separate REFERENCE_SCENARIO and QUOTE_VERIFIED paths strictly (V1.7.4.2 Part B & C)
         if evaluation_mode == EvaluationMode.REFERENCE_SCENARIO:
@@ -408,7 +466,21 @@ class DualDurationEvaluator:
                 break_even_distribution=None,
                 eligible_quote_decisions_count=0,
                 missing_ev_count=n,
-                quote_rejection_reasons={"REFERENCE_SCENARIO": n}
+                quote_rejection_reasons={"REFERENCE_SCENARIO": n},
+                total_decision_points=n,
+                total_quotes_collected=tot_quotes,
+                missing_quote_count=n,
+                future_quote_count=0,
+                missing_timestamp_count=0,
+                stale_quote_count=0,
+                wrong_symbol_count=0,
+                wrong_direction_count=0,
+                wrong_duration_count=0,
+                wrong_currency_count=0,
+                wrong_session_count=0,
+                ambiguous_proposal_count=0,
+                invalidated_quote_count=0,
+                quote_validity_unverified_count=0
             )
 
         # QUOTE_VERIFIED mode: Per-decision matching using actual ask prices and payouts
@@ -416,7 +488,9 @@ class DualDurationEvaluator:
             duration=duration,
             direction=direction,
             decision_timestamps=decision_timestamps,
-            quote_records=quote_records
+            quote_records=quote_records,
+            expected_session_id=expected_session_id,
+            tick_records=tick_records
         )
 
         raw_cov = cov_pcts["raw"]
@@ -424,6 +498,19 @@ class DualDurationEvaluator:
         econ_cov = cov_pcts["econ"]
         exec_cov = cov_pcts["exec"]
         quote_avail_pct = exec_cov
+
+        wrong_sym = rej_reasons.get("QUOTE_MISSING_SYMBOL", 0) + rej_reasons.get("QUOTE_WRONG_SYMBOL", 0)
+        wrong_dir = rej_reasons.get("QUOTE_WRONG_DIRECTION", 0)
+        wrong_dur = rej_reasons.get("QUOTE_WRONG_DURATION", 0)
+        wrong_curr = rej_reasons.get("QUOTE_CURRENCY_MISMATCH", 0) + rej_reasons.get("QUOTE_MISSING_CURRENCY", 0)
+        wrong_sess = rej_reasons.get("QUOTE_WRONG_SESSION", 0)
+        fut_q = rej_reasons.get("QUOTE_LOOKAHEAD_REJECTED", 0)
+        miss_ts = rej_reasons.get("QUOTE_RESPONSE_TIME_MISSING", 0)
+        stale_q = rej_reasons.get("QUOTE_STALE", 0)
+        inval_q = rej_reasons.get("QUOTE_INVALIDATED_BY_INTERVENING_TICK", 0)
+        ambig_q = rej_reasons.get("QUOTE_AMBIGUOUS_PROPOSAL", 0)
+        miss_q = rej_reasons.get("NO_QUOTES_PROVIDED", 0) + rej_reasons.get("QUOTE_NO_CANDIDATES", 0)
+        unverif_q = rej_reasons.get("QUOTE_VALIDITY_UNVERIFIED", 0)
 
         eligible_indices = [idx for idx, q in enumerate(matched_quotes) if q is not None]
         m = len(eligible_indices)
@@ -470,7 +557,21 @@ class DualDurationEvaluator:
                 break_even_distribution=None,
                 eligible_quote_decisions_count=0,
                 missing_ev_count=n,
-                quote_rejection_reasons=rej_reasons
+                quote_rejection_reasons=rej_reasons,
+                total_decision_points=n,
+                total_quotes_collected=tot_quotes,
+                missing_quote_count=miss_q,
+                future_quote_count=fut_q,
+                missing_timestamp_count=miss_ts,
+                stale_quote_count=stale_q,
+                wrong_symbol_count=wrong_sym,
+                wrong_direction_count=wrong_dir,
+                wrong_duration_count=wrong_dur,
+                wrong_currency_count=wrong_curr,
+                wrong_session_count=wrong_sess,
+                ambiguous_proposal_count=ambig_q,
+                invalidated_quote_count=inval_q,
+                quote_validity_unverified_count=unverif_q
             )
 
         # Genuine per-decision calculation over eligible matched decisions
@@ -567,7 +668,21 @@ class DualDurationEvaluator:
             break_even_distribution=be_dist,
             eligible_quote_decisions_count=m,
             missing_ev_count=n - m,
-            quote_rejection_reasons=rej_reasons
+            quote_rejection_reasons=rej_reasons,
+            total_decision_points=n,
+            total_quotes_collected=tot_quotes,
+            missing_quote_count=miss_q,
+            future_quote_count=fut_q,
+            missing_timestamp_count=miss_ts,
+            stale_quote_count=stale_q,
+            wrong_symbol_count=wrong_sym,
+            wrong_direction_count=wrong_dir,
+            wrong_duration_count=wrong_dur,
+            wrong_currency_count=wrong_curr,
+            wrong_session_count=wrong_sess,
+            ambiguous_proposal_count=ambig_q,
+            invalidated_quote_count=inval_q,
+            quote_validity_unverified_count=unverif_q
         )
 
     def _match_quotes_per_decision(
@@ -576,18 +691,24 @@ class DualDurationEvaluator:
         direction: str,
         decision_timestamps: List[float],
         quote_records: Optional[List[Any]],
-        max_freshness_seconds: float = 60.0
+        max_freshness_seconds: float = 60.0,
+        expected_session_id: Optional[str] = None,
+        tick_records: Optional[List[Any]] = None,
+        max_intervening_ticks: int = 2
     ) -> Tuple[List[Optional[Dict[str, Any]]], Dict[str, float], Dict[str, int]]:
         """Matches an individually identifiable, chronological quote record to each decision point.
         
-        Strict Quote Matching Rules (V1.7.4.2 Part B):
-        - Same market symbol (self.symbol)
+        Strict Quote Matching Rules (V1.7.4.3 Section 3):
+        - Verified database identity: quote_record_id, proposal_id, or persistent id
+        - Same market symbol (self.symbol) - missing symbol fails closed
         - Same contract duration (duration)
-        - Same contract direction (direction)
-        - Valid currency ('USD')
+        - Same contract direction (direction) - missing type fails closed
+        - Explicit currency ('USD') - missing currency fails closed
         - Valid ask price and payout: ask > 0, payout > 0, ask < payout
-        - Chronological response receipt: response_timestamp <= decision_timestamp (zero lookahead tolerance)
+        - Strict causality: response_timestamp <= decision_timestamp (zero lookahead tolerance)
         - Freshness: (decision_timestamp - response_timestamp) <= max_freshness_seconds
+        - Session attribution: matches expected_session_id if provided
+        - Tick-aware invalidation: quotes invalidated by intervening market movements
         """
         n = len(decision_timestamps)
         if n == 0:
@@ -607,32 +728,73 @@ class DualDurationEvaluator:
         dir_aliases = (norm_dir, "UP" if norm_dir == "RUNHIGH" else "DOWN", "RISE" if norm_dir == "RUNHIGH" else "FALL")
 
         for t_dec in decision_timestamps:
-            # 1. Match symbol, duration, direction, currency
+            # 1. Match symbol, duration, direction, currency, identity, session
             candidates = []
+            cand_rejections = []
             for q in quote_records:
-                q_dur = getattr(q, "contract_duration", None)
-                q_type = str(getattr(q, "contract_type", "")).upper()
-                q_sym = str(getattr(q, "market_symbol", "") or getattr(q, "symbol", "")).upper()
-                q_curr = str(getattr(q, "currency", "USD")).upper()
+                # Identity check
+                q_id = getattr(q, "quote_record_id", None) or getattr(q, "id", None) or getattr(q, "proposal_id", None)
+                if not q_id or str(q_id).strip() == "" or str(q_id).strip().upper() == "NONE":
+                    cand_rejections.append("QUOTE_ID_MISSING")
+                    continue
 
-                if q_sym and q_sym != self.symbol.upper():
+                # Symbol check (fail-closed: missing symbol must NEVER default to R_75)
+                raw_sym = getattr(q, "market_symbol", None) or getattr(q, "symbol", None)
+                if not raw_sym or str(raw_sym).strip() == "":
+                    cand_rejections.append("QUOTE_MISSING_SYMBOL")
                     continue
-                if q_dur != duration:
+                q_sym = str(raw_sym).strip().upper()
+                if q_sym != self.symbol.upper():
+                    cand_rejections.append("QUOTE_WRONG_SYMBOL")
                     continue
-                if q_type not in dir_aliases:
+
+                # Currency check (fail-closed: missing currency must NEVER default to USD)
+                raw_curr = getattr(q, "currency", None)
+                if not raw_curr or str(raw_curr).strip() == "":
+                    cand_rejections.append("QUOTE_MISSING_CURRENCY")
                     continue
+                q_curr = str(raw_curr).strip().upper()
                 if q_curr != "USD":
+                    cand_rejections.append("QUOTE_CURRENCY_MISMATCH")
                     continue
+
+                # Duration check
+                q_dur = getattr(q, "contract_duration", None)
+                if q_dur is None or q_dur != duration:
+                    cand_rejections.append("QUOTE_WRONG_DURATION")
+                    continue
+
+                # Direction check
+                raw_type = getattr(q, "contract_type", None)
+                if not raw_type or str(raw_type).strip() == "":
+                    cand_rejections.append("QUOTE_WRONG_DIRECTION")
+                    continue
+                q_type = str(raw_type).strip().upper()
+                if q_type not in dir_aliases:
+                    cand_rejections.append("QUOTE_WRONG_DIRECTION")
+                    continue
+
+                # Session check (if expected_session_id is specified)
+                if expected_session_id is not None:
+                    q_sess = getattr(q, "session_id", None)
+                    s_exp = str(expected_session_id).strip()
+                    s_act = str(q_sess).strip() if q_sess else ""
+                    if not s_act or not (s_act == s_exp or s_act.startswith(s_exp) or s_exp.startswith(s_act)):
+                        cand_rejections.append("QUOTE_WRONG_SESSION")
+                        continue
+
                 candidates.append(q)
 
             if candidates:
                 raw_valid += 1
             else:
                 rejection_reasons["QUOTE_WRONG_CONTRACT_OR_SYMBOL"] += 1
+                for r in cand_rejections:
+                    rejection_reasons[r] += 1
                 matched_list.append(None)
                 continue
 
-            # 2. Chronological filter: response_timestamp <= t_dec
+            # 2. Chronological filter: response_timestamp <= t_dec (zero lookahead tolerance)
             chrono_candidates = [
                 q for q in candidates
                 if getattr(q, "response_timestamp", None) is not None
@@ -674,26 +836,83 @@ class DualDurationEvaluator:
                 q for q in econ_candidates
                 if (t_dec - getattr(q, "response_timestamp", 0.0)) <= max_freshness_seconds
             ]
-            if exec_candidates:
-                exec_valid += 1
-                # Select the most recent quote received prior to decision
-                best_q = max(exec_candidates, key=lambda q: getattr(q, "response_timestamp", 0.0))
-                b_ask = float(getattr(best_q, "ask_price", getattr(best_q, "stake", 0.0)))
-                b_pay = float(getattr(best_q, "total_payout", 0.0))
-                b_resp = float(getattr(best_q, "response_timestamp", 0.0))
-                matched_list.append({
-                    "decision_timestamp": t_dec,
-                    "quote_id": str(getattr(best_q, "proposal_id", "") or getattr(best_q, "id", "")),
-                    "response_timestamp": b_resp,
-                    "ask_price": b_ask,
-                    "total_payout": b_pay,
-                    "break_even": b_ask / b_pay,
-                    "age_seconds": t_dec - b_resp,
-                    "quote_source": getattr(best_q, "quote_source", "live_proposal")
-                })
-            else:
+            if not exec_candidates:
                 rejection_reasons["QUOTE_STALE"] += 1
                 matched_list.append(None)
+                continue
+
+            # 5. Check proposal ambiguity (duplicate proposal records at the exact same timestamp with conflicting asks/payouts)
+            resp_dict = {}
+            has_ambiguity = False
+            for q in exec_candidates:
+                pid = getattr(q, "proposal_id", None)
+                r_ts = getattr(q, "response_timestamp", None)
+                if pid and r_ts is not None:
+                    q_ask = float(getattr(q, "ask_price", getattr(q, "stake", 0.0)))
+                    q_pay = float(getattr(q, "total_payout", 0.0))
+                    key = (pid, round(float(r_ts), 4))
+                    if key in resp_dict:
+                        prev_ask, prev_pay = resp_dict[key]
+                        if abs(prev_ask - q_ask) > 1e-4 or abs(prev_pay - q_pay) > 1e-4:
+                            has_ambiguity = True
+                            break
+                    else:
+                        resp_dict[key] = (q_ask, q_pay)
+            if has_ambiguity:
+                rejection_reasons["QUOTE_AMBIGUOUS_PROPOSAL"] += 1
+                matched_list.append(None)
+                continue
+
+            # Select the most recent quote received prior to decision
+            best_q = max(exec_candidates, key=lambda q: getattr(q, "response_timestamp", 0.0))
+            b_resp = float(getattr(best_q, "response_timestamp", 0.0))
+
+            # 6. Tick-aware Invalidation / Market Continuity Check (Section 3.4)
+            if tick_records:
+                intervening = [
+                    t for t in tick_records
+                    if getattr(t, "epoch", getattr(t, "timestamp", 0.0)) > b_resp
+                    and getattr(t, "epoch", getattr(t, "timestamp", 0.0)) <= t_dec
+                ]
+                quote_spot = None
+                meta_str = getattr(best_q, "api_response_metadata", "")
+                if meta_str:
+                    try:
+                        m_obj = json.loads(meta_str)
+                        quote_spot = m_obj.get("spot")
+                    except Exception:
+                        quote_spot = None
+
+                invalidated = False
+                if quote_spot is not None and intervening:
+                    for t in intervening:
+                        p_t = getattr(t, "price", None)
+                        if p_t is not None and abs(p_t - float(quote_spot)) > 1e-5:
+                            invalidated = True
+                            break
+
+                if not invalidated and len(intervening) > max_intervening_ticks:
+                    invalidated = True
+
+                if invalidated:
+                    rejection_reasons["QUOTE_INVALIDATED_BY_INTERVENING_TICK"] += 1
+                    rejection_reasons["QUOTE_VALIDITY_UNVERIFIED"] += 1
+                    matched_list.append(None)
+                    continue
+
+            exec_valid += 1
+            b_ask = float(getattr(best_q, "ask_price", getattr(best_q, "stake", 0.0)))
+            b_pay = float(getattr(best_q, "total_payout", 0.0))
+            matched_list.append({
+                "decision_timestamp": t_dec,
+                "quote_id": str(getattr(best_q, "quote_record_id", None) or getattr(best_q, "proposal_id", "") or getattr(best_q, "id", "")),
+                "response_timestamp": b_resp,
+                "ask_price": b_ask,
+                "total_payout": b_pay,
+                "break_even": b_ask / b_pay,
+                "age_seconds": t_dec - b_resp,
+                "quote_source": getattr(best_q, "quote_source", "live_proposal")
+            })
 
         cov_pcts = {
             "raw": (raw_valid / n) * 100.0,
@@ -853,3 +1072,180 @@ class DualDurationEvaluator:
                     sens_dict[f"block_{alt_bs}"] = None
 
         return cons_ev, "SUFFICIENT_SAMPLE", sens_dict
+
+    def evaluate_prospective_session(
+        self,
+        session_id: str,
+        manifest_path: Optional[str] = None,
+        journal_db_path: Optional[str] = None,
+        quote_db_path: Optional[str] = None,
+        tick_records: Optional[List[Any]] = None
+    ) -> DualDurationComparisonReport:
+        """Evaluates a completed or active prospective session with authentic records.
+        
+        Loads:
+        1. Predictions from SQLite forward_predictions.db
+        2. Quotes from SQLite quotes.db
+        3. Session manifest from sessions.db or JSON manifest file
+        4. Validates pre-outcome journaling and strict quote provenance.
+        """
+        import sqlite3
+        from forward_session import DEFAULT_SESSIONS_DB, ForwardSessionRegistry
+        from session_reconciler import DEFAULT_FORWARD_DB, DEFAULT_QUOTES_DB
+
+        j_path = journal_db_path or DEFAULT_FORWARD_DB
+        q_path = quote_db_path or DEFAULT_QUOTES_DB
+
+        # Resolve full session_id if short prefix passed
+        target_sid = session_id
+        if len(session_id) < 32 and os.path.exists(j_path):
+            conn_temp = sqlite3.connect(j_path)
+            try:
+                row_sid = conn_temp.execute(
+                    "SELECT session_id FROM forward_predictions WHERE session_id LIKE ? LIMIT 1",
+                    (f"{session_id}%",)
+                ).fetchone()
+                if row_sid:
+                    target_sid = row_sid[0]
+            finally:
+                conn_temp.close()
+
+        # 1. Load predictions
+        preds = []
+        if os.path.exists(j_path):
+            conn = sqlite3.connect(j_path)
+            conn.row_factory = sqlite3.Row
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM forward_predictions WHERE session_id = ? ORDER BY timestamp ASC",
+                    (target_sid,)
+                ).fetchall()
+                preds = [dict(r) for r in rows]
+            finally:
+                conn.close()
+
+        # 2. Load quotes
+        quotes = []
+        if os.path.exists(q_path):
+            from quote_database import QuoteDatabase
+            q_db = QuoteDatabase(db_path=q_path)
+            quotes = q_db.get_session_quotes(target_sid)
+
+        # 3. Load session manifest
+        manifest = None
+        if manifest_path and os.path.exists(manifest_path):
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+            except Exception:
+                manifest = None
+        if not manifest:
+            try:
+                registry = ForwardSessionRegistry()
+                sess = registry.get_session(target_sid)
+                if sess:
+                    manifest = sess.to_dict()
+            except Exception:
+                manifest = None
+
+        # Fail-closed evidence classification
+        if not preds or not manifest:
+            evidence_class = EvidenceClass.HISTORICAL_REPLAY
+        else:
+            evidence_class = EvidenceClass.PROSPECTIVE_SHADOW
+
+        # If predictions exist, extract outcomes and timestamps
+        preds_2t = [p for p in preds if p.get("contract_duration") == 2]
+        preds_5t = [p for p in preds if p.get("contract_duration") == 5]
+
+        # Extract timestamps
+        dec_ts_2t = [p["timestamp"] for p in preds_2t if "timestamp" in p]
+        dec_ts_5t = [p["timestamp"] for p in preds_5t if "timestamp" in p]
+
+        # Construct outcomes and probabilities
+        def extract_series(pred_subset, direction):
+            y_true = []
+            y_prob = []
+            for p in pred_subset:
+                out_high = p.get("outcome_runhigh")
+                out_low = p.get("outcome_runlow")
+                if direction == "RUNHIGH":
+                    y_true.append(1.0 if out_high == 1 else 0.0)
+                    y_prob.append(float(p.get("prob_runhigh") or (0.25 if p.get("contract_duration") == 2 else 0.03125)))
+                else:
+                    y_true.append(1.0 if out_low == 1 else 0.0)
+                    y_prob.append(float(p.get("prob_runlow") or (0.25 if p.get("contract_duration") == 2 else 0.03125)))
+            return y_true, y_prob
+
+        outcomes_2t_rh, probs_2t_rh = extract_series(preds_2t, "RUNHIGH")
+        outcomes_2t_rl, probs_2t_rl = extract_series(preds_2t, "RUNLOW")
+        outcomes_5t_rh, probs_5t_rh = extract_series(preds_5t, "RUNHIGH")
+        outcomes_5t_rl, probs_5t_rl = extract_series(preds_5t, "RUNLOW")
+
+        hurdle_2t = self.stake / self.payout_2t if self.payout_2t > 0 else 0.0
+        hurdle_5t = self.stake / self.payout_5t if self.payout_5t > 0 else 0.0
+
+        configs = [
+            ("2T_RUNHIGH", 2, "RUNHIGH", outcomes_2t_rh, probs_2t_rh, self.payout_2t, hurdle_2t, dec_ts_2t),
+            ("2T_RUNLOW",  2, "RUNLOW",  outcomes_2t_rl, probs_2t_rl, self.payout_2t, hurdle_2t, dec_ts_2t),
+            ("5T_RUNHIGH", 5, "RUNHIGH", outcomes_5t_rh, probs_5t_rh, self.payout_5t, hurdle_5t, dec_ts_5t),
+            ("5T_RUNLOW",  5, "RUNLOW",  outcomes_5t_rl, probs_5t_rl, self.payout_5t, hurdle_5t, dec_ts_5t),
+        ]
+
+        metrics_dict: Dict[str, DurationMetricSummary] = {}
+        for label, dur, direct, y_true, y_prob, payout, hurdle, ts_list in configs:
+            summary = self._compute_metrics(
+                label=label,
+                duration=dur,
+                direction=direct,
+                outcomes=y_true,
+                pred_probs=y_prob,
+                payout=payout,
+                hurdle=hurdle,
+                evidence_class=evidence_class,
+                evaluation_mode=EvaluationMode.QUOTE_VERIFIED,
+                decision_timestamps=ts_list,
+                quote_records=quotes,
+                min_ordinary_ev=self.min_ordinary_ev,
+                min_conservative_ev=self.min_conservative_ev,
+                expected_session_id=target_sid,
+                tick_records=tick_records
+            )
+            metrics_dict[label] = summary
+
+        sorted_labels = sorted(
+            metrics_dict.keys(),
+            key=lambda k: (
+                metrics_dict[k].ordinary_ev_per_dollar
+                if metrics_dict[k].ordinary_ev_per_dollar is not None
+                else -float("inf")
+            ),
+            reverse=True
+        )
+
+        top = sorted_labels[0]
+        top_summary = metrics_dict[top]
+        winning = top if top_summary.is_economically_positive else None
+
+        rec = (
+            f"Prospective Session: {session_id}. Top Ranked: {top}. "
+            f"Economically viable: {top_summary.is_economically_positive}. "
+            f"Verdict: {top_summary.verdict}. Real-money trading remains permanently disabled."
+        )
+
+        return DualDurationComparisonReport(
+            symbol=self.symbol,
+            stream_tick_count=len(preds),
+            decision_points_count=len(preds),
+            metrics=metrics_dict,
+            economic_ranking=sorted_labels,
+            winning_candidate=winning,
+            selection_bias_warning=(
+                f"Prospective evaluation for session {session_id}. "
+                f"Evidence Class: {evidence_class.value}. Evaluation Mode: QUOTE_VERIFIED."
+            ),
+            recommendation=rec,
+            evidence_class=evidence_class.value,
+            evaluation_mode=EvaluationMode.QUOTE_VERIFIED.value
+        )
+

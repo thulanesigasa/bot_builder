@@ -35,7 +35,7 @@ class ProposalRecord:
     response_timestamp: float
     market_symbol: str
     contract_type: str         # 'RUNHIGH' or 'RUNLOW'
-    contract_duration: int     # 5
+    contract_duration: int     # 2 or 5
     duration_unit: str         # 't'
     stake: float               # Ask price / stake
     total_payout: float        # Total return on win
@@ -47,10 +47,17 @@ class ProposalRecord:
     collection_status: str     # 'QUOTE_AVAILABLE' or 'QUOTE_UNAVAILABLE'
     api_response_metadata: str = ""
     session_id: str = ""
+    id: Optional[int] = None
+    quote_record_id: Optional[str] = None
+    basis: str = "stake"
 
     @property
     def ask_price(self) -> float:
         return self.stake
+
+    @property
+    def break_even(self) -> float:
+        return self.stake / self.total_payout if self.total_payout > 0 else 0.0
 
     @property
     def implied_probability(self) -> float:
@@ -135,7 +142,9 @@ class DerivQuoteRecorder:
                     quote_latency_ms=round(latency_ms, 2),
                     collection_status="QUOTE_AVAILABLE",
                     api_response_metadata=meta,
-                    session_id=self.session_id
+                    session_id=self.session_id,
+                    quote_record_id=f"QR_{uuid.uuid4().hex[:12]}",
+                    basis="stake"
                 )
                 GLOBAL_HEALTH_MONITOR.record_quote(success=True, latency_ms=latency_ms)
                 return rec
@@ -157,7 +166,9 @@ class DerivQuoteRecorder:
                     quote_latency_ms=round(latency_ms, 2),
                     collection_status="QUOTE_UNAVAILABLE",
                     api_response_metadata=json.dumps({"error": err_msg}),
-                    session_id=self.session_id
+                    session_id=self.session_id,
+                    quote_record_id=f"QR_{uuid.uuid4().hex[:12]}",
+                    basis="stake"
                 )
                 GLOBAL_HEALTH_MONITOR.record_quote(success=False, latency_ms=latency_ms)
                 return rec
@@ -180,7 +191,9 @@ class DerivQuoteRecorder:
                 quote_latency_ms=round(latency_ms, 2),
                 collection_status="QUOTE_UNAVAILABLE",
                 api_response_metadata=json.dumps({"exception": str(e)}),
-                session_id=self.session_id
+                session_id=self.session_id,
+                quote_record_id=f"QR_{uuid.uuid4().hex[:12]}",
+                basis="stake"
             )
             GLOBAL_HEALTH_MONITOR.record_quote(success=False, latency_ms=latency_ms)
             return rec

@@ -4,7 +4,7 @@ Provides secure environment variable loading with .env support and strict safety
 """
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Dict, Any, Tuple, List
 
 
 def load_env_file(filepath: str = ".env"):
@@ -132,3 +132,40 @@ async def query_proposal_payout_async(symbol: str = "R_75", app_id: str = "1089"
     except Exception:
         pass
     return None
+
+
+LIVE_EXECUTION_DISABLED: bool = True
+
+
+def run_startup_safety_preflight(operating_mode: str = "SHADOW") -> Dict[str, Any]:
+    """Inspects the actual executable runtime configuration and rejects unsafe operating modes.
+    
+    Safety Directive (Section 1):
+    - LIVE_EXECUTION_DISABLED must be True permanently.
+    - Operating mode must be strictly in ('DATA_COLLECTION_ONLY', 'SHADOW', 'PAPER').
+    - Real-money purchase endpoints or environment flags raise RuntimeError immediately.
+    """
+    from datetime import datetime, timezone
+    mode = str(operating_mode).upper()
+    allowed_modes = ("DATA_COLLECTION_ONLY", "SHADOW", "PAPER")
+    if mode not in allowed_modes:
+        raise RuntimeError(f"Unsafe operating mode '{operating_mode}' rejected. Must be one of {allowed_modes}.")
+
+    if DEFAULT_CONFIG.live_execution_disabled is not True or LIVE_EXECUTION_DISABLED is not True:
+        raise RuntimeError("Safety invariant violated: LIVE_EXECUTION_DISABLED must be True.")
+
+    # Inspect environment for any unsafe attempt to enable real-money trading
+    unsafe_env_vars = ["ENABLE_REAL_MONEY_TRADING", "ENABLE_LIVE_PURCHASES", "DERIV_LIVE_TOKEN", "LIVE_EXECUTION_ENABLED", "DERIV_LIVE_EXECUTION"]
+    for var in unsafe_env_vars:
+        val = os.environ.get(var, "").strip().lower()
+        if val in ("1", "true", "yes"):
+            raise RuntimeError(f"Unsafe runtime environment variable detected: {var}={val}. Real-money trading is permanently prohibited.")
+
+    return {
+        "status": "SAFETY_PREFLIGHT_PASSED",
+        "live_execution_disabled": True,
+        "operating_mode": mode,
+        "safety_invariant": "ZERO_REAL_MONEY_TRADING_ENFORCED",
+        "timestamp_utc": datetime.now(timezone.utc).isoformat()
+    }
+

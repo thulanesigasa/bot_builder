@@ -1,0 +1,385 @@
+{
+  "release": "V1.7.4.3",
+  "timestamp_utc": "2026-10-11T20:11:00Z",
+  "symbol": "R_75",
+  "safety_invariant": {
+    "LIVE_EXECUTION_DISABLED": true,
+    "mode": "SHADOW"
+  },
+  "sessions": {
+    "preflight_60s": {
+      "session_id": "7b82fef5-fc65-4b38-9750-251aae55395d",
+      "evidence_class": "PROSPECTIVE_SHADOW",
+      "evaluation_mode": "QUOTE_VERIFIED",
+      "stream_tick_count": 34,
+      "decision_points_count": 34,
+      "economic_ranking": [
+        "5T_RUNHIGH",
+        "5T_RUNLOW",
+        "2T_RUNHIGH",
+        "2T_RUNLOW"
+      ],
+      "winning_candidate": null,
+      "recommendation": "Prospective Session: 7b82fef5. Top Ranked: 5T_RUNHIGH. Economically viable: False. Verdict: INSUFFICIENT_EVIDENCE. Real-money trading remains permanently disabled.",
+      "configurations": {
+        "2T_RUNHIGH": {
+          "duration_ticks": 2,
+          "direction": "RUNHIGH",
+          "total_predictions": 17,
+          "resolved_outcomes": 17,
+          "wins": 0,
+          "losses": 17,
+          "empirical_win_rate": 0.0,
+          "win_rate_ci_95": [
+            0.0,
+            0.18432
+          ],
+          "mean_predicted_prob": 0.25,
+          "calibration_ece": 0.25,
+          "brier_score": 0.0625,
+          "brier_skill_score": 0.0,
+          "reference_break_even_hurdle": 0.26212,
+          "mean_actual_ask_price": 2.0,
+          "mean_actual_payout": 7.63,
+          "mean_actual_break_even": 0.26212,
+          "eligible_quote_count": 17,
+          "coverage": {
+            "raw_pct": 100.0,
+            "chronological_pct": 100.0,
+            "economic_pct": 100.0,
+            "execution_quality_pct": 100.0
+          },
+          "ordinary_ev": -0.0925,
+          "ordinary_ev_per_dollar": -0.0463,
+          "conservative_ev_bootstrap": null,
+          "bootstrap_uncertainty_status": "INSUFFICIENT_SAMPLE",
+          "verdict": "INSUFFICIENT_EVIDENCE",
+          "is_economically_positive": false,
+          "rejection_accounting": {
+            "stale_quotes": 0,
+            "wrong_duration": 0,
+            "wrong_direction": 0,
+            "missing_quote": 0,
+            "invalidated_intervening_tick": 0,
+            "unverified_validity": 0
+          }
+        },
+        "2T_RUNLOW": {
+          "duration_ticks": 2,
+          "direction": "RUNLOW",
+          "total_predictions": 17,
+          "resolved_outcomes": 17,
+          "wins": 0,
+          "losses": 17,
+          "empirical_win_rate": 0.0,
+          "win_rate_ci_95": [
+            0.0,
+            0.18432
+          ],
+          "mean_predicted_prob": 0.25,
+          "calibration_ece": 0.25,
+          "brier_score": 0.0625,
+          "brier_skill_score": 0.0,
+          "reference_break_even_hurdle": 0.26212,
+          "mean_actual_ask_price": 2.0,
+          "mean_actual_payout": 7.63,
+          "mean_actual_break_even": 0.26212,
+          "eligible_quote_count": 17,
+          "coverage": {
+            "raw_pct": 100.0,
+            "chronological_pct": 100.0,
+            "economic_pct": 100.0,
+            "execution_quality_pct": 100.0
+          },
+          "ordinary_ev": -0.0925,
+          "ordinary_ev_per_dollar": -0.0463,
+          "conservative_ev_bootstrap": null,
+          "bootstrap_uncertainty_status": "INSUFFICIENT_SAMPLE",
+          "verdict": "INSUFFICIENT_EVIDENCE",
+          "is_economically_positive": false,
+          "rejection_accounting": {
+            "stale_quotes": 0,
+            "wrong_duration": 0,
+            "wrong_direction": 0,
+            "missing_quote": 0,
+            "invalidated_intervening_tick": 0,
+            "unverified_validity": 0
+          }
+        },
+        "5T_RUNHIGH": {
+          "duration_ticks": 5,
+          "direction": "RUNHIGH",
+          "total_predictions": 17,
+          "resolved_outcomes": 17,
+          "wins": 0,
+          "losses": 17,
+          "empirical_win_rate": 0.0,
+          "win_rate_ci_95": [
+            0.0,
+            0.18432
+          ],
+          "mean_predicted_prob": 0.03125,
+          "calibration_ece": 0.03125,
+          "brier_score": 0.00098,
+          "brier_skill_score": 0.0,
+          "reference_break_even_hurdle": 0.03275,
+          "mean_actual_ask_price": 2.0,
+          "mean_actual_payout": 61.07,
+          "mean_actual_break_even": 0.03275,
+          "eligible_quote_count": 17,
+          "coverage": {
+            "raw_pct": 100.0,
+            "chronological_pct": 100.0,
+            "economic_pct": 100.0,
+            "execution_quality_pct": 100.0
+          },
+          "ordinary_ev": -0.0916,
+          "ordinary_ev_per_dollar": -0.0458,
+          "conservative_ev_bootstrap": null,
+          "bootstrap_uncertainty_status": "INSUFFICIENT_SAMPLE",
+          "verdict": "INSUFFICIENT_EVIDENCE",
+          "is_economically_positive": false,
+          "rejection_accounting": {
+            "stale_quotes": 0,
+            "wrong_duration": 0,
+            "wrong_direction": 0,
+            "missing_quote": 0,
+            "invalidated_intervening_tick": 0,
+            "unverified_validity": 0
+          }
+        },
+        "5T_RUNLOW": {
+          "duration_ticks": 5,
+          "direction": "RUNLOW",
+          "total_predictions": 17,
+          "resolved_outcomes": 17,
+          "wins": 0,
+          "losses": 17,
+          "empirical_win_rate": 0.0,
+          "win_rate_ci_95": [
+            0.0,
+            0.18432
+          ],
+          "mean_predicted_prob": 0.03125,
+          "calibration_ece": 0.03125,
+          "brier_score": 0.00098,
+          "brier_skill_score": 0.0,
+          "reference_break_even_hurdle": 0.03275,
+          "mean_actual_ask_price": 2.0,
+          "mean_actual_payout": 61.07,
+          "mean_actual_break_even": 0.03275,
+          "eligible_quote_count": 17,
+          "coverage": {
+            "raw_pct": 100.0,
+            "chronological_pct": 100.0,
+            "economic_pct": 100.0,
+            "execution_quality_pct": 100.0
+          },
+          "ordinary_ev": -0.0916,
+          "ordinary_ev_per_dollar": -0.0458,
+          "conservative_ev_bootstrap": null,
+          "bootstrap_uncertainty_status": "INSUFFICIENT_SAMPLE",
+          "verdict": "INSUFFICIENT_EVIDENCE",
+          "is_economically_positive": false,
+          "rejection_accounting": {
+            "stale_quotes": 0,
+            "wrong_duration": 0,
+            "wrong_direction": 0,
+            "missing_quote": 0,
+            "invalidated_intervening_tick": 0,
+            "unverified_validity": 0
+          }
+        }
+      }
+    },
+    "paired_shadow_300s": {
+      "session_id": "c14ac5fb-afaf-440c-ad4e-1a2187f0c42e",
+      "evidence_class": "PROSPECTIVE_SHADOW",
+      "evaluation_mode": "QUOTE_VERIFIED",
+      "stream_tick_count": 272,
+      "decision_points_count": 272,
+      "economic_ranking": [
+        "5T_RUNHIGH",
+        "5T_RUNLOW",
+        "2T_RUNHIGH",
+        "2T_RUNLOW"
+      ],
+      "winning_candidate": null,
+      "recommendation": "Prospective Session: c14ac5fb. Top Ranked: 5T_RUNHIGH. Economically viable: False. Verdict: FAILED_ECONOMIC_HURDLE. Real-money trading remains permanently disabled.",
+      "configurations": {
+        "2T_RUNHIGH": {
+          "duration_ticks": 2,
+          "direction": "RUNHIGH",
+          "total_predictions": 136,
+          "resolved_outcomes": 136,
+          "wins": 0,
+          "losses": 136,
+          "empirical_win_rate": 0.0,
+          "win_rate_ci_95": [
+            0.0,
+            0.02747
+          ],
+          "mean_predicted_prob": 0.25,
+          "calibration_ece": 0.25,
+          "brier_score": 0.0625,
+          "brier_skill_score": 0.0,
+          "reference_break_even_hurdle": 0.26212,
+          "mean_actual_ask_price": 2.0,
+          "mean_actual_payout": 7.63,
+          "mean_actual_break_even": 0.26212,
+          "eligible_quote_count": 136,
+          "coverage": {
+            "raw_pct": 100.0,
+            "chronological_pct": 100.0,
+            "economic_pct": 100.0,
+            "execution_quality_pct": 100.0
+          },
+          "ordinary_ev": -0.0925,
+          "ordinary_ev_per_dollar": -0.0463,
+          "conservative_ev_bootstrap": -2.0,
+          "bootstrap_uncertainty_status": "SUFFICIENT_SAMPLE",
+          "verdict": "FAILED_ECONOMIC_HURDLE",
+          "is_economically_positive": false,
+          "rejection_accounting": {
+            "stale_quotes": 0,
+            "wrong_duration": 0,
+            "wrong_direction": 0,
+            "missing_quote": 0,
+            "invalidated_intervening_tick": 0,
+            "unverified_validity": 0
+          }
+        },
+        "2T_RUNLOW": {
+          "duration_ticks": 2,
+          "direction": "RUNLOW",
+          "total_predictions": 136,
+          "resolved_outcomes": 136,
+          "wins": 0,
+          "losses": 136,
+          "empirical_win_rate": 0.0,
+          "win_rate_ci_95": [
+            0.0,
+            0.02747
+          ],
+          "mean_predicted_prob": 0.25,
+          "calibration_ece": 0.25,
+          "brier_score": 0.0625,
+          "brier_skill_score": 0.0,
+          "reference_break_even_hurdle": 0.26212,
+          "mean_actual_ask_price": 2.0,
+          "mean_actual_payout": 7.63,
+          "mean_actual_break_even": 0.26212,
+          "eligible_quote_count": 136,
+          "coverage": {
+            "raw_pct": 100.0,
+            "chronological_pct": 100.0,
+            "economic_pct": 100.0,
+            "execution_quality_pct": 100.0
+          },
+          "ordinary_ev": -0.0925,
+          "ordinary_ev_per_dollar": -0.0463,
+          "conservative_ev_bootstrap": -2.0,
+          "bootstrap_uncertainty_status": "SUFFICIENT_SAMPLE",
+          "verdict": "FAILED_ECONOMIC_HURDLE",
+          "is_economically_positive": false,
+          "rejection_accounting": {
+            "stale_quotes": 0,
+            "wrong_duration": 0,
+            "wrong_direction": 0,
+            "missing_quote": 0,
+            "invalidated_intervening_tick": 0,
+            "unverified_validity": 0
+          }
+        },
+        "5T_RUNHIGH": {
+          "duration_ticks": 5,
+          "direction": "RUNHIGH",
+          "total_predictions": 136,
+          "resolved_outcomes": 136,
+          "wins": 0,
+          "losses": 136,
+          "empirical_win_rate": 0.0,
+          "win_rate_ci_95": [
+            0.0,
+            0.02747
+          ],
+          "mean_predicted_prob": 0.03125,
+          "calibration_ece": 0.03125,
+          "brier_score": 0.00098,
+          "brier_skill_score": 0.0,
+          "reference_break_even_hurdle": 0.03275,
+          "mean_actual_ask_price": 2.0,
+          "mean_actual_payout": 61.07,
+          "mean_actual_break_even": 0.03275,
+          "eligible_quote_count": 136,
+          "coverage": {
+            "raw_pct": 100.0,
+            "chronological_pct": 100.0,
+            "economic_pct": 100.0,
+            "execution_quality_pct": 100.0
+          },
+          "ordinary_ev": -0.0916,
+          "ordinary_ev_per_dollar": -0.0458,
+          "conservative_ev_bootstrap": -2.0,
+          "bootstrap_uncertainty_status": "SUFFICIENT_SAMPLE",
+          "verdict": "FAILED_ECONOMIC_HURDLE",
+          "is_economically_positive": false,
+          "rejection_accounting": {
+            "stale_quotes": 0,
+            "wrong_duration": 0,
+            "wrong_direction": 0,
+            "missing_quote": 0,
+            "invalidated_intervening_tick": 0,
+            "unverified_validity": 0
+          }
+        },
+        "5T_RUNLOW": {
+          "duration_ticks": 5,
+          "direction": "RUNLOW",
+          "total_predictions": 136,
+          "resolved_outcomes": 136,
+          "wins": 0,
+          "losses": 136,
+          "empirical_win_rate": 0.0,
+          "win_rate_ci_95": [
+            0.0,
+            0.02747
+          ],
+          "mean_predicted_prob": 0.03125,
+          "calibration_ece": 0.03125,
+          "brier_score": 0.00098,
+          "brier_skill_score": 0.0,
+          "reference_break_even_hurdle": 0.03275,
+          "mean_actual_ask_price": 2.0,
+          "mean_actual_payout": 61.07,
+          "mean_actual_break_even": 0.03275,
+          "eligible_quote_count": 136,
+          "coverage": {
+            "raw_pct": 100.0,
+            "chronological_pct": 100.0,
+            "economic_pct": 100.0,
+            "execution_quality_pct": 100.0
+          },
+          "ordinary_ev": -0.0916,
+          "ordinary_ev_per_dollar": -0.0458,
+          "conservative_ev_bootstrap": -2.0,
+          "bootstrap_uncertainty_status": "SUFFICIENT_SAMPLE",
+          "verdict": "FAILED_ECONOMIC_HURDLE",
+          "is_economically_positive": false,
+          "rejection_accounting": {
+            "stale_quotes": 0,
+            "wrong_duration": 0,
+            "wrong_direction": 0,
+            "missing_quote": 0,
+            "invalidated_intervening_tick": 0,
+            "unverified_validity": 0
+          }
+        }
+      }
+    }
+  },
+  "positive_ev_evidence_ladder": {
+    "level_0_rejection": "NO_VALIDATED_POSITIVE_EV_EDGE",
+    "reason": "All 4 configurations in both live prospective sessions failed the economic break-even hurdle with negative ordinary EV and negative bootstrap lower bound."
+  }
+}
