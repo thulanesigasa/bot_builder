@@ -53,7 +53,7 @@ class QuoteDatabase:
                 CREATE TABLE IF NOT EXISTS quotes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     request_timestamp REAL NOT NULL,
-                    response_timestamp REAL NOT NULL,
+                    response_timestamp REAL,
                     market_symbol TEXT NOT NULL,
                     contract_type TEXT NOT NULL,
                     contract_duration INTEGER NOT NULL DEFAULT 5,
@@ -101,8 +101,8 @@ class QuoteDatabase:
                     quote_latency_ms, collection_status, api_response_metadata, session_id, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                float(d.get("request_timestamp", 0.0)),
-                float(d.get("response_timestamp", 0.0)),
+                float(d["request_timestamp"]) if d.get("request_timestamp") is not None else None,
+                float(d["response_timestamp"]) if d.get("response_timestamp") is not None else None,
                 str(d.get("market_symbol", "R_75")),
                 str(d.get("contract_type", "RUNHIGH")).upper(),
                 int(d.get("contract_duration", 5)),
@@ -131,8 +131,8 @@ class QuoteDatabase:
         for r in records:
             d = asdict(r) if hasattr(r, "__dataclass_fields__") else dict(r)
             rows.append((
-                float(d.get("request_timestamp", 0.0)),
-                float(d.get("response_timestamp", 0.0)),
+                float(d["request_timestamp"]) if d.get("request_timestamp") is not None else None,
+                float(d["response_timestamp"]) if d.get("response_timestamp") is not None else None,
                 str(d.get("market_symbol", "R_75")),
                 str(d.get("contract_type", "RUNHIGH")).upper(),
                 int(d.get("contract_duration", 5)),

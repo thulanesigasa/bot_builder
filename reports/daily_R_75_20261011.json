@@ -1,7 +1,7 @@
 {
   "report_type": "DAILY",
   "period_utc": "2026-10-11 (last 24h)",
-  "generated_at": "2026-10-11T15:16:12+00:00",
+  "generated_at": "2026-10-11T16:11:07+00:00",
   "safety": {
     "live_money_trading_disabled": true,
     "purchasing_allowed": false,
@@ -79,14 +79,14 @@
     "brier_score_runhigh": 0.0361,
     "brier_score_runlow": 0.02197,
     "per_state_breakdown": {},
-    "generated_at": "2026-10-11T15:16:12.188641+00:00"
+    "generated_at": "2026-10-11T16:11:07.124272+00:00"
   },
   "system_health": {
     "ticks": {
       "total_ticks": 468,
-      "tick_rate_per_sec": 7.8,
+      "tick_rate_per_sec": 7.22,
       "last_tick_epoch": 240,
-      "last_tick_age_seconds": 35.97,
+      "last_tick_age_seconds": 45.77,
       "last_tick_latency_ms": 0.0,
       "duplicate_ticks": 0,
       "gap_count": 0

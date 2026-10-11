@@ -1,21 +1,20 @@
-# Deriv 5-Tick Quantitative Research & Statistical Validation Framework (V1.7.2.1)
+# Deriv 5-Tick Quantitative Research & Statistical Validation Framework (V1.7.3)
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Testing](https://img.shields.io/badge/pytest-244%20passed%20(100%25)-0284C7)
+![Testing](https://img.shields.io/badge/pytest-257%20passed%20(100%25)-0284C7)
 ![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-0284C7)
 ![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v1%2Foptions%20Verified-0284C7)
 ![Safety](https://img.shields.io/badge/Safety-Real--Money%20Trading%20DISABLED-0F172A)
-![Economic Integrity](https://img.shields.io/badge/Economic%20Integrity-Zero%20Benchmark%20Fallbacks-0284C7)
-![Metrics Engine](https://img.shields.io/badge/Metrics%20Engine-Canonical%20%7C%20SHA--256%20Checksummed-0284C7)
+![Quote Chronology](https://img.shields.io/badge/Quote%20Chronology-Strict%200.0s%20Tolerance-0284C7)
+![Contract Spec](https://img.shields.io/badge/Contract%20Spec-Canonical%205--Movement%20Monotonic-0284C7)
+![Quote Coverage](https://img.shields.io/badge/Quote%20Coverage-4%20Distinct%20Categories-0284C7)
 ![Confirmation Authority](https://img.shields.io/badge/Confirmation%20Authority-Unified%20ForwardConfirmationGate-0284C7)
-![Manifest Admission](https://img.shields.io/badge/Admission-Pre--Registered%20Frozen%20Manifest%20Mandatory-0284C7)
-![Stage Integrity](https://img.shields.io/badge/Stage%20Integrity-Immutable%20Registered%20Stages-0284C7)
-![Reconciliation](https://img.shields.io/badge/Reconciliation-6--Dimension%20Automated%20Engine-0284C7)
-![Architecture](https://img.shields.io/badge/Architecture-V1.7.2.1%20Hotfix%20%26%20Economic%20Integrity-0284C7)
+![Reconciliation](https://img.shields.io/badge/Reconciliation-6%20Separated%20Integrity%20Dimensions-0284C7)
+![Architecture](https://img.shields.io/badge/Architecture-V1.7.3%20Strict%20Chronology%20%26%20Settlement-0284C7)
 
 A rigorous quantitative research, frozen model inference, and real-market forward observation system engineered for Deriv 5-tick contracts—specifically modeling RUNHIGH (Only Ups) and RUNLOW (Only Downs) where every successive tick after the entry spot must move strictly in the contract direction.
 
-V1.7.2.1 delivers a targeted release hotfix: resolves runtime typing import errors under Python 3.14 (`Tuple`, `Any`), completely purges residual economic benchmark fallbacks (`3.277%`, `3.28%`), reconciles authoritative database session counts (6 registered sessions), verifies single-authority confirmation gate integrity, and validates all operational CLI commands.
+V1.7.3 establishes strict causal quote chronology (0.0s future-quote allowance eliminated), taxonomic quote rejection reasons, canonical 5-movement contract outcome specification (`contract_specification.py`), 6 separated reconciliation integrity dimensions, and 4 distinct quote coverage categories. Real-money live execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`).
 
 ---
 
@@ -253,6 +252,14 @@ python dashboard.py --port 8088
 Navigate to `http://127.0.0.1:8088`.
 
 ---
+
+## Authoritative V1.7.3 Quantitative Audit & Validation Package
+
+The following reports document the V1.7.3 mathematical verification and causal audit:
+- [V1_7_3_QUOTE_CHRONOLOGY_AUDIT.md](file:///d:/workspace_programming/bot_builder/V1_7_3_QUOTE_CHRONOLOGY_AUDIT.md): Causal quote availability audit, zero future quotes, root cause analysis of Deriv proposal ID reuse, and 4 distinct quote coverage metrics.
+- [V1_7_3_CONTRACT_OUTCOME_AUDIT.md](file:///d:/workspace_programming/bot_builder/V1_7_3_CONTRACT_OUTCOME_AUDIT.md): Official Deriv documentation references, canonical 5-movement monotonic contract definition, and 0-discrepancy raw tick re-computation.
+- [V1_7_3_FORWARD_EVIDENCE_REPORT.md](file:///d:/workspace_programming/bot_builder/V1_7_3_FORWARD_EVIDENCE_REPORT.md): Recomputed probability calibration, dependence-aware block-bootstrap uncertainty ($0.52\%$ lower bound), genuine quote-based EV, and 0 PAPER approvals.
+- [V1_7_3_RELEASE_VALIDATION_REPORT.md](file:///d:/workspace_programming/bot_builder/V1_7_3_RELEASE_VALIDATION_REPORT.md): Complete test suite results (257 passing tests), clean ZIP extraction verification, and operational readiness.
 
 ## Controlled Forward Research Evidence Package
 

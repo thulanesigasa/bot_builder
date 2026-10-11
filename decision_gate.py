@@ -22,6 +22,9 @@ import math
 
 from config import DEFAULT_CONFIG
 
+# Permanent Safety Invariant (Part G): Real-money live trading disabled
+LIVE_EXECUTION_DISABLED: bool = True
+
 
 class DecisionReason(str, Enum):
     """Taxonomic reason codes for paper trade evaluation."""
@@ -35,7 +38,18 @@ class DecisionReason(str, Enum):
     FEATURE_MISMATCH = "FEATURE_MISMATCH"
     NO_VALIDATED_EDGE = "NO_VALIDATED_EDGE"
     QUOTE_UNAVAILABLE = "QUOTE_UNAVAILABLE"
+    QUOTE_RESPONSE_TIME_MISSING = "QUOTE_RESPONSE_TIME_MISSING"
+    QUOTE_RECEIVED_AFTER_DECISION = "QUOTE_RECEIVED_AFTER_DECISION"
     QUOTE_STALE = "QUOTE_STALE"
+    QUOTE_WRONG_SYMBOL = "QUOTE_WRONG_SYMBOL"
+    QUOTE_WRONG_CONTRACT = "QUOTE_WRONG_CONTRACT"
+    QUOTE_WRONG_DURATION = "QUOTE_WRONG_DURATION"
+    QUOTE_CURRENCY_MISMATCH = "QUOTE_CURRENCY_MISMATCH"
+    QUOTE_PRICE_INVALID = "QUOTE_PRICE_INVALID"
+    QUOTE_PAYOUT_INVALID = "QUOTE_PAYOUT_INVALID"
+    QUOTE_SESSION_MISMATCH = "QUOTE_SESSION_MISMATCH"
+    QUOTE_PROVENANCE_UNVERIFIED = "QUOTE_PROVENANCE_UNVERIFIED"
+    QUOTE_CLOCK_COMPARISON_UNCERTAIN = "QUOTE_CLOCK_COMPARISON_UNCERTAIN"
     QUOTE_INVALID = "QUOTE_INVALID"
     QUOTE_TIMESTAMP_INVALID = "QUOTE_TIMESTAMP_INVALID"
     QUOTE_LOOKAHEAD_REJECTED = "QUOTE_LOOKAHEAD_REJECTED"
@@ -204,30 +218,44 @@ def evaluate_paper_trade_eligibility(
 
     if ask_price is None or total_payout is None or ask_price <= 0.0 or total_payout <= 0.0:
         reasons.append(DecisionReason.QUOTE_UNAVAILABLE.value)
+        if ask_price is not None and ask_price <= 0.0:
+            reasons.append(DecisionReason.QUOTE_PRICE_INVALID.value)
+        if total_payout is not None and total_payout <= 0.0:
+            reasons.append(DecisionReason.QUOTE_PAYOUT_INVALID.value)
     elif math.isnan(ask_price) or math.isnan(total_payout) or math.isinf(ask_price) or math.isinf(total_payout):
         reasons.append(DecisionReason.QUOTE_INVALID.value)
+        reasons.append(DecisionReason.QUOTE_PRICE_INVALID.value)
     elif ask_price >= total_payout:
         reasons.append(DecisionReason.QUOTE_INVALID.value)
+        reasons.append(DecisionReason.QUOTE_PRICE_INVALID.value)
     else:
         # Strict Quote Compatibility Verification
         if quote_symbol is not None and quote_symbol != symbol:
             reasons.append(DecisionReason.QUOTE_INVALID.value)
+            reasons.append(DecisionReason.QUOTE_WRONG_SYMBOL.value)
         if quote_duration is not None and quote_duration != duration_ticks:
             reasons.append(DecisionReason.QUOTE_INVALID.value)
+            reasons.append(DecisionReason.QUOTE_WRONG_DURATION.value)
         if quote_currency is not None and quote_currency != "USD":
             reasons.append(DecisionReason.QUOTE_INVALID.value)
+            reasons.append(DecisionReason.QUOTE_CURRENCY_MISMATCH.value)
         if quote_contract_type is not None:
             qc_norm = quote_contract_type.upper()
             expected_aliases = (norm_dir, "UP" if norm_dir == "RUNHIGH" else "DOWN", "RISE" if norm_dir == "RUNHIGH" else "FALL")
             if qc_norm not in expected_aliases:
                 reasons.append(DecisionReason.QUOTE_INVALID.value)
+                reasons.append(DecisionReason.QUOTE_WRONG_CONTRACT.value)
 
         # Strict Timestamp Verification (V1.6.1 Section 5)
         # Decision requires: quote_request <= quote_response <= decision_epoch
         if quote_request_timestamp is None or quote_response_timestamp is None or current_epoch is None or current_epoch <= 0:
             reasons.append(DecisionReason.QUOTE_TIMESTAMP_INVALID.value)
+            if quote_response_timestamp is None:
+                reasons.append(DecisionReason.QUOTE_RESPONSE_TIME_MISSING.value)
         elif math.isnan(quote_request_timestamp) or math.isnan(quote_response_timestamp) or math.isnan(current_epoch):
             reasons.append(DecisionReason.QUOTE_TIMESTAMP_INVALID.value)
+            if math.isnan(quote_response_timestamp):
+                reasons.append(DecisionReason.QUOTE_RESPONSE_TIME_MISSING.value)
         elif quote_request_timestamp <= 0 or quote_response_timestamp <= 0:
             reasons.append(DecisionReason.QUOTE_TIMESTAMP_INVALID.value)
         elif quote_response_timestamp < quote_request_timestamp:
@@ -236,6 +264,7 @@ def evaluate_paper_trade_eligibility(
         elif quote_response_timestamp > current_epoch or quote_request_timestamp > current_epoch:
             # Lookahead: quote arrived after decision or timestamp is in the future
             reasons.append(DecisionReason.QUOTE_LOOKAHEAD_REJECTED.value)
+            reasons.append(DecisionReason.QUOTE_RECEIVED_AFTER_DECISION.value)
         else:
             # Valid timestamps: enforce freshness window
             quote_age = current_epoch - quote_response_timestamp
