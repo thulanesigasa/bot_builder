@@ -1,48 +1,67 @@
 {
   "report_type": "DAILY",
   "period_utc": "2026-10-11 (last 24h)",
-  "generated_at": "2026-10-11T14:42:05+00:00",
+  "generated_at": "2026-10-11T15:16:12+00:00",
   "safety": {
     "live_money_trading_disabled": true,
     "purchasing_allowed": false,
     "declaration": "REAL-MONEY TRADING DISABLED. All metrics are non-purchasing forward research observations."
   },
-  "sessions_today": 0,
+  "sessions_today": 2,
   "session_accounting": {
-    "total_registered_sessions": 6,
-    "sessions_in_window": 0,
-    "exploratory_sessions_count": 6,
+    "total_registered_sessions": 8,
+    "sessions_in_window": 2,
+    "exploratory_sessions_count": 8,
     "confirmation_sessions_count": 0,
-    "completed_sessions_count": 6,
-    "reconciled_sessions_count": 4
+    "completed_sessions_count": 8,
+    "reconciled_sessions_count": 6
   },
-  "session_summary": [],
+  "session_summary": [
+    {
+      "session_id": "413bbee4",
+      "mode": "SHADOW",
+      "status": "COMPLETED",
+      "ticks": 145,
+      "predictions": 134,
+      "resolved": 129,
+      "pnl": 0.0
+    },
+    {
+      "session_id": "ca00735b",
+      "mode": "SHADOW",
+      "status": "COMPLETED",
+      "ticks": 28,
+      "predictions": 0,
+      "resolved": 0,
+      "pnl": 0.0
+    }
+  ],
   "lifecycle_counts": {
-    "quotes_recorded": 384,
-    "predictions_generated": 1763,
-    "predictions_persisted": 1763,
-    "outcomes_resolved": 1742,
+    "quotes_recorded": 544,
+    "predictions_generated": 1897,
+    "predictions_persisted": 1897,
+    "outcomes_resolved": 1871,
     "outcomes_pending": 0,
     "outcomes_incomplete": 8,
-    "outcomes_data_gap": 7,
+    "outcomes_data_gap": 12,
     "outcomes_unverified": 6
   },
   "statistical_evidence": {
     "runhigh_estimated_win_prob": 0.03278,
     "runlow_estimated_win_prob": 0.02978,
-    "runhigh_observed_win_prob": 0.03731,
-    "runlow_observed_win_prob": 0.02124,
-    "brier_score_runhigh": 0.036,
-    "brier_score_runlow": 0.02083,
-    "calibration_error_runhigh": 0.00453,
-    "calibration_error_runlow": 0.00854,
-    "genuine_quote_coverage_pct": 35.05
+    "runhigh_observed_win_prob": 0.03741,
+    "runlow_observed_win_prob": 0.02245,
+    "brier_score_runhigh": 0.0361,
+    "brier_score_runlow": 0.02197,
+    "calibration_error_runhigh": 0.00463,
+    "calibration_error_runlow": 0.00733,
+    "genuine_quote_coverage_pct": 39.64
   },
   "aggregate_economic_performance": {
     "session_id": null,
     "symbol": "R_75",
     "mode": "ALL",
-    "total_predictions": 1763,
+    "total_predictions": 1897,
     "paper_trade_signals": 0,
     "resolved_trades": 0,
     "wins": 0,
@@ -53,21 +72,21 @@
     "std_pnl_per_trade": null,
     "sharpe_ratio": null,
     "max_drawdown": 0.0,
-    "quote_coverage_pct": 35.05,
+    "quote_coverage_pct": 39.64,
     "predicted_ev_mean": null,
     "realized_ev_mean": null,
     "ev_accuracy_error": null,
-    "brier_score_runhigh": 0.036,
-    "brier_score_runlow": 0.02083,
+    "brier_score_runhigh": 0.0361,
+    "brier_score_runlow": 0.02197,
     "per_state_breakdown": {},
-    "generated_at": "2026-10-11T14:42:05.676528+00:00"
+    "generated_at": "2026-10-11T15:16:12.188641+00:00"
   },
   "system_health": {
     "ticks": {
       "total_ticks": 468,
       "tick_rate_per_sec": 7.8,
       "last_tick_epoch": 240,
-      "last_tick_age_seconds": 38.17,
+      "last_tick_age_seconds": 35.97,
       "last_tick_latency_ms": 0.0,
       "duplicate_ticks": 0,
       "gap_count": 0

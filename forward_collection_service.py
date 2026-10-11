@@ -258,7 +258,7 @@ class ForwardCollectionService:
         GLOBAL_HEALTH_MONITOR.update_connection_status("CONNECTING")
 
         print(f"\n{'=' * 65}")
-        print(f"  DERIV FORWARD COLLECTION SERVICE — V1.7")
+        print(f"  DERIV FORWARD COLLECTION SERVICE — V1.7.2.1")
         print(f"{'=' * 65}")
         print(f"  Symbol           : {self.symbol}")
         print(f"  Mode             : {self.mode}")
@@ -422,9 +422,10 @@ class ForwardCollectionService:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sustained Forward Collection Service (V1.6.3)")
+    parser = argparse.ArgumentParser(description="Sustained Forward Collection Service (V1.7.2.1)")
     parser.add_argument("symbol", nargs="?", default="R_75", help="Asset symbol (e.g. R_75)")
     parser.add_argument("--mode", default="SHADOW", choices=["DATA_COLLECTION_ONLY", "SHADOW", "PAPER"], help="Observation mode")
+    parser.add_argument("--stage", default="EXPLORATORY_FORWARD", choices=["EXPLORATORY_FORWARD", "VALIDATION_FORWARD", "CONFIRMATION_FORWARD"], help="Research stage")
     parser.add_argument("--duration", type=float, default=None, help="Session duration in seconds (omitted = indefinite)")
     parser.add_argument("--max-observations", type=int, default=None, help="Maximum predictions before stopping")
     parser.add_argument("--interval", type=float, default=2.0, help="Quote polling interval in seconds")
@@ -447,7 +448,8 @@ def main():
         flush_interval_ticks=args.flush_interval,
         reports_dir=args.report_dir,
         notes=args.notes,
-        preload_warmup=not args.no_preload_warmup
+        preload_warmup=not args.no_preload_warmup,
+        research_stage=args.stage
     )
 
     def handle_sig(sig, frame):

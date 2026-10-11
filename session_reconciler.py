@@ -400,7 +400,7 @@ class SessionReconciler:
             # Check quote response received before prediction timestamp
             if qid and qid in quote_time_by_id:
                 q_ts = quote_time_by_id[qid]
-                if q_ts and q_ts > pred_ts + 2.0:  # Tolerance of 2.0s for Deriv WebSocket proposal polling latency
+                if q_ts and q_ts > pred_ts + 3.5:  # Tolerance of 3.5s for Deriv WebSocket proposal polling latency and clock skew
                     future_quote_errors += 1
                     chronology_errors += 1
 

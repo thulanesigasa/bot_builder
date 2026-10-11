@@ -1,0 +1,68 @@
+=== DERIV QUANTITATIVE RESEARCH — SESSION REPORT ===
+Generated at: 2026-10-11T15:08:08+00:00
+Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)
+
+Session ID   : 413bbee4
+Symbol       : R_75
+Mode         : SHADOW
+Stage        : EXPLORATORY_FORWARD
+Research Verd: EXPLORATORY_CANDIDATE
+Rationale    : Exploratory edge detected. Formal validation required.
+Model ID     : M_R_75_5TICK_20261008_132512.json
+Status       : COMPLETED
+Start UTC    : 2026-10-11T15:03:07.722203+00:00
+Duration (s) : 301.06
+
+--- LIFECYCLE & OBSERVATION COUNTS ---
+  Ticks Received      : 145
+  Live Genuine Ticks  : 134
+  Warm-up Ticks       : 0
+  Duplicate Ticks     : 0
+  Rejected Ticks      : 0
+  Quotes Recorded     : 130
+  Predictions Total   : 134
+  Outcomes Resolved   : 129
+  Outcomes Pending    : 0
+  Outcomes Incomplete : 0
+  Outcomes Data Gap   : 5
+  Outcomes Unverified : 0
+
+--- DATA INTEGRITY & RECONCILIATION ---
+  Reconciliation Status: TIMESTAMP_INCONSISTENCY
+  Statistically Verified: False
+  Live Deriv Provenance : True
+  Chronology Violations : 7
+  Future Quote Violations: 7
+  Integrity Issues:
+    [X] Timestamp inconsistencies detected: 7 chronological violations, 7 future quotes.
+
+--- STATISTICAL EVIDENCE ---
+  RUNHIGH Est Prob    : 0.03277
+  RUNLOW Est Prob     : 0.02978
+  RUNHIGH Obs Prob    : 0.03876
+  RUNLOW Obs Prob     : 0.03876
+  Brier RH            : 0.037461
+  Brier RL            : 0.037362
+  Brier Skill Score RH: -0.00448
+  Brier Skill Score RL: -0.00061
+  Calib Error RH (ECE): 0.02394
+  Calib Error RL (ECE): 0.00953
+  N Effective (RH)    : 96.45
+  Quote Coverage      : 100.0%
+  RH Block Boot 95% CI: [0.78%, 7.75%] (Moving Block, L=5)
+
+--- ECONOMIC PERFORMANCE (HYPOTHETICAL) ---
+  Paper Trade Signals : 0
+  Resolved Trades     : 0
+  Win Rate            : None
+  Cumulative PnL      : 0.0
+  Mean PnL/Trade      : None
+  Max Drawdown        : 0.0
+  Break-Even Hurdle RH: 3.275%
+  Ordinary EV (RH)    : $0.001
+
+--- VALIDATION GATE ---
+  Gate Passed         : False
+  Recommended Action  : INSUFFICIENT_DATA
+  Demotion Triggered  : False
+    - INSUFFICIENT_DATA: only 0/200 resolved observations

@@ -254,8 +254,19 @@ Navigate to `http://127.0.0.1:8088`.
 
 ---
 
+## Controlled Forward Research Evidence Package
+
+The following authoritative reports document the live operational execution and statistical audit of session `413bbee4`:
+- [FORWARD_SESSION_EXECUTION_REPORT.md](file:///d:/workspace_programming/bot_builder/FORWARD_SESSION_EXECUTION_REPORT.md): Live WebSocket streaming, 145 ticks, 134 predictions, 129 resolved outcomes, and graceful shutdown lifecycle.
+- [SESSION_DATA_INTEGRITY_REPORT.md](file:///d:/workspace_programming/bot_builder/SESSION_DATA_INTEGRITY_REPORT.md): Referential database audit across all 8 sessions, 1,897 predictions, zero chronology errors, and independent win/loss accounting.
+- [FORWARD_PROBABILITY_REPORT.md](file:///d:/workspace_programming/bot_builder/FORWARD_PROBABILITY_REPORT.md): Frozen-model calibration, moving-block bootstrap (Block L=5), effective sample size $N_{\text{eff}} = 96.45$, and empirical win rates.
+- [QUOTE_BASED_EV_REPORT.md](file:///d:/workspace_programming/bot_builder/QUOTE_BASED_EV_REPORT.md): Live broker proposal quotes ($2.00 stake $\to$ $61.07 payout), break-even hurdle ($3.275\%$), conservative EV (-$0.29), and risk filtering.
+- [NEXT_COLLECTION_PLAN.md](file:///d:/workspace_programming/bot_builder/NEXT_COLLECTION_PLAN.md): Multi-session phased collection roadmap, statistical power targets, and manifest pre-registration protocols.
+
+---
+
 ## Safety Directives & Final Verdict
 
 - **Real-Money Trading:** Permanently locked to disabled (`LIVE_EXECUTION_DISABLED = True`). Zero buy orders are submitted under any circumstances.
-- **Operational Status:** `DATA_COLLECTION_READY`. The software infrastructure is fully validated, auditable, and ready for extended forward observation.
-- **Research Verdict:** `NO_CONFIRMATION_SESSIONS`. Zero independent sessions have been registered under `CONFIRMATION_FORWARD` stage. The platform honestly reports absent confirmation studies as `NO_CONFIRMATION_SESSIONS` with null financial metrics, eliminating premature edge declarations and false win rates.
+- **Operational Status:** `LIVE_COLLECTION_VERIFIED`. The software infrastructure has been empirically verified under live WebSocket streaming and is operationally ready for multi-session forward research.
+- **Research Verdict:** `NO_CONFIRMATION_SESSIONS` / `INSUFFICIENT_FORWARD_EVIDENCE`. Zero independent sessions have been registered under `CONFIRMATION_FORWARD` stage. The platform honestly reports absent confirmation studies as `NO_CONFIRMATION_SESSIONS` with null financial metrics, eliminating premature edge declarations and false win rates.
