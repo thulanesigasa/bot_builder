@@ -215,6 +215,8 @@ class OutcomeResolver:
             cur = conn.execute("PRAGMA table_info(forward_predictions)")
             pred_cols = {r["name"] for r in cur.fetchall()}
 
+            if "contract_duration" not in pred_cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN contract_duration INTEGER DEFAULT 5")
             if "unresolved_reason" not in pred_cols:
                 conn.execute("ALTER TABLE forward_predictions ADD COLUMN unresolved_reason TEXT DEFAULT ''")
             if "forward_epochs_json" not in pred_cols:
@@ -226,6 +228,8 @@ class OutcomeResolver:
             cur = conn.execute("PRAGMA table_info(forward_outcomes)")
             out_cols = {r["name"] for r in cur.fetchall()}
 
+            if "contract_duration" not in out_cols:
+                conn.execute("ALTER TABLE forward_outcomes ADD COLUMN contract_duration INTEGER DEFAULT 5")
             if "symbol" not in out_cols:
                 conn.execute("ALTER TABLE forward_outcomes ADD COLUMN symbol TEXT DEFAULT 'R_75'")
             if "contract_type" not in out_cols:
@@ -257,7 +261,8 @@ class OutcomeResolver:
                        target_direction, signal_epoch, signal_price, timestamp,
                        entry_epoch, forward_prices_json, forward_ticks_count,
                        runhigh_ask, runhigh_payout, runlow_ask, runlow_payout,
-                       unresolved_reason, forward_epochs_json, last_forward_epoch
+                       unresolved_reason, forward_epochs_json, last_forward_epoch,
+                       contract_duration
                 FROM forward_predictions
                 {where_sql}
                 ORDER BY timestamp ASC
@@ -284,22 +289,25 @@ class OutcomeResolver:
                 entry_pr = fwd_prices[0] if fwd_prices else None
                 last_ep = r["last_forward_epoch"] or (fwd_epochs[-1] if fwd_epochs else (entry_ep or sig_ep))
 
+                dur = int(r["contract_duration"]) if ("contract_duration" in r.keys() and r["contract_duration"]) else self.required_movements
+                req_ticks = dur + 1
+
                 reason = r["unresolved_reason"]
                 if not reason:
                     if not fwd_prices:
                         reason = REASON_WAITING_FOR_ENTRY_TICK
                     else:
-                        reason = f"{REASON_WAITING_FOR_FUTURE_TICKS} ({len(fwd_prices)}/{self.required_ticks_total})"
+                        reason = f"{REASON_WAITING_FOR_FUTURE_TICKS} ({len(fwd_prices)}/{req_ticks})"
 
                 self._active_pending[pid] = PendingOutcome(
                     prediction_id=pid,
                     session_id=r["session_id"] or "LEGACY_UNATTRIBUTED",
                     symbol=r["symbol"],
                     contract_type="RUNHIGH_RUNLOW",
-                    contract_duration=self.required_movements,
+                    contract_duration=dur,
                     prediction_timestamp=float(r["timestamp"]),
                     signal_price=float(r["signal_price"] or 0.0),
-                    model_version=r["model_version"] or "V1.6.4",
+                    model_version=r["model_version"] or "V1.7.4",
                     decision=r["decision"] or "NO_TRADE",
                     target_direction=r["target_direction"] or "NONE",
                     runhigh_ask=r["runhigh_ask"],
@@ -307,7 +315,7 @@ class OutcomeResolver:
                     runlow_ask=r["runlow_ask"],
                     runlow_payout=r["runlow_payout"],
                     required_entry_boundary=float(sig_ep),
-                    required_future_tick_count=self.required_ticks_total,
+                    required_future_tick_count=req_ticks,
                     entry_epoch=entry_ep,
                     entry_price=entry_pr,
                     forward_prices=fwd_prices,
@@ -326,21 +334,24 @@ class OutcomeResolver:
         signal_epoch: int,
         signal_price: float,
         timestamp: float,
-        model_version: str = "V1.6.4",
+        model_version: str = "V1.7.4",
         decision: str = "NO_TRADE",
         target_direction: str = "NONE",
         runhigh_ask: Optional[float] = None,
         runhigh_payout: Optional[float] = None,
         runlow_ask: Optional[float] = None,
         runlow_payout: Optional[float] = None,
+        contract_duration: Optional[int] = None,
     ) -> PendingOutcome:
         """Registers a newly generated prediction as an active pending outcome."""
+        dur = contract_duration if contract_duration is not None else self.required_movements
+        req_ticks = dur + 1
         pending = PendingOutcome(
             prediction_id=prediction_id,
             session_id=session_id or "LEGACY_UNATTRIBUTED",
             symbol=symbol,
             contract_type="RUNHIGH_RUNLOW",
-            contract_duration=self.required_movements,
+            contract_duration=dur,
             prediction_timestamp=timestamp,
             signal_price=signal_price,
             model_version=model_version,
@@ -351,7 +362,7 @@ class OutcomeResolver:
             runlow_ask=runlow_ask,
             runlow_payout=runlow_payout,
             required_entry_boundary=float(signal_epoch),
-            required_future_tick_count=self.required_ticks_total,
+            required_future_tick_count=req_ticks,
             outcome_status=STATUS_PENDING,
             unresolved_reason=REASON_WAITING_FOR_ENTRY_TICK,
             resolver_version=self.resolver_version
@@ -364,13 +375,13 @@ class OutcomeResolver:
                     prediction_id, session_id, timestamp, symbol, model_version,
                     market_state, decision, rejection_reason, target_direction,
                     signal_epoch, signal_price, forward_prices_json, forward_ticks_count,
-                    outcome_status, created_at, forward_epochs_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 0, ?, ?, '[]')
+                    outcome_status, created_at, forward_epochs_json, contract_duration
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 0, ?, ?, '[]', ?)
             """, (
                 prediction_id, session_id or "LEGACY_UNATTRIBUTED", timestamp, symbol,
                 model_version, "DEFAULT", decision, "", target_direction,
                 signal_epoch, signal_price, STATUS_PENDING,
-                datetime.now(timezone.utc).isoformat()
+                datetime.now(timezone.utc).isoformat(), dur
             ))
             conn.commit()
 
@@ -438,15 +449,15 @@ class OutcomeResolver:
                                 forward_epochs_json, forward_ticks_count, outcome_status,
                                 runhigh_win, runlow_win, hypothetical_pnl, contract_model_version,
                                 resolution_timestamp, verification_level, resolver_version,
-                                unresolved_reason, created_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                unresolved_reason, created_at, contract_duration
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             oid, pid, pending.session_id, pending.symbol, pending.contract_type,
                             pending.entry_epoch, pending.entry_price, epoch,
                             json.dumps(pending.forward_prices), json.dumps(pending.forward_epochs),
                             len(pending.forward_prices), STATUS_DATA_GAP, None, None, 0.0,
-                            "5_movement_canonical", float(epoch), "DATA_GAP",
-                            self.resolver_version, pending.unresolved_reason, now_iso
+                            f"{pending.contract_duration}_movement_canonical", float(epoch), "DATA_GAP",
+                            self.resolver_version, pending.unresolved_reason, now_iso, pending.contract_duration
                         ))
 
                         pids_to_remove.append(pid)
@@ -468,10 +479,10 @@ class OutcomeResolver:
                 pending.last_processed_tick_epoch = epoch
                 count = len(pending.forward_prices)
 
-                if count < self.required_ticks_total:
+                if count < pending.required_future_tick_count:
                     # Window accumulating
                     pending.outcome_status = STATUS_PENDING
-                    pending.unresolved_reason = f"{REASON_WAITING_FOR_FUTURE_TICKS} ({count}/{self.required_ticks_total})"
+                    pending.unresolved_reason = f"{REASON_WAITING_FOR_FUTURE_TICKS} ({count}/{pending.required_future_tick_count})"
 
                     conn.execute("""
                         UPDATE forward_predictions
@@ -489,14 +500,15 @@ class OutcomeResolver:
                         pid
                     ))
                 else:
-                    # Complete canonical 6-tick sequence: S_0, S_1, S_2, S_3, S_4, S_5
-                    prices = pending.forward_prices[:self.required_ticks_total]
-                    epochs = pending.forward_epochs[:self.required_ticks_total]
+                    # Complete canonical sequence: S_0, S_1, ... S_d
+                    prices = pending.forward_prices[:pending.required_future_tick_count]
+                    epochs = pending.forward_epochs[:pending.required_future_tick_count]
 
-                    # Canonical 5-movement evaluation
-                    # S_1 > S_0 AND S_2 > S_1 AND S_3 > S_2 AND S_4 > S_3 AND S_5 > S_4
-                    rh_win = 1.0 if all(prices[k] > prices[k - 1] for k in range(1, 6)) else 0.0
-                    rl_win = 1.0 if all(prices[k] < prices[k - 1] for k in range(1, 6)) else 0.0
+                    # Canonical monotonic evaluation for duration d
+                    # S_1 > S_0 AND S_2 > S_1 ... AND S_d > S_{d-1}
+                    d = pending.contract_duration
+                    rh_win = 1.0 if all(prices[k] > prices[k - 1] for k in range(1, d + 1)) else 0.0
+                    rl_win = 1.0 if all(prices[k] < prices[k - 1] for k in range(1, d + 1)) else 0.0
 
                     # Hypothetical PnL calculation
                     pnl = 0.0
@@ -540,14 +552,14 @@ class OutcomeResolver:
                             forward_epochs_json, forward_ticks_count, outcome_status,
                             runhigh_win, runlow_win, hypothetical_pnl, contract_model_version,
                             resolution_timestamp, verification_level, resolver_version,
-                            unresolved_reason, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            unresolved_reason, created_at, contract_duration
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         oid, pid, pending.session_id, pending.symbol, pending.contract_type,
                         pending.entry_epoch, pending.entry_price, epoch,
                         json.dumps(prices), json.dumps(epochs), count, STATUS_RECONSTRUCTED,
-                        rh_win, rl_win, round(pnl, 2), "5_movement_canonical",
-                        float(epoch), "RECONSTRUCTED", self.resolver_version, "", now_iso
+                        rh_win, rl_win, round(pnl, 2), f"{pending.contract_duration}_movement_canonical",
+                        float(epoch), "RECONSTRUCTED", self.resolver_version, "", now_iso, pending.contract_duration
                     ))
 
                     pids_to_remove.append(pid)

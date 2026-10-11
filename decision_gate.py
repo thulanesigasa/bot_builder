@@ -182,7 +182,7 @@ def evaluate_paper_trade_eligibility(
         reasons.append(DecisionReason.DATA_INTEGRITY_FAILURE.value)
 
     # Gate 3: Contract & Symbol Compatibility
-    if duration_ticks != 5:
+    if duration_ticks not in (2, 5):
         reasons.append(DecisionReason.CONTRACT_MODEL_UNVERIFIED.value)
     if norm_dir == "NONE":
         reasons.append(DecisionReason.CONTRACT_MODEL_UNVERIFIED.value)

@@ -68,27 +68,36 @@ class CanonicalContractSpec:
     commercial_name: str                # 'Only Ups' or 'Only Downs'
     symbol: str = "R_75"
     duration_ticks: int = 5
-    required_ticks_total: int = 6       # S_0 entry + 5 movements
+    required_ticks_total: int = 6       # S_0 entry + duration movements
     gap_threshold_seconds: float = 5.0
     official_source_url: str = "https://developers.deriv.com/docs/api-guide/contracts/"
     access_date: str = "2026-10-11"
-    resolver_version: str = "V1.7.3"
+    resolver_version: str = "V1.7.4"
 
 
-CANONICAL_RUNHIGH_SPEC = CanonicalContractSpec(contract_type="RUNHIGH", commercial_name="Only Ups")
-CANONICAL_RUNLOW_SPEC = CanonicalContractSpec(contract_type="RUNLOW", commercial_name="Only Downs")
+# Dual-Duration Canonical Specs (V1.7.4)
+CANONICAL_RUNHIGH_2T_SPEC = CanonicalContractSpec(contract_type="RUNHIGH", commercial_name="Only Ups 2T", duration_ticks=2, required_ticks_total=3)
+CANONICAL_RUNLOW_2T_SPEC  = CanonicalContractSpec(contract_type="RUNLOW", commercial_name="Only Downs 2T", duration_ticks=2, required_ticks_total=3)
+CANONICAL_RUNHIGH_5T_SPEC = CanonicalContractSpec(contract_type="RUNHIGH", commercial_name="Only Ups 5T", duration_ticks=5, required_ticks_total=6)
+CANONICAL_RUNLOW_5T_SPEC  = CanonicalContractSpec(contract_type="RUNLOW", commercial_name="Only Downs 5T", duration_ticks=5, required_ticks_total=6)
+
+# Backward Compatibility Aliases
+CANONICAL_RUNHIGH_SPEC = CANONICAL_RUNHIGH_5T_SPEC
+CANONICAL_RUNLOW_SPEC = CANONICAL_RUNLOW_5T_SPEC
 
 
-def evaluate_5tick_monotonic_outcome(
+def evaluate_monotonic_outcome(
     prices: List[float],
+    duration_ticks: int = 5,
     require_full_sequence: bool = True
 ) -> Tuple[Optional[float], Optional[float], str]:
-    """Centrally evaluates 5-tick monotonic contract outcomes for RUNHIGH and RUNLOW.
+    """Centrally evaluates monotonic contract outcomes for RUNHIGH and RUNLOW across configurable duration.
     
     Parameters:
-        prices: List of prices starting with Entry Spot S_0, followed by S_1..S_5.
-                Must contain exactly 6 prices for a complete evaluation.
-        require_full_sequence: If True, sequences with len != 6 return None win rates.
+        prices: List of prices starting with Entry Spot S_0, followed by S_1..S_K.
+                Must contain exactly (duration_ticks + 1) prices for complete evaluation.
+        duration_ticks: Number of forward ticks/movements (e.g. 2 or 5).
+        require_full_sequence: If True, sequences with len < duration_ticks + 1 return None win rates.
         
     Returns:
         (runhigh_win, runlow_win, outcome_classification)
@@ -96,27 +105,39 @@ def evaluate_5tick_monotonic_outcome(
         - runlow_win:  1.0 (win), 0.0 (loss), or None (incomplete)
         - classification: OutcomeClassification value string
     """
-    if len(prices) < 6:
-        if require_full_sequence:
-            return None, None, OutcomeClassification.RESEARCH_OUTCOME_INCOMPLETE.value
-        prices = prices  # fallback for partial inspections
-
-    if len(prices) < 6:
+    needed = duration_ticks + 1
+    if len(prices) < needed:
         return None, None, OutcomeClassification.RESEARCH_OUTCOME_INCOMPLETE.value
 
-    p = [float(x) for x in prices[:6]]
+    p = [float(x) for x in prices[:needed]]
 
-    # Strict 5-movement comparisons:
-    # RUNHIGH: S_1 > S_0 and S_2 > S_1 and S_3 > S_2 and S_4 > S_3 and S_5 > S_4
-    is_runhigh = all(p[k] > p[k - 1] for k in range(1, 6))
+    # Strict K-movement comparisons:
+    # RUNHIGH: S_k > S_{k-1} for all k in 1..duration_ticks
+    is_runhigh = all(p[k] > p[k - 1] for k in range(1, needed))
     
-    # RUNLOW:  S_1 < S_0 and S_2 < S_1 and S_3 < S_2 and S_4 < S_3 and S_5 < S_4
-    is_runlow = all(p[k] < p[k - 1] for k in range(1, 6))
+    # RUNLOW:  S_k < S_{k-1} for all k in 1..duration_ticks
+    is_runlow = all(p[k] < p[k - 1] for k in range(1, needed))
 
     rh_win = 1.0 if is_runhigh else 0.0
     rl_win = 1.0 if is_runlow else 0.0
 
     return rh_win, rl_win, OutcomeClassification.RESEARCH_OUTCOME_RECONSTRUCTED.value
+
+
+def evaluate_5tick_monotonic_outcome(
+    prices: List[float],
+    require_full_sequence: bool = True
+) -> Tuple[Optional[float], Optional[float], str]:
+    """Evaluates 5-tick monotonic contract outcomes (backward compatibility)."""
+    return evaluate_monotonic_outcome(prices, duration_ticks=5, require_full_sequence=require_full_sequence)
+
+
+def evaluate_2tick_monotonic_outcome(
+    prices: List[float],
+    require_full_sequence: bool = True
+) -> Tuple[Optional[float], Optional[float], str]:
+    """Evaluates 2-tick monotonic contract outcomes (S_0 -> S_1 -> S_2)."""
+    return evaluate_monotonic_outcome(prices, duration_ticks=2, require_full_sequence=require_full_sequence)
 
 
 CONTRACT_TYPE_RUNHIGH = "RUNHIGH"
@@ -150,9 +171,11 @@ class ContractOutcomeResult:
 def evaluate_canonical_outcome(
     contract_type: str,
     prices: List[float],
+    duration_ticks: int = 5,
     data_gap: bool = False
 ) -> ContractOutcomeResult:
-    """Evaluates a single contract outcome with step-by-step diagnostic verification."""
+    """Evaluates a single contract outcome with step-by-step diagnostic verification across configurable duration."""
+    needed = duration_ticks + 1
     if data_gap:
         return ContractOutcomeResult(
             contract_type=contract_type,
@@ -163,7 +186,7 @@ def evaluate_canonical_outcome(
             prices=prices,
         )
 
-    if len(prices) < 6:
+    if len(prices) < needed:
         return ContractOutcomeResult(
             contract_type=contract_type,
             outcome_status=STATUS_OUTCOME_INCOMPLETE,
@@ -173,7 +196,7 @@ def evaluate_canonical_outcome(
             prices=prices,
         )
 
-    p = [float(x) for x in prices[:6]]
+    p = [float(x) for x in prices[:needed]]
     ctype = contract_type.upper()
     steps = []
 
@@ -181,7 +204,7 @@ def evaluate_canonical_outcome(
         # Check step-by-step
         has_equality = False
         has_reversal = False
-        for k in range(1, 6):
+        for k in range(1, needed):
             if p[k] == p[k - 1]:
                 has_equality = True
                 steps.append(False)
@@ -191,7 +214,7 @@ def evaluate_canonical_outcome(
                 has_reversal = True
                 steps.append(False)
 
-        all_above_entry = all(p[k] > p[0] for k in range(1, 6))
+        all_above_entry = all(p[k] > p[0] for k in range(1, needed))
 
         if all(steps):
             return ContractOutcomeResult(
@@ -233,7 +256,7 @@ def evaluate_canonical_outcome(
     elif ctype == CONTRACT_TYPE_RUNLOW:
         has_equality = False
         has_reversal = False
-        for k in range(1, 6):
+        for k in range(1, needed):
             if p[k] == p[k - 1]:
                 has_equality = True
                 steps.append(False)
@@ -243,7 +266,7 @@ def evaluate_canonical_outcome(
                 has_reversal = True
                 steps.append(False)
 
-        all_below_entry = all(p[k] < p[0] for k in range(1, 6))
+        all_below_entry = all(p[k] < p[0] for k in range(1, needed))
 
         if all(steps):
             return ContractOutcomeResult(
@@ -287,9 +310,10 @@ def evaluate_canonical_outcome(
 
 def evaluate_tick_stream_outcome(
     entry_price: float,
-    subsequent_prices: List[float]
+    subsequent_prices: List[float],
+    duration_ticks: int = 5
 ) -> Tuple[Optional[float], Optional[float], str]:
-    """Evaluates outcome given S_0 entry price and exactly 5 subsequent forward ticks."""
+    """Evaluates outcome given S_0 entry price and subsequent forward ticks across configurable duration."""
     full_path = [entry_price] + list(subsequent_prices)
-    return evaluate_5tick_monotonic_outcome(full_path)
+    return evaluate_monotonic_outcome(full_path, duration_ticks=duration_ticks)
 

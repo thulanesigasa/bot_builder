@@ -239,7 +239,7 @@ class QuoteEngine:
         self._quotes["UP"] = None
         self._quotes["DOWN"] = None
 
-    def get_quote(self, direction: str, epoch: Optional[int] = None) -> Optional[ProposalQuote]:
+    def get_quote(self, direction: str, epoch: Optional[int] = None, duration: int = 5) -> Optional[ProposalQuote]:
         """Returns the exact quote for the direction at a given epoch timestamp.
         
         Priority of lookup:
@@ -261,7 +261,8 @@ class QuoteEngine:
                 symbol=self.symbol,
                 contract_type=c_type,
                 timestamp=float(epoch),
-                max_freshness_seconds=self.max_freshness_seconds
+                max_freshness_seconds=self.max_freshness_seconds,
+                duration=duration
             )
             if rec is not None:
                 profit = rec.total_payout - rec.stake
@@ -323,11 +324,11 @@ class QuoteEngine:
         # 5. Benchmark fallback in research mode
         return self._quotes.get(dir_key)
 
-    def get_quote_status(self, direction: str, epoch: Optional[int] = None) -> Tuple[str, Optional[ProposalQuote]]:
+    def get_quote_status(self, direction: str, epoch: Optional[int] = None, duration: int = 5) -> Tuple[str, Optional[ProposalQuote]]:
         """Returns ('QUOTE_AVAILABLE', quote) if a valid quote exists at or before epoch,
         or ('QUOTE_UNAVAILABLE', None) if missing/stale.
         """
-        q = self.get_quote(direction, epoch=epoch)
+        q = self.get_quote(direction, epoch=epoch, duration=duration)
         if q is not None:
             return "QUOTE_AVAILABLE", q
         return "QUOTE_UNAVAILABLE", None

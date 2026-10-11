@@ -95,6 +95,7 @@ class ForwardPredictionRecord:
     source_provenance: str = "LIVE_DERIV"
     unresolved_reason: str = ""
     forward_epochs_json: str = "[]"
+    contract_duration: int = 5
 
 
 class ForwardPredictionJournal:
@@ -199,6 +200,8 @@ class ForwardPredictionJournal:
                 conn.execute("ALTER TABLE forward_predictions ADD COLUMN feature_schema_version TEXT DEFAULT '1.5.3'")
             if "source_provenance" not in cols:
                 conn.execute("ALTER TABLE forward_predictions ADD COLUMN source_provenance TEXT DEFAULT 'LIVE_DERIV'")
+            if "contract_duration" not in cols:
+                conn.execute("ALTER TABLE forward_predictions ADD COLUMN contract_duration INTEGER DEFAULT 5")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_fwd_status
@@ -226,6 +229,7 @@ class ForwardPredictionJournal:
         sess_id = record.session_id.strip() if (record.session_id and str(record.session_id).strip()) else "LEGACY_UNATTRIBUTED"
         provenance = getattr(record, "source_provenance", "LIVE_DERIV") or "LIVE_DERIV"
         created_at = datetime.now(timezone.utc).isoformat()
+        dur = getattr(record, "contract_duration", 5) or 5
 
         with self._get_conn() as conn:
             # Check duplicate prediction ID
@@ -251,8 +255,9 @@ class ForwardPredictionJournal:
                     target_direction, signal_epoch, signal_price, entry_epoch,
                     expiry_epoch, forward_prices_json, forward_ticks_count,
                     outcome_status, runhigh_win, runlow_win, hypothetical_pnl,
-                    execution_mode, model_id, quote_id, feature_schema_version, source_provenance, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    execution_mode, model_id, quote_id, feature_schema_version, source_provenance, created_at,
+                    contract_duration
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 record.prediction_id, sess_id, record.timestamp, record.symbol, record.model_version,
                 record.market_state, record.features_json, record.runhigh_pred_prob,
@@ -266,7 +271,8 @@ class ForwardPredictionJournal:
                 norm_status, record.runhigh_win, record.runlow_win,
                 record.hypothetical_pnl, record.execution_mode, record.model_id,
                 getattr(record, "quote_id", "") or "",
-                getattr(record, "feature_schema_version", "1.0") or "1.0", provenance, created_at
+                getattr(record, "feature_schema_version", "1.0") or "1.0", provenance, created_at,
+                dur
             ))
             conn.commit()
 
@@ -285,6 +291,7 @@ class ForwardPredictionJournal:
             runhigh_payout=record.runhigh_payout,
             runlow_ask=record.runlow_ask,
             runlow_payout=record.runlow_payout,
+            contract_duration=dur,
         )
         return record.prediction_id
 

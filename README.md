@@ -1,27 +1,43 @@
-# Deriv 5-Tick Quantitative Research & Statistical Validation Framework (V1.7.3)
+# Deriv Quantitative Research & Dual-Duration Statistical Validation Framework (V1.7.4)
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Testing](https://img.shields.io/badge/pytest-257%20passed%20(100%25)-0284C7)
+![Testing](https://img.shields.io/badge/pytest-274%20passed%20(100%25)-0284C7)
 ![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-0284C7)
 ![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v1%2Foptions%20Verified-0284C7)
 ![Safety](https://img.shields.io/badge/Safety-Real--Money%20Trading%20DISABLED-0F172A)
-![Quote Chronology](https://img.shields.io/badge/Quote%20Chronology-Strict%200.0s%20Tolerance-0284C7)
-![Contract Spec](https://img.shields.io/badge/Contract%20Spec-Canonical%205--Movement%20Monotonic-0284C7)
-![Quote Coverage](https://img.shields.io/badge/Quote%20Coverage-4%20Distinct%20Categories-0284C7)
+![Dual Duration](https://img.shields.io/badge/Architecture-Dual--Duration%202T%20%7C%205T-0284C7)
+![Strategy Discovery](https://img.shields.io/badge/Strategy%20Discovery-Advisory--Only%20FWER%20Controlled-0284C7)
+![Evidence Integrity](https://img.shields.io/badge/Evidence%20Integrity-Authoritative%20Reconciled-brightgreen.svg)
+![Contract Spec](https://img.shields.io/badge/Contract%20Spec-Configurable%20Monotonic%20Lifecycle-0284C7)
 ![Confirmation Authority](https://img.shields.io/badge/Confirmation%20Authority-Unified%20ForwardConfirmationGate-0284C7)
 ![Reconciliation](https://img.shields.io/badge/Reconciliation-6%20Separated%20Integrity%20Dimensions-0284C7)
-![Architecture](https://img.shields.io/badge/Architecture-V1.7.3%20Strict%20Chronology%20%26%20Settlement-0284C7)
+![Version](https://img.shields.io/badge/Version-V1.7.4%20Dual--Duration%20Research-0284C7)
 
-A rigorous quantitative research, frozen model inference, and real-market forward observation system engineered for Deriv 5-tick contracts—specifically modeling RUNHIGH (Only Ups) and RUNLOW (Only Downs) where every successive tick after the entry spot must move strictly in the contract direction.
+A quantitative financial research, machine-learning inference, and real-market forward observation system engineered for Deriv synthetic index contracts—specifically modeling Only Ups (`RUNHIGH`) and Only Downs (`RUNLOW`) on Volatility 75 (`R_75`).
 
-V1.7.3 establishes strict causal quote chronology (0.0s future-quote allowance eliminated), taxonomic quote rejection reasons, canonical 5-movement contract outcome specification (`contract_specification.py`), 6 separated reconciliation integrity dimensions, and 4 distinct quote coverage categories. Real-money live execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`).
+V1.7.4 establishes dual-duration 2-tick versus 5-tick paired research, evidence-grounded research reporting inspired by HKUDS/Vibe-Trading, an advisory-only strategy discovery engine with Bonferroni multiple-testing control, overlapping-label purging, independent frozen model management, and full reconciliation of historical probability and expected value statistics. Real-money live execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`).
 
 ---
 
-## Canonical 5-Tick Contract Execution Lifecycle
+## The Central Research Question: 2-Tick vs. 5-Tick
 
-The production framework enforces a single canonical contract duration implementation:
+> **Does a two-tick contract provide more reliable, economically profitable prediction opportunities than the existing five-tick contract?**
 
+### The Empirical Finding
+**A higher winning frequency does NOT imply economic profitability.**
+- **Winning Frequency**: 2-Tick contracts win approximately **25.67%** of the time (7x more frequently than 5-tick contracts at **3.63%**).
+- **Payout Asymmetry**: Deriv's total payout on a $2.00 stake is **$7.63** for 2 ticks versus **$61.07** for 5 ticks.
+- **The Economic Hurdle**: The break-even probability for 2 ticks is **26.212%**, which is strictly higher than both the empirical base rate (25.34%) and the observed live win rate (25.67%).
+- **Economic Return**: The unconditional 2-tick contract produces an average loss of **-$0.0667** per $2.00 stake.
+- **Uncertainty Lower Bound**: When dependence-aware moving-block bootstrap uncertainty is applied, both durations produce negative conservative expected values. Neither clears the authoritative confirmation hurdle.
+
+---
+
+## Canonical Contract Execution Lifecycles
+
+The framework centrally supports configurable monotonic contract durations:
+
+### 1. Two-Tick Lifecycle (2T)
 ```
 Signal detected at tick i
        |
@@ -30,250 +46,208 @@ Order submitted & processed
 Entry Spot S_0 = tick i + 1 (First tick after processing)
        |
   Step 1: S_0 -> S_1 (tick i + 2)
+  Step 2: S_1 -> S_2 (tick i + 3, Expiry Spot)
+```
+- **RUNHIGH_2T**: Wins iff $S_0 < S_1 < S_2$ (both movements strictly increase).
+- **RUNLOW_2T**: Wins iff $S_0 > S_1 > S_2$ (both movements strictly decrease).
+
+### 2. Five-Tick Lifecycle (5T)
+```
+Signal detected at tick i
+       |
+Order submitted & processed
+       |
+Entry Spot S_0 = tick i + 1
+       |
+  Step 1: S_0 -> S_1 (tick i + 2)
   Step 2: S_1 -> S_2 (tick i + 3)
   Step 3: S_2 -> S_3 (tick i + 4)
   Step 4: S_3 -> S_4 (tick i + 5)
   Step 5: S_4 -> S_5 (tick i + 6, Expiry Spot)
 ```
+- **RUNHIGH_5T**: Wins iff $S_0 < S_1 < S_2 < S_3 < S_4 < S_5$.
+- **RUNLOW_5T**: Wins iff $S_0 > S_1 > S_2 > S_3 > S_4 > S_5$.
 
-### Strict Settlement Rules
-- **RUNHIGH (Only Ups)**: Wins if and only if $S_1 > S_0 \land S_2 > S_1 \land S_3 > S_2 \land S_4 > S_3 \land S_5 > S_4$.
-- **RUNLOW (Only Downs)**: Wins if and only if $S_1 < S_0 \land S_2 < S_1 \land S_3 < S_2 \land S_4 < S_3 \land S_5 < S_4$.
-- **Equality Rule**: Any equality ($=$) at any step results in an immediate contract loss.
-- **Reversal Rule**: Any opposing directional tick results in an immediate contract loss.
-- **Dual Loss Reality**: In oscillating sequences, both RUNHIGH and RUNLOW lose simultaneously (~93.75% theoretical non-monotonic rate). RUNLOW is never inferred from RUNHIGH ($RUNLOW \neq 1 - RUNHIGH$).
-- **Incomplete Sequences**: Evaluates to `OUTCOME_INCOMPLETE`, preventing artificial loss attribution.
-- **Data Gap Sequences**: If elapsed time between consecutive ticks during observation exceeds $5.0\text{s}$, classified as `OUTCOME_DATA_GAP` and excluded from win-rate metrics.
-
----
-
-## Empirical Baseline vs Genuine Proposal Hurdle
-
-The engine does not assume theoretical random-walk probability ($3.125\%$). It computes the empirical baseline from historical observations:
-
-$$\text{Theoretical Reference} = (0.5)^5 = 0.03125 = 3.125\%$$
-
-$$\text{Deriv Live Proposal Hurdle (\$2.00 Stake } \to \text{\$61.03 Total Payout)} = \frac{\$2.00}{\$61.03} \approx 3.277\%$$
-
-Empirical results on Volatility 75 (`R_75`, canonical historical dataset):
-- **Empirical $P(\text{RUNHIGH})$**: $3.275\%$ ($SE = 0.0009$, $95\%$ Wald CI: $[3.107\%, 3.443\%]$)
-- **Empirical $P(\text{RUNLOW})$**: $2.971\%$ ($SE = 0.0008$, $95\%$ Wald CI: $[2.811\%, 3.132\%]$)
+### Universal Settlement Rules
+- **Equality Rule**: Any flat movement ($S_k = S_{k-1}$) results in an immediate contract loss.
+- **Reversal Rule**: Any opposing directional movement results in an immediate contract loss.
+- **Dual Loss Reality**: In oscillating sequences, both RUNHIGH and RUNLOW lose simultaneously.
+- **Incomplete Sequences**: Classified as `OUTCOME_INCOMPLETE`, strictly excluded from win rates.
+- **Data Gap Sequences**: Inter-tick gaps $> 5.0\text{s}$ classified as `OUTCOME_DATA_GAP` and excluded.
 
 ---
 
-## V1.7.2 Core Architecture & Pipeline Components
+## Empirical Baselines vs. Live Proposal Hurdle
+
+The engine evaluates conditional model probabilities against exact broker quotes:
+
+$$\text{BreakEven} = \frac{\text{AskPrice}}{\text{TotalPayout}}$$
+$$\text{ExpectedValue} = \text{PredictedProbability} \times \text{TotalPayout} - \text{AskPrice}$$
+
+| Contract Configuration | Theoretical Symmetric Rate | Empirical Base Rate (R_75) | Deriv Proposal ($2 Stake) | Break-Even Hurdle | Unconditional Ordinary EV |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **RUNHIGH (2 Ticks)** | 25.000% ($(0.5)^2$) | 25.341% | $7.63 | **26.212%** | **-$0.0665** |
+| **RUNLOW (2 Ticks)** | 25.000% ($(0.5)^2$) | 24.752% | $7.63 | **26.212%** | **-$0.1114** |
+| **RUNHIGH (5 Ticks)** | 3.125% ($(0.5)^5$) | 3.277% | $61.07 | **3.275%** | **+$0.0013** |
+| **RUNLOW (5 Ticks)** | 3.125% ($(0.5)^5$) | 2.973% | $61.07 | **3.275%** | **-$0.1812** |
+
+---
+
+## AI-Assisted Strategy Discovery Architecture
+
+Inspired by the research methodology of HKUDS/Vibe-Trading, V1.7.4 introduces `strategy_discovery.py`:
+
+```
++-------------------------------------------------------------------------+
+|                  AI RESEARCH LAYER (ADVISORY-ONLY)                     |
+|                                                                         |
+|   strategy_discovery.py:                                               |
+|   - Predeclared Hypothesis Families (Streak, Volatility, Reversal)      |
+|   - Overlapping-Label Purging (step = duration + 1)                    |
+|   - Bonferroni & FDR Multiple-Testing Adjustments                      |
+|                                                                         |
+|   INVARIANTS:                                                           |
+|   IS_ADVISORY_ONLY = True                                              |
+|   EXECUTION_AUTHORIZATION_DISABLED = True                               |
++-------------------------------------------------------------------------+
+                                    ||
+                                    || (Hypothesis Audit Report Only)
+                                    \/
++-------------------------------------------------------------------------+
+|             CONFIRMATION GATE & NO_TRADE SAFETY INVARIANT               |
+|                                                                         |
+|   decision_gate.py:                                                     |
+|   - Gate 1: SHADOW / DATA_COLLECTION Mode Non-Trading Guard             |
+|   - Gate 3: Contract & Duration Verification (2T and 5T)               |
+|   - Gate 4: Frozen Model Approval Status (Approved only if confirmed)  |
+|   - Gate 6: Quote Timestamps (resp_ts <= decision_ts)                   |
+|   - Gate 7 & 9: Positive EV & Break-Even Margin                        |
+|                                                                         |
+|   PERMANENT SAFETY INVARIANT:                                           |
+|   LIVE_EXECUTION_DISABLED = True                                       |
++-------------------------------------------------------------------------+
+```
+
+### Discovery Guardrails
+1. **Advisory-Only Firewall**: An AI-generated hypothesis CANNOT authorize order placement.
+2. **Controlled Hypothesis Families**: Replaces unconstrained data mining with pre-registered feature conditions (consecutive streaks, volatility regimes, extreme acceleration).
+3. **Overlapping-Label Purging**: Eliminates artificial serial correlation by sampling evaluations at $(d + 1)$ tick intervals.
+4. **Multiple-Testing Correction**: Applies Bonferroni ($p_{\text{adj}} = \min(1.0, p \times M)$) and Benjamini-Hochberg FDR adjustments.
+
+---
+
+## V1.7.4 Core Architecture & Module Inventory
 
 | Component | File | Role |
 |---|---|---|
-| **Research Metrics Engine** | `research_metrics_engine.py` | Canonical single-source data-analysis interface, referential SQLite joins, directional independence, SHA-256 integrity checksums |
-| **Confirmation Gate** | `forward_confirmation_gate.py` | Single authoritative confirmed-edge decision gate enforcing 13 mandatory categories via strict AND logic |
-| **Confirmation Manifest** | `confirmation_specification.py` | Pre-registered, canonical JSON SHA-256 hashed confirmation criteria and parameter manifests |
-| **Statistical Evaluator** | `statistical_evaluator.py` | Wilson CIs, Brier Score, Brier Skill Score, rare-event ECE, moving block bootstrap ($L=5$), effective sample size ($N_{\text{eff}}$) |
-| **Economic Evaluator** | `economic_evaluator.py` | Break-even hurdle ($P_{\text{be}} = \text{Ask}/\text{Payout}$), Ordinary EV, Conservative EV (strictly requires lower bound), hypothetical PnL/drawdown |
-| **Research Aggregator** | `session_research_aggregator.py` | Multi-session stage aggregator delegating all confirmation decisions strictly to `ForwardConfirmationGate` |
-| **Outcome Resolver** | `outcome_resolver.py` | Dedicated multi-pending outcome resolution tracking consecutive inter-tick gaps and full 6-tick sequences ($S_0 \to S_5$) |
-| **Forward Observer** | `forward_observer.py` | Feature buffer, historical warmup anchored strictly before first live tick, prediction cutoff controls |
-| **Collection Service** | `forward_collection_service.py` | Sustained WebSocket collection service, auto-reconnect, target prediction milestones, research stage admission enforcement |
-| **Session Launcher** | `run_forward_session.py` | Operational CLI launcher supporting extended duration, `--stage`, `--manifest`, and `--target-resolved` milestones |
-| **Session Reconciler** | `session_reconciler.py` | 6-dimension automated audit engine verifying provenance, ticks, quotes, and outcome chronology |
-| **Session Registry** | `forward_session.py` | Authoritative lifecycle transitions, mandatory confirmation admission validation, immutable stage enforcement |
-| **Prediction Journal** | `forward_journal.py` | Integrated `OutcomeResolver`, immutable prediction logging, dedicated `forward_outcomes` table |
-| **Model Artifact** | `model_artifact.py` | Frozen model schema with dynamic `required_lookback`, cryptographic checksum, and inference |
-| **Model Promotion Gate** | `forward_validation_gate.py` | Promotion gate requiring independent confirmation pass before authorizing paper execution |
-| **Quote Database** | `quote_database.py` | SQLite proposal quote persistence strictly linked and queried by `session_id` |
-| **Quote Recorder** | `quote_recorder.py` | Deriv proposal quote recorder with active `session_id` propagation |
-| **Risk Engine** | `risk.py` | Persistent SQLite risk state tracking and NO_TRADE enforcement |
-| **Operations Dashboard** | `dashboard.py` | Web monitoring UI consuming `ResearchMetricsEngine` with dataset checksum display (60-30-10 palette, SVG only) |
-
-### End-to-End Auditable Pipeline
-
-```
-[Historical Ticks Preload: CSV / Master] ──► Anchored Strictly Preceding First Live Tick
-                                                      │
-[Genuine Deriv Tick: wss://api.derivws.com]           │
-         │                                            │
-         ├───► LiveTickStreamer ──► ForwardObserver.process_incoming_tick()
-         │                               │
-         │                               ├──► Rolling Feature Calculation (Parity Verified)
-         │                               ├──► Model Inference (Dynamic Lookback, Frozen Checksum)
-         │                               ├──► QuoteDatabase.get_latest_quote_before() (Lookahead-Free)
-         │                               ├──► PersistentRiskManager.get_state()
-         │                               │
-         │                               ├──► ForwardPredictionJournal.log_prediction()
-         │                               │       [Mandatory session_id, Immutable]
-         │                               │
-         │                               └──► OutcomeResolver.ingest_tick()
-         │                                       │ (Consecutive Tick Gaps Checked vs last_epoch)
-         │                                       │ (Reconstructs S0..S5 Monotonic Movement)
-         │                                       └──► Writes to forward_outcomes
-         │                                               [Foreign Key -> forward_predictions]
-         │
-         ├───► DerivQuoteRecorder ──► QuoteDatabase.store_quote() [Tagged with session_id]
-         │
-         ├───► SessionReconciler ──► Audit Report [RECONCILED / is_verified = True]
-         │
-         ├───► ResearchMetricsEngine ──► Canonical Directional Metrics & SHA-256 Checksum
-         │
-         ├───► ConfirmationManifest ──► Cryptographic Criteria Freezing (Canonical SHA-256)
-         │
-         └───► ForwardConfirmationGate ──► Sole Authoritative Confirmation Decision (13 Mandatory Gates)
-```
+| **2-Tick Model Trainer** | `model_2tick.py` | Independent 2-tick state conditioning, empirical Bayes shrinkage, Wilson intervals |
+| **Strategy Discovery Engine** | `strategy_discovery.py` | Advisory hypothesis discovery, label purging, Bonferroni FWER controls |
+| **Dual-Duration Research** | `dual_duration_research.py` | Paired stream evaluator, moving-block bootstrap, economic ranking |
+| **Contract Specification** | `contract_specification.py` | Canonical 2T and 5T specs, monotonic evaluation, equality loss rules |
+| **Outcome Resolver** | `outcome_resolver.py` | Duration-aware multi-pending resolution, inter-tick gap tracking ($S_0..S_d$) |
+| **Prediction Journal** | `forward_journal.py` | Duration-aware schema, duplicate write prevention, forward outcomes table |
+| **Central Decision Gate** | `decision_gate.py` | 11-gate centralized evaluation, cross-duration quote/model rejection, NO_TRADE |
+| **Quote Database** | `quote_database.py` | SQLite proposal storage with duration filtering and strict causal timestamp bounds |
+| **Quote Quoting Engine** | `quote_engine.py` | Direction and duration-specific live/historical quote retrieval |
+| **Model Manager** | `model_manager.py` | Multi-duration model discovery, schema verification, and cryptographic loading |
+| **Forward Observer** | `forward_observer.py` | Duration-aware observation, tick buffer, live boundary anchoring |
+| **Research Metrics Engine** | `research_metrics_engine.py` | Single-source data analysis, referential joins, dataset checksum validation |
+| **Confirmation Gate** | `forward_confirmation_gate.py` | Unified confirmation gate enforcing 13 mandatory categories via strict AND logic |
+| **Session Reconciler** | `session_reconciler.py` | 6-dimension automated audit engine verifying provenance, ticks, quotes, outcomes |
+| **Risk Manager** | `risk.py` | Persistent SQLite risk state tracking and daily loss limit enforcement |
 
 ---
 
-## Directory Structure
+## Project Directory Structure
 
 ```
 bot_builder/
-├── .env.example                                  # Environment variables template
-├── .gitignore                                    # Git ignore specification (.agents protected)
-├── README.md                                     # Architectural documentation and CLI reference
-├── confirmation_specification.py                 # Pre-registered SHA-256 confirmation manifests
-├── contract_lifecycle.py                         # Canonical 5-tick contract execution model
-├── dashboard.py                                  # Web dashboard (60-30-10 palette, SVG only, argparse CLI)
-├── decision_gate.py                              # Centralized multi-gate eligibility engine
-├── economic_evaluator.py                         # Genuine proposal EV, break-even hurdles, stress tests
-├── feature_schema.py                             # Canonical feature extraction schema
-├── forward_collection_service.py                 # Long-running collection service with milestones & admission
-├── forward_confirmation_gate.py                  # Single authoritative 13-condition confirmation gate
-├── forward_journal.py                            # Prediction journal delegating to OutcomeResolver
-├── forward_observer.py                           # Forward observation orchestrator with anchored warmup
-├── forward_session.py                            # Session registry with immutable stages & admission checks
-├── forward_validation_gate.py                    # Promotion gate requiring RECONCILED session status
-├── health_monitor.py                             # Process and network health diagnostics
-├── live_collector.py                             # Live WebSocket tick streaming and gap monitor
-├── model_artifact.py                             # Frozen model schema with dynamic required_lookback
-├── model_manager.py                              # Model registry, training, and holdout evaluation
-├── outcome_resolver.py                           # Multi-pending outcome tracking & canonical resolution
-├── performance_tracker.py                        # Economic PnL attribution engine strictly per session
-├── quote_database.py                             # SQLite proposal quote database with session filtering
-├── quote_recorder.py                             # Deriv proposal quote recorder with session propagation
-├── research_metrics_engine.py                    # Canonical data analysis engine with SHA-256 integrity checksums
-├── risk.py                                       # SQLite-persisted risk management engine
-├── run_edge_research.py                          # Statistical edge analysis and hypothesis testing
-├── run_forward_session.py                        # Operational V1.7.2 CLI launcher with --manifest admission
-├── session_reconciler.py                         # Automated session reconciliation engine
-├── session_reporter.py                           # Session and daily report generator with argparse CLI
-├── session_research_aggregator.py                # Multi-session stage aggregator delegating to gate
-├── statistical_evaluator.py                      # Calibration, BSS, rare-event ECE, bootstrap, Neff
-├── verify_deriv_connection.py                    # WebSocket handshake and latency diagnostic
-├── verify_v162_reconciliation.py                 # Deterministic two-session offline reconciliation script
+├── .gitignore                                      # Excludes scratch, .agents, pycache
+├── README.md                                       # Architectural documentation and specs
+├── requirements.txt                                # Python dependencies (zero unapproved additions)
+├── config.py                                       # System configuration defaults
+│
+├── contract_specification.py                       # Canonical 2T and 5T monotonic specs
+├── contract_model.py                               # Vectorized contract lifecycle engine
+├── contract_lifecycle.py                           # Demo settlement verification harness
+│
+├── model_artifact.py                               # ModelArtifact schema and JSON serialization
+├── model_manager.py                                # Model discovery, loading, and duration routing
+├── model_2tick.py                                  # Independent 2-tick model implementation
+│
+├── feature_schema.py                               # Canonical feature definitions and lookback
+├── features.py                                     # Feature computation utilities
+├── probability.py                                  # Statistical distributions & Wilson score intervals
+│
+├── quote_recorder.py                               # Deriv proposal quote recorder
+├── quote_database.py                               # Indexed SQLite proposal quote storage
+├── quote_engine.py                                 # Quoting engine with duration support
+│
+├── outcome_resolver.py                             # Duration-aware multi-pending outcome resolver
+├── forward_journal.py                              # Immutable forward prediction journal
+├── forward_observer.py                             # Live stream observer and sliding buffer
+├── forward_session.py                              # Session registry and lifecycle states
+├── session_reconciler.py                           # 6-dimension audit reconciler
+├── run_forward_session.py                          # Forward research CLI runner
+│
+├── decision_gate.py                                # Centralized 11-gate paper decision gate
+├── forward_confirmation_gate.py                    # Authoritative confirmation gate
+├── confirmation_specification.py                   # Pre-registered confirmation manifests
+├── risk.py                                         # Institutional persistent risk engine
+│
+├── strategy_discovery.py                           # Advisory-only hypothesis testing engine
+├── dual_duration_research.py                       # Paired 2T vs 5T research comparison engine
+├── research_metrics_engine.py                      # Research metrics aggregation engine
+│
 ├── data/
-│   ├── forward_predictions.db                    # Persistent SQLite predictions and outcomes tables
-│   ├── quotes.db                                 # Persistent SQLite proposal quotes database
-│   ├── risk_state.db                             # Persistent SQLite risk state database
-│   ├── sessions.db                               # Persistent SQLite forward sessions database
-│   ├── validation_gate.db                        # Model promotion and audit trail database
-│   ├── R_75_master.csv                           # Canonical historical tick dataset
-│   └── quarantine/
-│       ├── .gitkeep
-│       └── quarantine_log.json
+│   ├── R_75_master.csv                             # Canonical training dataset (43,184 ticks)
+│   ├── R_75_live_ticks.csv                         # Live market stream (2,014 ticks)
+│   ├── deriv_2t_5t_availability.json               # Live Deriv API 2T & 5T proposal records
+│   ├── forward_predictions.db                      # SQLite prediction & outcome journal
+│   ├── quotes.db                                   # SQLite proposal quotes database
+│   ├── sessions.db                                 # SQLite session registry
+│   └── risk_state.db                               # SQLite persistent risk limits
+│
 ├── models/
-│   └── M_R_75_5TICK_20261008_132512.json           # Frozen baseline research model artifact
-├── reports/
-│   ├── V1_7_2_RESEARCH_INTEGRITY_AND_CONFIRMATION_REPORT.md # Comprehensive V1.7.2 audit report
-│   ├── V1_7_1_CONFIRMATION_AND_FORWARD_EVIDENCE_REPORT.md # Historical V1.7.1 validation report
-│   ├── V1_7_FORWARD_STATISTICAL_VALIDATION_REPORT.md # Historical V1.7 validation report
-│   ├── V1_6_4_FORWARD_OUTCOME_VALIDATION_REPORT.md   # Historical V1.6.4 validation report
-│   └── session_*.json                            # Generated forward session audit reports
-└── tests/
-    ├── test_v172_research_integrity.py           # V1.7.2 Defect A-D regression, bypass and admission tests
-    ├── test_v171_confirmation_hardening.py       # V1.7.1 manifest, cases A-F, benchmark fallback removal
-    ├── test_v17_statistical_validation.py        # V1.7 calibration, dependence, economics & stages
-    ├── test_v164_outcome_resolution.py           # V1.6.4 outcome resolver, gap fix & e2e acceptance
-    ├── test_v163_integration.py                  # V1.6.3 dynamic lookback, warmup & lifecycle tests
-    ├── test_v162_data_integrity.py               # V1.6.2 data integrity & reconciliation tests
-    ├── test_v161_forward_activation.py           # V1.6.1 safety and lifecycle regression tests
-    └── ...                                       # 232 total passing automated unit & integration tests
+│   ├── M_R_75_5TICK_20261008_132512.json           # Preserved authoritative 5-tick frozen model
+│   └── M_R_75_2TICK_20261011_120000.json           # Independent 2-tick frozen model
+│
+├── tests/
+│   ├── test_v174_dual_duration_and_discovery.py    # 17 new V1.7.4 regression tests
+│   ├── test_v173_chronology_and_settlement.py      # V1.7.3 chronology & settlement tests
+│   ├── test_v172_research_integrity.py             # V1.7.2 integrity & confirmation tests
+│   └── ... (274 total passing tests)
+│
+└── V1_7_4 Deliverable Reports:
+    ├── V1_7_4_EVIDENCE_CORRECTION_REPORT.md        # Reconciled historical probabilities & EV
+    ├── V1_7_4_DERIV_2T_AVAILABILITY_REPORT.md       # Live Deriv 2T contract availability
+    ├── V1_7_4_VIBE_TRADING_RESEARCH_ASSESSMENT.md  # Vibe-Trading methodology assessment
+    ├── V1_7_4_DUAL_DURATION_MODEL_REPORT.md        # Independent 2T & 5T model report
+    ├── V1_7_4_DUAL_DURATION_FORWARD_COMPARISON.md  # Paired 2T vs 5T empirical comparison
+    └── V1_7_4_RELEASE_VALIDATION_REPORT.md         # Release audit & safety verification
 ```
 
 ---
 
-## Verified Command Execution Reference
+## Test Suite & Verification Execution
 
-### 1. Run Complete Regression Test Suite (232 Passed)
-```powershell
-python -m pytest tests/ -v
+Execute the full automated test suite:
+
+```bash
+python -m pytest -q
 ```
 
-### 2. Run V1.7.2 Research Integrity & Confirmation Gate Tests
-```powershell
-python -m pytest tests/test_v172_research_integrity.py -v
+Expected result:
 ```
-
-### 3. Run Pipeline Diagnostics Without Streaming
-```powershell
-python run_forward_session.py --diagnose --symbol R_75
+274 passed in ~68s (100% green)
 ```
-
-### 4. Run Bounded Live Smoke Test (30 seconds)
-```powershell
-python run_forward_session.py --symbol R_75 --duration 30 --smoke-test
-```
-
-### 5. Pre-Register and Freeze Confirmation Manifest
-```powershell
-python -c "from confirmation_specification import ConfirmationManifest; m = ConfirmationManifest.create_default_for_model('M_R_75_5TICK', 'sha256_model_hash', 'R_75'); m.save_to_file('data/manifest_r75_v172.json'); print('Frozen manifest checksum:', m.specification_checksum)"
-```
-
-### 6. Start Authorized Confirmation Session (Admission Enforced)
-```powershell
-python run_forward_session.py --mode SHADOW --symbol R_75 --duration 3600 --stage CONFIRMATION --manifest data/manifest_r75_v172.json --target-resolved 500
-```
-
-### 7. Verify Deriv WebSocket API Connectivity
-```powershell
-python verify_deriv_connection.py --symbol R_75 --timeout 6.0
-```
-
-### 8. Compute Canonical Research Metrics and Checksum
-```powershell
-python -c "from research_metrics_engine import ResearchMetricsEngine; eng = ResearchMetricsEngine(); m = eng.compute_metrics('R_75'); print('RH Wins:', m.runhigh.wins, 'RL Wins:', m.runlow.wins, 'Dual Losses:', m.both_lost_count, 'Checksum:', m.integrity_checksum)"
-```
-
-### 9. Evaluate Authoritative Confirmation Gate
-```powershell
-python -c "from forward_confirmation_gate import evaluate_forward_edge_confirmation; rep = evaluate_forward_edge_confirmation('R_75', 'M_R_75_5TICK'); print('Verdict:', rep.verdict); print('Confirmed:', rep.is_confirmed)"
-```
-
-### 10. Generate Session and Daily Reports
-```powershell
-# Daily report
-python session_reporter.py R_75
-
-# Session report
-python session_reporter.py R_75 --session <session_id>
-```
-
-### 11. Launch Web Operations Dashboard
-```powershell
-python dashboard.py --port 8088
-```
-Navigate to `http://127.0.0.1:8088`.
 
 ---
 
-## Authoritative V1.7.3 Quantitative Audit & Validation Package
+## Permanent Safety Invariants
 
-The following reports document the V1.7.3 mathematical verification and causal audit:
-- [V1_7_3_QUOTE_CHRONOLOGY_AUDIT.md](file:///d:/workspace_programming/bot_builder/V1_7_3_QUOTE_CHRONOLOGY_AUDIT.md): Causal quote availability audit, zero future quotes, root cause analysis of Deriv proposal ID reuse, and 4 distinct quote coverage metrics.
-- [V1_7_3_CONTRACT_OUTCOME_AUDIT.md](file:///d:/workspace_programming/bot_builder/V1_7_3_CONTRACT_OUTCOME_AUDIT.md): Official Deriv documentation references, canonical 5-movement monotonic contract definition, and 0-discrepancy raw tick re-computation.
-- [V1_7_3_FORWARD_EVIDENCE_REPORT.md](file:///d:/workspace_programming/bot_builder/V1_7_3_FORWARD_EVIDENCE_REPORT.md): Recomputed probability calibration, dependence-aware block-bootstrap uncertainty ($0.52\%$ lower bound), genuine quote-based EV, and 0 PAPER approvals.
-- [V1_7_3_RELEASE_VALIDATION_REPORT.md](file:///d:/workspace_programming/bot_builder/V1_7_3_RELEASE_VALIDATION_REPORT.md): Complete test suite results (257 passing tests), clean ZIP extraction verification, and operational readiness.
-
-## Controlled Forward Research Evidence Package
-
-The following authoritative reports document the live operational execution and statistical audit of session `413bbee4`:
-- [FORWARD_SESSION_EXECUTION_REPORT.md](file:///d:/workspace_programming/bot_builder/FORWARD_SESSION_EXECUTION_REPORT.md): Live WebSocket streaming, 145 ticks, 134 predictions, 129 resolved outcomes, and graceful shutdown lifecycle.
-- [SESSION_DATA_INTEGRITY_REPORT.md](file:///d:/workspace_programming/bot_builder/SESSION_DATA_INTEGRITY_REPORT.md): Referential database audit across all 8 sessions, 1,897 predictions, zero chronology errors, and independent win/loss accounting.
-- [FORWARD_PROBABILITY_REPORT.md](file:///d:/workspace_programming/bot_builder/FORWARD_PROBABILITY_REPORT.md): Frozen-model calibration, moving-block bootstrap (Block L=5), effective sample size $N_{\text{eff}} = 96.45$, and empirical win rates.
-- [QUOTE_BASED_EV_REPORT.md](file:///d:/workspace_programming/bot_builder/QUOTE_BASED_EV_REPORT.md): Live broker proposal quotes ($2.00 stake $\to$ $61.07 payout), break-even hurdle ($3.275\%$), conservative EV (-$0.29), and risk filtering.
-- [NEXT_COLLECTION_PLAN.md](file:///d:/workspace_programming/bot_builder/NEXT_COLLECTION_PLAN.md): Multi-session phased collection roadmap, statistical power targets, and manifest pre-registration protocols.
-
----
-
-## Safety Directives & Final Verdict
-
-- **Real-Money Trading:** Permanently locked to disabled (`LIVE_EXECUTION_DISABLED = True`). Zero buy orders are submitted under any circumstances.
-- **Operational Status:** `LIVE_COLLECTION_VERIFIED`. The software infrastructure has been empirically verified under live WebSocket streaming and is operationally ready for multi-session forward research.
-- **Research Verdict:** `NO_CONFIRMATION_SESSIONS` / `INSUFFICIENT_FORWARD_EVIDENCE`. Zero independent sessions have been registered under `CONFIRMATION_FORWARD` stage. The platform honestly reports absent confirmation studies as `NO_CONFIRMATION_SESSIONS` with null financial metrics, eliminating premature edge declarations and false win rates.
+1. **`LIVE_EXECUTION_DISABLED = True`**: Hardcoded invariant. Real-money purchases are permanently disabled across all modules.
+2. **No Real-Money Endpoints**: The software contains zero real-money order routing code.
+3. **`IS_ADVISORY_ONLY = True`**: AI strategy discovery is locked behind an advisory firewall.
+4. **Authoritative NO_TRADE**: Every observation in SHADOW mode resolves to `decision: NO_TRADE`.
+5. **No Lookahead**: Strict causal timestamp enforcement: $\text{QuoteResponse} \le \text{DecisionTime}$.

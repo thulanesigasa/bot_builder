@@ -97,9 +97,11 @@ class ForwardObserver:
         session_id: str = "",
         risk_db_path: Optional[str] = None,
         preload_warmup: bool = False,
-        warmup_csv_path: Optional[str] = None
+        warmup_csv_path: Optional[str] = None,
+        contract_duration: int = 5
     ):
         self.symbol = symbol
+        self.contract_duration = contract_duration
         self.mode = mode.upper()
         if self.mode not in ("DATA_COLLECTION_ONLY", "SHADOW", "PAPER"):
             self.mode = "SHADOW"
@@ -114,7 +116,7 @@ class ForwardObserver:
         self.journal = ForwardPredictionJournal(db_path=journal_db_path, enforce_session_id=True)
         self.quote_db = QuoteDatabase(db_path=quote_db_path)
         self.quote_engine = QuoteEngine(mode="real_quotes_only", quote_db=self.quote_db, allow_benchmark_fallback=False)
-        self.contract_model = ContractOutcomeModel(duration_ticks=5, entry_offset=1)
+        self.contract_model = ContractOutcomeModel(duration_ticks=self.contract_duration, entry_offset=1)
         self.risk_manager = RiskManager(db_path=risk_db_path or DEFAULT_RISK_DB, symbol=self.symbol)
 
         # In-memory sliding tick buffer for rolling feature computation
@@ -289,8 +291,9 @@ class ForwardObserver:
     def _init_frozen_model(self, model_path_or_id: Optional[str]):
         """Discovers, validates, and loads the frozen prediction model."""
         target_model = model_path_or_id
+        dur = getattr(self, "contract_duration", 5) or 5
         if not target_model:
-            target_model = self.model_manager.get_latest_model_for_symbol(self.symbol)
+            target_model = self.model_manager.get_latest_model_for_symbol(self.symbol, duration_ticks=dur)
 
         if not target_model:
             script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -302,9 +305,10 @@ class ForwardObserver:
                     self.model_manager.train_and_export_baseline_model(
                         csv_path=csv_cand,
                         symbol=self.symbol,
+                        duration_ticks=dur,
                         approval_status=ModelStatus.RESEARCH_ONLY
                     )
-                    target_model = self.model_manager.get_latest_model_for_symbol(self.symbol)
+                    target_model = self.model_manager.get_latest_model_for_symbol(self.symbol, duration_ticks=dur)
                 except Exception:
                     pass
 
@@ -317,7 +321,7 @@ class ForwardObserver:
             model_path_or_id=target_model,
             expected_symbol=self.symbol,
             expected_contract_family="RUNHIGH_RUNLOW",
-            expected_duration_ticks=5,
+            expected_duration_ticks=dur,
             require_paper_approval=(self.mode == "PAPER")
         )
 

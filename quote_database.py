@@ -167,7 +167,8 @@ class QuoteDatabase:
         contract_type: str,
         timestamp: float,
         max_freshness_seconds: float = 60.0,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        duration: Optional[int] = None
     ) -> Optional[ProposalRecord]:
         """Fetches the latest recorded quote strictly before `timestamp`.
         
@@ -184,9 +185,10 @@ class QuoteDatabase:
             c_type = "RUNLOW"
 
         min_time = timestamp - max_freshness_seconds
+        dur_clause = " AND contract_duration = ?" if duration is not None else ""
         with self._get_connection() as conn:
             if session_id:
-                cur = conn.execute("""
+                sql = f"""
                     SELECT * FROM quotes
                     WHERE market_symbol = ?
                       AND contract_type = ?
@@ -195,11 +197,16 @@ class QuoteDatabase:
                       AND collection_status = 'QUOTE_AVAILABLE'
                       AND total_payout > 0
                       AND session_id = ?
+                      {dur_clause}
                     ORDER BY response_timestamp DESC
                     LIMIT 1
-                """, (symbol, c_type, float(timestamp), float(min_time), session_id))
+                """
+                params = [symbol, c_type, float(timestamp), float(min_time), session_id]
+                if duration is not None:
+                    params.append(int(duration))
+                cur = conn.execute(sql, params)
             else:
-                cur = conn.execute("""
+                sql = f"""
                     SELECT * FROM quotes
                     WHERE market_symbol = ?
                       AND contract_type = ?
@@ -207,9 +214,14 @@ class QuoteDatabase:
                       AND response_timestamp >= ?
                       AND collection_status = 'QUOTE_AVAILABLE'
                       AND total_payout > 0
+                      {dur_clause}
                     ORDER BY response_timestamp DESC
                     LIMIT 1
-                """, (symbol, c_type, float(timestamp), float(min_time)))
+                """
+                params = [symbol, c_type, float(timestamp), float(min_time)]
+                if duration is not None:
+                    params.append(int(duration))
+                cur = conn.execute(sql, params)
             row = cur.fetchone()
             if row is None:
                 return None

@@ -1,0 +1,34 @@
+{
+  "RUNHIGH_2t": {
+    "status": "SUCCESS",
+    "ask_price": 2,
+    "payout": 7.63,
+    "break_even_pct": 26.212319790301443,
+    "proposal_id": "1b2591ab-cdda-733d-bee8-9d4d8bae742c",
+    "latency_ms": 305.9110641479492
+  },
+  "RUNLOW_2t": {
+    "status": "SUCCESS",
+    "ask_price": 2,
+    "payout": 7.63,
+    "break_even_pct": 26.212319790301443,
+    "proposal_id": "15db5536-509e-b542-1329-983b48277519",
+    "latency_ms": 296.2815761566162
+  },
+  "RUNHIGH_5t": {
+    "status": "SUCCESS",
+    "ask_price": 2,
+    "payout": 61.07,
+    "break_even_pct": 3.2749304077288355,
+    "proposal_id": "44579d6d-4c0f-df22-10d7-1c5450fbf18d",
+    "latency_ms": 397.5553512573242
+  },
+  "RUNLOW_5t": {
+    "status": "SUCCESS",
+    "ask_price": 2,
+    "payout": 61.07,
+    "break_even_pct": 3.2749304077288355,
+    "proposal_id": "08efe3b6-4277-ff96-feca-b2c7313328e5",
+    "latency_ms": 296.1597442626953
+  }
+}

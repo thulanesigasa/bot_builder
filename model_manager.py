@@ -49,8 +49,8 @@ class ModelManager:
         self.models_dir = models_dir or self.DEFAULT_MODELS_DIR
         os.makedirs(self.models_dir, exist_ok=True)
 
-    def get_latest_model_for_symbol(self, symbol: str = "R_75") -> Optional[str]:
-        """Finds the latest valid JSON model artifact file for a given symbol."""
+    def get_latest_model_for_symbol(self, symbol: str = "R_75", duration_ticks: Optional[int] = None) -> Optional[str]:
+        """Finds the latest valid JSON model artifact file for a given symbol and optional duration."""
         candidates = []
         sym_norm = symbol.upper().replace("_", "")
         for fname in os.listdir(self.models_dir):
@@ -59,6 +59,8 @@ class ModelManager:
                 try:
                     art = ModelArtifact.load_from_file(fpath)
                     if art.market_symbol.upper().replace("_", "") == sym_norm:
+                        if duration_ticks is not None and getattr(art, "contract_duration", 5) != duration_ticks:
+                            continue
                         candidates.append((art.created_at_utc, fpath))
                 except Exception:
                     continue
@@ -129,6 +131,7 @@ class ModelManager:
         self,
         csv_path: str,
         symbol: str = "R_75",
+        duration_ticks: int = 5,
         output_filename: Optional[str] = None,
         approval_status: str = ModelStatus.RESEARCH_ONLY
     ) -> ModelArtifact:
@@ -141,8 +144,8 @@ class ModelManager:
         prices = df["price"].astype(float).values
         n = len(prices)
 
-        # 5-tick contract outcome modeling
-        contract_model = ContractOutcomeModel(duration_ticks=5, entry_offset=1)
+        # Configurable tick contract outcome modeling
+        contract_model = ContractOutcomeModel(duration_ticks=duration_ticks, entry_offset=1)
         outcomes_df = contract_model.compute_contract_outcomes(df)
         outcomes_up = outcomes_df["runhigh_win"].values
         outcomes_down = outcomes_df["runlow_win"].values
@@ -154,7 +157,8 @@ class ModelManager:
         valid_obs_count = 0
 
         # Require lookback of at least 25 ticks
-        for i in range(25, n - 6):
+        max_fwd_offset = duration_ticks + 1
+        for i in range(25, n - max_fwd_offset):
             if outcomes_up[i] is None or outcomes_down[i] is None:
                 continue
 
@@ -183,8 +187,9 @@ class ModelManager:
             state_tables[state]["runlow_wins"] += is_down
 
         # Bayesian smoothed unconditional empirical base rates (shrinkage floor > 0)
-        base_rate_rh = max(0.001, (rh_wins_total / valid_obs_count)) if valid_obs_count > 0 else 0.03125
-        base_rate_rl = max(0.001, (rl_wins_total / valid_obs_count)) if valid_obs_count > 0 else 0.03125
+        uncond_default = (0.5 ** duration_ticks)
+        base_rate_rh = max(0.001, (rh_wins_total / valid_obs_count)) if valid_obs_count > 0 else uncond_default
+        base_rate_rl = max(0.001, (rl_wins_total / valid_obs_count)) if valid_obs_count > 0 else uncond_default
 
         # 3-way split observations for validation metrics
         train_n = int(valid_obs_count * 0.6)
@@ -196,16 +201,16 @@ class ModelManager:
         brier_rl = float(base_rate_rl * (1 - base_rate_rl))
 
         artifact = ModelArtifact(
-            model_id=f"M_{symbol}_5TICK_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
-            model_version="1.5.3",
+            model_id=f"M_{symbol}_{duration_ticks}TICK_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+            model_version="1.7.4",
             created_at_utc=datetime.now(timezone.utc).isoformat(),
             training_dataset_id=os.path.basename(csv_path),
             dataset_checksum=checksum,
             market_symbol=symbol,
             contract_family="RUNHIGH_RUNLOW",
-            contract_duration=5,
+            contract_duration=duration_ticks,
             contract_duration_unit="t",
-            outcome_definition_version="1.5",
+            outcome_definition_version="1.7.4",
             feature_schema_version=FEATURE_SCHEMA_VERSION,
             feature_names=CANONICAL_FEATURE_NAMES,
             feature_ordering=CANONICAL_FEATURE_NAMES,
