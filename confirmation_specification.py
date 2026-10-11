@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 
-CONFIRMATION_SPEC_VERSION = "V1.7.1"
+CONFIRMATION_SPEC_VERSION = "V1.7.2.1"
 
 
 @dataclass
@@ -42,7 +42,7 @@ class ConfirmationManifest:
     min_conservative_ev: float = 0.0     # Conservative EV > 0.0 using lower probability bound
     max_hypothetical_drawdown: float = 20.0
     max_consecutive_losses: int = 5
-    software_version: str = "V1.7.1"
+    software_version: str = "V1.7.2.1"
     created_at_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     specification_checksum: str = ""
 
@@ -133,4 +133,30 @@ class ConfirmationManifest:
             min_effective_sample_size=max(50.0, min_observations / 4.5),
         )
         return manifest
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Confirmation Specification & Manifest Generator (V1.7.2.1)")
+    parser.add_argument("symbol", nargs="?", default="R_75", help="Market symbol (default: R_75)")
+    parser.add_argument("--model", default="M_R_75_5TICK_20261008_132512.json", help="Model artifact filename")
+    parser.add_argument("--contract", default="RUNHIGH", help="Contract type (default: RUNHIGH)")
+    parser.add_argument("--save", default=None, help="Save manifest to path (e.g. models/confirmation_manifest.json)")
+    args = parser.parse_args()
+    manifest = ConfirmationManifest.create_default_for_model(
+        model_id=args.model,
+        symbol=args.symbol,
+        contract_type=args.contract
+    )
+    if args.save:
+        manifest.save_to_file(args.save)
+        print(f"Manifest saved to: {args.save}")
+    print(f"Manifest ID       : {manifest.specification_id}")
+    print(f"Model ID          : {manifest.model_id}")
+    print(f"Symbol            : {manifest.market_symbol}")
+    print(f"Contract          : {manifest.contract_type}")
+    print(f"Min Observations  : {manifest.min_confirmation_observations}")
+    print(f"Min Sessions      : {manifest.min_confirmation_sessions}")
+    print(f"Quote Coverage Req: {manifest.min_quote_coverage_pct}%")
+    print(f"Manifest Checksum : {manifest.specification_checksum}")
 

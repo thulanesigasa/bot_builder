@@ -351,8 +351,10 @@ class ResearchMetricsEngine:
             if os.path.exists(self.session_db_path):
                 try:
                     with sqlite3.connect(self.session_db_path) as s_conn:
-                        s_cur = s_conn.execute("SELECT session_id FROM forward_sessions WHERE symbol = ?", (symbol,))
-                        target_sessions = [r[0] for r in s_cur.fetchall()]
+                        tbl = s_conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('sessions', 'forward_sessions')").fetchone()
+                        if tbl:
+                            s_cur = s_conn.execute(f"SELECT session_id FROM {tbl[0]} WHERE symbol = ?", (symbol,))
+                            target_sessions = [r[0] for r in s_cur.fetchall()]
                 except Exception:
                     pass
             if not target_sessions and os.path.exists(self.forward_db_path):

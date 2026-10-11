@@ -44,17 +44,19 @@ from session_reconciler import SessionReconciler
 
 import argparse
 
-_parser = argparse.ArgumentParser(description="Local Web Dashboard & Visual Analysis Engine (V1.7.2)")
-_parser.add_argument("port", nargs="?", type=int, default=8088, help="Server port (default: 8088)")
-_parser.add_argument("--port", dest="opt_port", type=int, default=None, help="Server port option")
-_parser.add_argument("--host", default="127.0.0.1", help="Binding host (default: 127.0.0.1)")
+PORT = 8088
+BIND_HOST = "127.0.0.1"
 
-if "--help" in sys.argv or "-h" in sys.argv:
-    _parser.parse_args()
-
-_args, _ = _parser.parse_known_args()
-PORT = _args.opt_port or _args.port or 8088
-BIND_HOST = _args.host
+if __name__ == "__main__":
+    _parser = argparse.ArgumentParser(description="Local Web Dashboard & Visual Analysis Engine (V1.7.2.1)")
+    _parser.add_argument("port", nargs="?", type=int, default=8088, help="Server port (default: 8088)")
+    _parser.add_argument("--port", dest="opt_port", type=int, default=None, help="Server port option")
+    _parser.add_argument("--host", default="127.0.0.1", help="Binding host (default: 127.0.0.1)")
+    if "--help" in sys.argv or "-h" in sys.argv:
+        _parser.parse_args()
+    _args, _ = _parser.parse_known_args()
+    PORT = _args.opt_port or _args.port or 8088
+    BIND_HOST = _args.host
 
 
 def get_available_symbols():
@@ -136,13 +138,13 @@ def generate_v17_payload(symbol: str = "R_75") -> Dict[str, Any]:
     risk_snap = risk_mgr.get_state()
 
     # Economic EV calculations using genuine quotes
-    be_rh = (latest_rh.implied_probability * 100) if latest_rh else 3.28
-    be_rl = (latest_rl.implied_probability * 100) if latest_rl else 3.28
-    p_rh_mean = fwd_metrics.get("runhigh_estimated_mean_prob") or 0.0
-    p_rl_mean = fwd_metrics.get("runlow_estimated_mean_prob") or 0.0
+    be_rh = (latest_rh.implied_probability * 100) if latest_rh else None
+    be_rl = (latest_rl.implied_probability * 100) if latest_rl else None
+    p_rh_mean = fwd_metrics.get("runhigh_estimated_mean_prob")
+    p_rl_mean = fwd_metrics.get("runlow_estimated_mean_prob")
 
-    ord_ev_rh = (p_rh_mean * (latest_rh.total_payout if latest_rh else 61.03)) - (latest_rh.ask_price if latest_rh else 2.0)
-    ord_ev_rl = (p_rl_mean * (latest_rl.total_payout if latest_rl else 61.03)) - (latest_rl.ask_price if latest_rl else 2.0)
+    ord_ev_rh = ((p_rh_mean * latest_rh.total_payout) - latest_rh.ask_price) if (latest_rh and p_rh_mean is not None) else None
+    ord_ev_rl = ((p_rl_mean * latest_rl.total_payout) - latest_rl.ask_price) if (latest_rl and p_rl_mean is not None) else None
 
     # Extract top rejection reasons
     rejection_counts: Dict[str, int] = {}
@@ -187,8 +189,8 @@ def generate_v17_payload(symbol: str = "R_75") -> Dict[str, Any]:
     }
     v17_econ: Dict[str, Any] = {
         "quote_coverage_pct": fwd_metrics.get("quote_coverage_pct", 0.0),
-        "break_even_prob_runhigh": round(be_rh / 100.0, 4),
-        "ordinary_ev_runhigh": round(ord_ev_rh, 4) if p_rh_mean > 0 else None,
+        "break_even_prob_runhigh": round(be_rh / 100.0, 4) if be_rh is not None else None,
+        "ordinary_ev_runhigh": round(ord_ev_rh, 4) if ord_ev_rh is not None else None,
         "conservative_ev_runhigh": None,
         "cumulative_pnl": 0.0,
         "max_drawdown": 0.0,
@@ -226,7 +228,7 @@ def generate_v17_payload(symbol: str = "R_75") -> Dict[str, Any]:
 
             rh_e = econ_res.get("runhigh", {})
             v17_econ["quote_coverage_pct"] = econ_res.get("overall_quote_coverage_pct", 0.0)
-            v17_econ["break_even_prob_runhigh"] = rh_e.get("mean_break_even_prob", 0.0328)
+            v17_econ["break_even_prob_runhigh"] = rh_e.get("mean_break_even_prob")
             v17_econ["ordinary_ev_runhigh"] = rh_e.get("ordinary_ev")
             v17_econ["conservative_ev_runhigh"] = rh_e.get("conservative_ev")
             v17_econ["cumulative_pnl"] = econ_res.get("cumulative_pnl", 0.0)
@@ -295,7 +297,7 @@ def generate_v17_payload(symbol: str = "R_75") -> Dict[str, Any]:
         }
 
     return {
-        "version": "V1.7.2",
+        "version": "V1.7.2.1",
         "canonical_research_metrics": canon_data,
         "integrity_checksum": canon_data.get("integrity_checksum", "UNAVAILABLE"),
         "symbol": symbol,
@@ -609,7 +611,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         Economic EV & Edge
       </div>
       <div class="card-val" id="econ-ev-val">EV: N/A</div>
-      <div class="card-desc" id="econ-be">BE: 3.28% | Cons EV: N/A</div>
+      <div class="card-desc" id="econ-be">BE: N/A | Cons EV: N/A</div>
     </div>
 
     <!-- 6. Safety & Governance -->
@@ -627,7 +629,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <div class="panel">
     <div class="panel-title">
       <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-      V1.7.1 Authoritative Forward Edge Confirmation Gate (13 Pre-Registered Conditions)
+      V1.7.2.1 Authoritative Forward Edge Confirmation Gate (13 Pre-Registered Conditions)
     </div>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px;">
       <div style="background-color: var(--bg-base); padding: 14px; border-radius: 6px; border: 1px solid var(--border-subtle);">
@@ -844,7 +846,7 @@ function renderDashboard(data) {
   const econ17 = v17.economics || {};
   const ordEv = econ17.ordinary_ev_runhigh !== null && econ17.ordinary_ev_runhigh !== undefined ? `$${Number(econ17.ordinary_ev_runhigh).toFixed(2)}` : "N/A";
   const consEv = econ17.conservative_ev_runhigh !== null && econ17.conservative_ev_runhigh !== undefined ? `$${Number(econ17.conservative_ev_runhigh).toFixed(2)}` : "N/A";
-  const bePct = econ17.break_even_prob_runhigh ? (Number(econ17.break_even_prob_runhigh) * 100).toFixed(2) + "%" : "3.28%";
+  const bePct = (econ17.break_even_prob_runhigh !== null && econ17.break_even_prob_runhigh !== undefined) ? (Number(econ17.break_even_prob_runhigh) * 100).toFixed(2) + "%" : "N/A";
   document.getElementById("econ-ev-val").textContent = `EV: ${ordEv}`;
   document.getElementById("econ-be").textContent = `BE: ${bePct} | Cons EV: ${consEv}`;
 

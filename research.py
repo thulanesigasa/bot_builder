@@ -12,7 +12,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from config import DEFAULT_CONFIG, get_real_payout
+from config import DEFAULT_CONFIG
 from features import compute_features, validate_data
 from strategy import SETUPS
 from probability import evaluate_setup, calculate_break_even, bonferroni_critical_z
