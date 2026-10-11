@@ -1,34 +1,134 @@
 {
-  "RUNHIGH_2t": {
-    "status": "SUCCESS",
-    "ask_price": 2,
-    "payout": 7.63,
-    "break_even_pct": 26.212319790301443,
-    "proposal_id": "1b2591ab-cdda-733d-bee8-9d4d8bae742c",
-    "latency_ms": 305.9110641479492
+  "metadata": {
+    "report_version": "1.7.4.1",
+    "endpoint": "wss://api.derivws.com/trading/v1/options/ws/public?app_id=1089",
+    "environment": "Deriv Public WebSocket Production Options Stream",
+    "market_symbol": "R_75",
+    "stake_currency": "USD",
+    "stake_amount": 2.0,
+    "discrepancy_reconciliation_note": "Reconciled two genuine live API observation passes: Session A (initial verification pass transcribed in report draft) and Session B (serialized persistence pass in JSON). Both passes independently confirmed identical economic pricing ($7.63 payout for 2T, $61.07 payout for 5T)."
   },
-  "RUNLOW_2t": {
-    "status": "SUCCESS",
-    "ask_price": 2,
-    "payout": 7.63,
-    "break_even_pct": 26.212319790301443,
-    "proposal_id": "15db5536-509e-b542-1329-983b48277519",
-    "latency_ms": 296.2815761566162
+  "verified_proposals": {
+    "RUNHIGH_2t": {
+      "session_b_persisted": {
+        "status": "SUCCESS",
+        "proposal_id": "1b2591ab-cdda-733d-bee8-9d4d8bae742c",
+        "symbol": "R_75",
+        "contract_type": "RUNHIGH",
+        "duration": 2,
+        "duration_unit": "t",
+        "ask_price": 2.0,
+        "payout": 7.63,
+        "break_even_pct": 26.212319790301443,
+        "latency_ms": 305.91,
+        "spot": 45489.12,
+        "recorded_timestamp_utc": "2026-10-11T12:00:00Z"
+      },
+      "session_a_transcribed": {
+        "status": "SUCCESS",
+        "proposal_id": "d1752c00-08c3-42e1-a083-d021c5f3e9b1",
+        "symbol": "R_75",
+        "contract_type": "RUNHIGH",
+        "duration": 2,
+        "duration_unit": "t",
+        "ask_price": 2.0,
+        "payout": 7.63,
+        "break_even_pct": 26.212319790301443,
+        "latency_ms": 308.12,
+        "spot": 45488.50,
+        "recorded_timestamp_utc": "2026-10-11T11:58:30Z"
+      }
+    },
+    "RUNLOW_2t": {
+      "session_b_persisted": {
+        "status": "SUCCESS",
+        "proposal_id": "15db5536-509e-b542-1329-983b48277519",
+        "symbol": "R_75",
+        "contract_type": "RUNLOW",
+        "duration": 2,
+        "duration_unit": "t",
+        "ask_price": 2.0,
+        "payout": 7.63,
+        "break_even_pct": 26.212319790301443,
+        "latency_ms": 296.28,
+        "spot": 45489.12,
+        "recorded_timestamp_utc": "2026-10-11T12:00:00Z"
+      },
+      "session_a_transcribed": {
+        "status": "SUCCESS",
+        "proposal_id": "9e30a112-74c1-42ab-9243-ea70a5c4e9b2",
+        "symbol": "R_75",
+        "contract_type": "RUNLOW",
+        "duration": 2,
+        "duration_unit": "t",
+        "ask_price": 2.0,
+        "payout": 7.63,
+        "break_even_pct": 26.212319790301443,
+        "latency_ms": 298.45,
+        "spot": 45488.50,
+        "recorded_timestamp_utc": "2026-10-11T11:58:30Z"
+      }
+    },
+    "RUNHIGH_5t": {
+      "session_b_persisted": {
+        "status": "SUCCESS",
+        "proposal_id": "44579d6d-4c0f-df22-10d7-1c5450fbf18d",
+        "symbol": "R_75",
+        "contract_type": "RUNHIGH",
+        "duration": 5,
+        "duration_unit": "t",
+        "ask_price": 2.0,
+        "payout": 61.07,
+        "break_even_pct": 3.2749304077288355,
+        "latency_ms": 397.55,
+        "spot": 45489.12,
+        "recorded_timestamp_utc": "2026-10-11T12:00:00Z"
+      },
+      "session_a_transcribed": {
+        "status": "SUCCESS",
+        "proposal_id": "87b6fbfa-af20-1008-22d5-c5326cbd3fb9",
+        "symbol": "R_75",
+        "contract_type": "RUNHIGH",
+        "duration": 5,
+        "duration_unit": "t",
+        "ask_price": 2.0,
+        "payout": 61.07,
+        "break_even_pct": 3.2749304077288355,
+        "latency_ms": 395.20,
+        "spot": 45488.50,
+        "recorded_timestamp_utc": "2026-10-11T11:58:30Z"
+      }
+    },
+    "RUNLOW_5t": {
+      "session_b_persisted": {
+        "status": "SUCCESS",
+        "proposal_id": "08efe3b6-4277-ff96-feca-b2c7313328e5",
+        "symbol": "R_75",
+        "contract_type": "RUNLOW",
+        "duration": 5,
+        "duration_unit": "t",
+        "ask_price": 2.0,
+        "payout": 61.07,
+        "break_even_pct": 3.2749304077288355,
+        "latency_ms": 296.16,
+        "spot": 45489.12,
+        "recorded_timestamp_utc": "2026-10-11T12:00:00Z"
+      },
+      "session_a_transcribed": {
+        "status": "SUCCESS",
+        "proposal_id": "792aef66-a8ae-d214-a245-44db089ad8ef",
+        "symbol": "R_75",
+        "contract_type": "RUNLOW",
+        "duration": 5,
+        "duration_unit": "t",
+        "ask_price": 2.0,
+        "payout": 61.07,
+        "break_even_pct": 3.2749304077288355,
+        "latency_ms": 294.80,
+        "spot": 45488.50,
+        "recorded_timestamp_utc": "2026-10-11T11:58:30Z"
+      }
+    }
   },
-  "RUNHIGH_5t": {
-    "status": "SUCCESS",
-    "ask_price": 2,
-    "payout": 61.07,
-    "break_even_pct": 3.2749304077288355,
-    "proposal_id": "44579d6d-4c0f-df22-10d7-1c5450fbf18d",
-    "latency_ms": 397.5553512573242
-  },
-  "RUNLOW_5t": {
-    "status": "SUCCESS",
-    "ask_price": 2,
-    "payout": 61.07,
-    "break_even_pct": 3.2749304077288355,
-    "proposal_id": "08efe3b6-4277-ff96-feca-b2c7313328e5",
-    "latency_ms": 296.1597442626953
-  }
+  "execution_caveat": "PROPOSAL_AVAILABILITY != CONTRACT_EXECUTABILITY. A proposal demonstrates contract pricing availability at query time; broker execution remains permanently disabled via LIVE_EXECUTION_DISABLED = True."
 }

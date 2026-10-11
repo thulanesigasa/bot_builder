@@ -406,13 +406,15 @@ class ForwardObserver:
             symbol=self.symbol,
             contract_type="RUNHIGH",
             timestamp=float(epoch),
-            max_freshness_seconds=self.max_quote_age_seconds
+            max_freshness_seconds=self.max_quote_age_seconds,
+            duration=self.contract_duration
         )
         q_rl = self.quote_db.get_latest_quote_before(
             symbol=self.symbol,
             contract_type="RUNLOW",
             timestamp=float(epoch),
-            max_freshness_seconds=self.max_quote_age_seconds
+            max_freshness_seconds=self.max_quote_age_seconds,
+            duration=self.contract_duration
         )
 
         # 6. Evaluate probability strictly from Frozen Model (NO hardcoded values)
@@ -479,7 +481,7 @@ class ForwardObserver:
         gate_rh = evaluate_paper_trade_eligibility(
             symbol=self.symbol,
             contract_type="RUNHIGH",
-            duration_ticks=5,
+            duration_ticks=self.contract_duration,
             model_artifact=self.model_artifact,
             estimated_prob=rh_pred,
             lower_prob_bound=rh_lower,
@@ -510,7 +512,7 @@ class ForwardObserver:
         gate_rl = evaluate_paper_trade_eligibility(
             symbol=self.symbol,
             contract_type="RUNLOW",
-            duration_ticks=5,
+            duration_ticks=self.contract_duration,
             model_artifact=self.model_artifact,
             estimated_prob=rl_pred,
             lower_prob_bound=rl_lower,

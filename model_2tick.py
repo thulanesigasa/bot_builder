@@ -150,9 +150,20 @@ class TwoTickModelTrainer:
         self,
         csv_path: str,
         output_filename: Optional[str] = None,
-        approval_status: str = ModelStatus.RESEARCH_ONLY
+        approval_status: str = ModelStatus.RESEARCH_ONLY,
+        train_ratio: float = 0.60,
+        val_ratio: float = 0.20,
+        embargo_ticks: int = 3
     ) -> Tuple[ModelArtifact, TwoTickEvaluationSummary]:
-        """Fits an independent 2-tick state-conditional model and serializes it with full provenance."""
+        """Fits an independent 2-tick state-conditional model using strict chronological partitions.
+        
+        Strict Chronological Protocol (V1.7.4.1 Part 5):
+        1. Training Partition: First 60% of chronological observations.
+        2. Purge/Embargo Gap: 3 ticks (duration + 1) excluded between train and validation.
+        3. Validation Partition: Next 20% of observations for independent calibration & metrics.
+        4. Purge/Embargo Gap: 3 ticks excluded between validation and holdout.
+        5. Untouched Holdout: Final 20% of observations evaluated once without influencing model fitting.
+        """
         if not os.path.exists(csv_path):
             raise FileNotFoundError(f"Training CSV not found: {csv_path}")
 
@@ -166,27 +177,51 @@ class TwoTickModelTrainer:
         outcomes_up = outcomes_df["runhigh_win"].values
         outcomes_down = outcomes_df["runlow_win"].values
 
-        state_tables: Dict[str, Dict[str, Any]] = {}
-        rh_wins_total = 0
-        rl_wins_total = 0
-        valid_obs_count = 0
-
-        # Lookback = 25 ticks, forward horizon = 3 ticks (i+1 to i+3)
+        # Collect valid decision points (lookback 25, forward 3)
+        valid_indices: List[int] = []
         for i in range(25, n - 3):
             if outcomes_up[i] is None or outcomes_down[i] is None or math.isnan(outcomes_up[i]):
                 continue
+            valid_indices.append(i)
 
+        total_valid = len(valid_indices)
+        if total_valid < 100:
+            raise ValueError(f"Insufficient valid decision points: {total_valid} < 100 required.")
+
+        # Compute partition boundaries
+        n_train = int(total_valid * train_ratio)
+        n_val = int(total_valid * val_ratio)
+
+        train_indices = valid_indices[:n_train]
+        # Purge/embargo between train and val
+        val_start_idx = n_train + embargo_ticks
+        val_end_idx = val_start_idx + n_val
+        val_indices = valid_indices[val_start_idx:val_end_idx]
+
+        # Purge/embargo between val and holdout
+        hold_start_idx = val_end_idx + embargo_ticks
+        hold_indices = valid_indices[hold_start_idx:]
+
+        # -------------------------------------------------------------
+        # 1. FIT ON TRAINING PARTITION ONLY
+        # -------------------------------------------------------------
+        state_tables: Dict[str, Dict[str, Any]] = {}
+        rh_wins_train = 0
+        rl_wins_train = 0
+        train_count = 0
+
+        for i in train_indices:
             slice_df = df.iloc[max(0, i - 50):i + 1]
             feat_dict, state = extract_discrete_market_state(slice_df)
             if state in ("INSUFFICIENT_TICKS", "UNCLASSIFIED", "INVALID_INPUT"):
                 continue
 
-            valid_obs_count += 1
+            train_count += 1
             is_up = int(outcomes_up[i])
             is_down = int(outcomes_down[i])
 
-            rh_wins_total += is_up
-            rl_wins_total += is_down
+            rh_wins_train += is_up
+            rl_wins_train += is_down
 
             if state not in state_tables:
                 state_tables[state] = {
@@ -199,20 +234,105 @@ class TwoTickModelTrainer:
             state_tables[state]["runhigh_wins"] += is_up
             state_tables[state]["runlow_wins"] += is_down
 
-        base_rate_rh = float(rh_wins_total / valid_obs_count) if valid_obs_count > 0 else THEORETICAL_2T_BASELINE
-        base_rate_rl = float(rl_wins_total / valid_obs_count) if valid_obs_count > 0 else THEORETICAL_2T_BASELINE
+        base_rate_rh = float(rh_wins_train / train_count) if train_count > 0 else THEORETICAL_2T_BASELINE
+        base_rate_rl = float(rl_wins_train / train_count) if train_count > 0 else THEORETICAL_2T_BASELINE
 
-        train_n = int(valid_obs_count * 0.6)
-        val_n = int(valid_obs_count * 0.2)
-        hold_n = valid_obs_count - train_n - val_n
+        # Shrinkage prior weight
+        prior_weight = 50.0
 
-        brier_rh = float(base_rate_rh * (1.0 - base_rate_rh))
-        brier_rl = float(base_rate_rl * (1.0 - base_rate_rl))
+        def predict_probs(st: str) -> Tuple[float, float]:
+            if st in state_tables:
+                entry = state_tables[st]
+                c = entry["sample_count"]
+                p_rh = (entry["runhigh_wins"] + prior_weight * base_rate_rh) / (c + prior_weight)
+                p_rl = (entry["runlow_wins"] + prior_weight * base_rate_rl) / (c + prior_weight)
+            else:
+                p_rh = base_rate_rh
+                p_rl = base_rate_rl
+            return p_rh, p_rl
+
+        # -------------------------------------------------------------
+        # 2. INDEPENDENT VALIDATION EVALUATION (Out-of-sample)
+        # -------------------------------------------------------------
+        val_probs_rh: List[float] = []
+        val_probs_rl: List[float] = []
+        val_y_rh: List[float] = []
+        val_y_rl: List[float] = []
+
+        for i in val_indices:
+            slice_df = df.iloc[max(0, i - 50):i + 1]
+            feat_dict, state = extract_discrete_market_state(slice_df)
+            if state in ("INSUFFICIENT_TICKS", "UNCLASSIFIED", "INVALID_INPUT"):
+                continue
+
+            p_rh, p_rl = predict_probs(state)
+            val_probs_rh.append(p_rh)
+            val_probs_rl.append(p_rl)
+            val_y_rh.append(float(outcomes_up[i]))
+            val_y_rl.append(float(outcomes_down[i]))
+
+        n_val_eval = len(val_y_rh)
+        if n_val_eval > 0:
+            val_bs_rh = float(np.mean([(p - y)**2 for p, y in zip(val_probs_rh, val_y_rh)]))
+            val_bs_rl = float(np.mean([(p - y)**2 for p, y in zip(val_probs_rl, val_y_rl)]))
+            ref_bs_rh = float(np.mean([(base_rate_rh - y)**2 for y in val_y_rh]))
+            ref_bs_rl = float(np.mean([(base_rate_rl - y)**2 for y in val_y_rl]))
+            val_bss_rh = float(1.0 - (val_bs_rh / ref_bs_rh)) if ref_bs_rh > 0 else 0.0
+            val_bss_rl = float(1.0 - (val_bs_rl / ref_bs_rl)) if ref_bs_rl > 0 else 0.0
+            # Log loss
+            eps = 1e-15
+            val_logloss_rh = float(-np.mean([y * math.log(p + eps) + (1 - y) * math.log(1 - p + eps) for p, y in zip(val_probs_rh, val_y_rh)]))
+            val_logloss_rl = float(-np.mean([y * math.log(p + eps) + (1 - y) * math.log(1 - p + eps) for p, y in zip(val_probs_rl, val_y_rl)]))
+        else:
+            val_bs_rh = base_rate_rh * (1.0 - base_rate_rh)
+            val_bs_rl = base_rate_rl * (1.0 - base_rate_rl)
+            val_bss_rh = 0.0
+            val_bss_rl = 0.0
+            val_logloss_rh = 0.0
+            val_logloss_rl = 0.0
+
+        # -------------------------------------------------------------
+        # 3. UNTOUCHED HOLDOUT EVALUATION (Out-of-sample)
+        # -------------------------------------------------------------
+        hold_probs_rh: List[float] = []
+        hold_probs_rl: List[float] = []
+        hold_y_rh: List[float] = []
+        hold_y_rl: List[float] = []
+
+        for i in hold_indices:
+            slice_df = df.iloc[max(0, i - 50):i + 1]
+            feat_dict, state = extract_discrete_market_state(slice_df)
+            if state in ("INSUFFICIENT_TICKS", "UNCLASSIFIED", "INVALID_INPUT"):
+                continue
+
+            p_rh, p_rl = predict_probs(state)
+            hold_probs_rh.append(p_rh)
+            hold_probs_rl.append(p_rl)
+            hold_y_rh.append(float(outcomes_up[i]))
+            hold_y_rl.append(float(outcomes_down[i]))
+
+        n_hold_eval = len(hold_y_rh)
+        if n_hold_eval > 0:
+            hold_bs_rh = float(np.mean([(p - y)**2 for p, y in zip(hold_probs_rh, hold_y_rh)]))
+            hold_bs_rl = float(np.mean([(p - y)**2 for p, y in zip(hold_probs_rl, hold_y_rl)]))
+            ref_hold_bs_rh = float(np.mean([(base_rate_rh - y)**2 for y in hold_y_rh]))
+            ref_hold_bs_rl = float(np.mean([(base_rate_rl - y)**2 for y in hold_y_rl]))
+            hold_bss_rh = float(1.0 - (hold_bs_rh / ref_hold_bs_rh)) if ref_hold_bs_rh > 0 else 0.0
+            hold_bss_rl = float(1.0 - (hold_bs_rl / ref_hold_bs_rl)) if ref_hold_bs_rl > 0 else 0.0
+            hold_winrate_rh = float(np.mean(hold_y_rh))
+            hold_winrate_rl = float(np.mean(hold_y_rl))
+        else:
+            hold_bs_rh = base_rate_rh * (1.0 - base_rate_rh)
+            hold_bs_rl = base_rate_rl * (1.0 - base_rate_rl)
+            hold_bss_rh = 0.0
+            hold_bss_rl = 0.0
+            hold_winrate_rh = base_rate_rh
+            hold_winrate_rl = base_rate_rl
 
         model_id = f"M_{self.symbol}_2TICK_20261011_120000"
         artifact = ModelArtifact(
             model_id=model_id,
-            model_version="1.7.4",
+            model_version="1.7.4.1",
             created_at_utc=datetime.now(timezone.utc).isoformat(),
             training_dataset_id=os.path.basename(csv_path),
             dataset_checksum=checksum,
@@ -220,34 +340,56 @@ class TwoTickModelTrainer:
             contract_family="RUNHIGH_RUNLOW",
             contract_duration=2,
             contract_duration_unit="t",
-            outcome_definition_version="1.7.4",
+            outcome_definition_version="1.7.4.1",
             feature_schema_version=FEATURE_SCHEMA_VERSION,
             feature_names=CANONICAL_FEATURE_NAMES,
             feature_ordering=CANONICAL_FEATURE_NAMES,
             model_type="EMPIRICAL_STATE_CONDITIONAL",
             model_parameters={
-                "base_rate_runhigh": round(base_rate_rh, 5),
-                "base_rate_runlow": round(base_rate_rl, 5),
+                "base_rate_runhigh_train": round(base_rate_rh, 5),
+                "base_rate_runlow_train": round(base_rate_rl, 5),
                 "theoretical_baseline": THEORETICAL_2T_BASELINE,
                 "break_even_hurdle": round(DERIV_2T_BREAK_EVEN_HURDLE, 5),
                 "total_states_discovered": len(state_tables),
-                "state_tables": state_tables
+                "state_tables": state_tables,
+                "partition_info": {
+                    "train_ratio": train_ratio,
+                    "val_ratio": val_ratio,
+                    "embargo_ticks": embargo_ticks,
+                    "train_sample_count": train_count,
+                    "val_sample_count": n_val_eval,
+                    "holdout_sample_count": n_hold_eval,
+                    "train_index_range": [train_indices[0], train_indices[-1]] if train_indices else [],
+                    "val_index_range": [val_indices[0], val_indices[-1]] if val_indices else [],
+                    "holdout_index_range": [hold_indices[0], hold_indices[-1]] if hold_indices else []
+                }
             },
             calibration_parameters={
                 "method": "BAYESIAN_EMPIRICAL_SHRINKAGE",
-                "shrinkage_prior_weight": 50.0,
+                "shrinkage_prior_weight": prior_weight,
                 "confidence_level": 0.95
             },
-            training_sample_count=train_n,
-            validation_sample_count=val_n,
-            holdout_sample_count=hold_n,
+            training_sample_count=train_count,
+            validation_sample_count=n_val_eval,
+            holdout_sample_count=n_hold_eval,
             validation_metrics={
-                "brier_score_runhigh": round(brier_rh, 5),
-                "brier_score_runlow": round(brier_rl, 5),
+                "brier_score_runhigh": round(val_bs_rh, 5),
+                "brier_score_runlow": round(val_bs_rl, 5),
+                "brier_skill_score_runhigh": round(val_bss_rh, 5),
+                "brier_skill_score_runlow": round(val_bss_rl, 5),
+                "log_loss_runhigh": round(val_logloss_rh, 5),
+                "log_loss_runlow": round(val_logloss_rl, 5),
                 "break_even_hurdle": round(DERIV_2T_BREAK_EVEN_HURDLE, 5),
-                "relative_lift_max": 0.0
+                "holdout_metrics": {
+                    "brier_score_runhigh": round(hold_bs_rh, 5),
+                    "brier_score_runlow": round(hold_bs_rl, 5),
+                    "brier_skill_score_runhigh": round(hold_bss_rh, 5),
+                    "brier_skill_score_runlow": round(hold_bss_rl, 5),
+                    "empirical_win_rate_runhigh": round(hold_winrate_rh, 5),
+                    "empirical_win_rate_runlow": round(hold_winrate_rl, 5)
+                }
             },
-            statistical_status="EMPIRICAL_BASELINE",
+            statistical_status="HISTORICAL_HOLDOUT_EVALUATED",
             approval_status=approval_status
         )
 
@@ -260,7 +402,7 @@ class TwoTickModelTrainer:
         rl_ev = base_rate_rl * DERIV_2T_REFERENCE_PAYOUT - DERIV_2T_REFERENCE_STAKE
 
         eval_summary = TwoTickEvaluationSummary(
-            total_observations=valid_obs_count,
+            total_observations=total_valid,
             unconditional_runhigh_rate=round(base_rate_rh, 5),
             unconditional_runlow_rate=round(base_rate_rl, 5),
             both_lose_rate=round(1.0 - (base_rate_rh + base_rate_rl), 5),
@@ -271,14 +413,17 @@ class TwoTickModelTrainer:
             runhigh_ev_per_stake=round(rh_ev, 4),
             runlow_ev_per_stake=round(rl_ev, 4),
             discovered_states_count=len(state_tables),
-            brier_score_runhigh=round(brier_rh, 5),
-            brier_score_runlow=round(brier_rl, 5),
+            brier_score_runhigh=round(val_bs_rh, 5),
+            brier_score_runlow=round(val_bs_rl, 5),
             is_economically_viable=(base_rate_rh > be_hurdle or base_rate_rl > be_hurdle),
             findings_summary=(
-                f"2-Tick Model {model_id} trained on {valid_obs_count} ticks. "
-                f"Base rate RUNHIGH {base_rate_rh*100:.3f}%, RUNLOW {base_rate_rl*100:.3f}%. "
-                f"Hurdle: {be_hurdle*100:.3f}%. Discovered {len(state_tables)} states."
+                f"2-Tick Model {model_id} fitted strictly on {train_count} training ticks (60%). "
+                f"Embargo gap: {embargo_ticks} ticks. Evaluated on {n_val_eval} validation ticks and {n_hold_eval} holdout ticks. "
+                f"Train Base Rate RH: {base_rate_rh*100:.3f}%, RL: {base_rate_rl*100:.3f}%. "
+                f"Val BS RH: {val_bs_rh:.5f}, Val BSS RH: {val_bss_rh:+.5f}. "
+                f"Holdout Win Rate RH: {hold_winrate_rh*100:.3f}%, RL: {hold_winrate_rl*100:.3f}% vs Hurdle {be_hurdle*100:.3f}%."
             )
         )
 
         return artifact, eval_summary
+

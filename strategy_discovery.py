@@ -20,43 +20,101 @@ import numpy as np
 import pandas as pd
 
 
-def binomial_test_greater(k: int, n: int, p: float) -> float:
-    """Computes one-tailed p-value P(X >= k) for Binomial(n, p) using pure standard library.
+def exact_binomial_survival(k: int, n: int, p: float) -> Tuple[float, bool]:
+    """Computes one-tailed survival p-value P(X >= k) for Binomial(n, p).
     
-    Uses exact binomial sum for n <= 50, and continuity-corrected normal approximation
-    via math.erfc for larger n.
+    Returns (p_value, is_exact).
+    Uses exact summation of probability mass function terms for n <= 2000.
+    For n > 2000, applies continuity-corrected Gaussian approximation.
     """
-    if n <= 0:
-        return 1.0
-    if k <= 0:
-        return 1.0
+    if n <= 0 or k <= 0:
+        return 1.0, True
     if k > n:
-        return 0.0
+        return 0.0, True
     if p <= 0.0:
-        return 0.0 if k > 0 else 1.0
+        return (0.0 if k > 0 else 1.0), True
     if p >= 1.0:
-        return 1.0 if k <= n else 0.0
+        return (1.0 if k <= n else 0.0), True
 
-    if n <= 50:
-        # Exact binomial sum
+    if n <= 2000:
+        # Exact binomial sum: sum_{j=k}^n comb(n, j) * p^j * (1-p)^(n-j)
+        # Numerically stable evaluation
         prob_sum = 0.0
-        for j in range(k, n + 1):
-            prob_sum += math.comb(n, j) * (p ** j) * ((1.0 - p) ** (n - j))
-        return min(1.0, max(0.0, prob_sum))
+        # If summing fewer terms from the left (k > n/2), sum j in [k, n]
+        # Otherwise sum j in [0, k-1] and subtract from 1
+        if k > n // 2:
+            for j in range(k, n + 1):
+                prob_sum += math.comb(n, j) * (p ** j) * ((1.0 - p) ** (n - j))
+            p_val = min(1.0, max(0.0, prob_sum))
+        else:
+            cdf_less = 0.0
+            for j in range(0, k):
+                cdf_less += math.comb(n, j) * (p ** j) * ((1.0 - p) ** (n - j))
+            p_val = min(1.0, max(0.0, 1.0 - cdf_less))
+        return p_val, True
     else:
         # Continuity-corrected normal approximation
         mean = n * p
         var = n * p * (1.0 - p)
         if var <= 0.0:
-            return 1.0 if k <= mean else 0.0
+            return (1.0 if k <= mean else 0.0), False
         std = math.sqrt(var)
         z = (k - 0.5 - mean) / std
         # P(Z >= z) = 0.5 * erfc(z / sqrt(2))
         p_val = 0.5 * math.erfc(z / math.sqrt(2.0))
-        return min(1.0, max(0.0, p_val))
+        return min(1.0, max(0.0, p_val)), False
+
+
+def binomial_test_greater(k: int, n: int, p: float) -> float:
+    """Computes one-tailed p-value P(X >= k) for Binomial(n, p) using exact survival where practical."""
+    p_val, _ = exact_binomial_survival(k, n, p)
+    return p_val
+
+
+def benjamini_hochberg_adjustment(p_values: List[float]) -> List[float]:
+    """Applies monotonic Benjamini-Hochberg False Discovery Rate (FDR) adjustment.
+    
+    Procedure (Benjamini & Hochberg 1995 step-up):
+    1. Sort p-values ascending: p_(1) <= p_(2) <= ... <= p_(m).
+    2. Compute rank-adjusted values: q_(i) = min(1.0, p_(i) * m / i) for i = 1, ..., m.
+    3. Apply reverse cumulative minimum: q'_(i) = min(q'_(i+1), q_(i)) from i = m-1 down to 1.
+    4. Clamp values to [0.0, 1.0].
+    5. Restore original hypothesis ordering.
+    """
+    m = len(p_values)
+    if m == 0:
+        return []
+    if m == 1:
+        return [min(1.0, max(0.0, float(p_values[0])))]
+
+    # Sort indices by p-value
+    sorted_order = sorted(range(m), key=lambda idx: p_values[idx])
+    sorted_p = [p_values[idx] for idx in sorted_order]
+
+    # Step 2: raw rank adjustment (1-indexed rank: r + 1)
+    q_vals = [min(1.0, max(0.0, sorted_p[r] * m / (r + 1))) for r in range(m)]
+
+    # Step 3: reverse cumulative minimum for monotonicity
+    for r in range(m - 2, -1, -1):
+        q_vals[r] = min(q_vals[r], q_vals[r + 1])
+
+    # Step 4 & 5: clamp and restore original order
+    adjusted = [0.0] * m
+    for r, orig_idx in enumerate(sorted_order):
+        adjusted[orig_idx] = min(1.0, max(0.0, float(q_vals[r])))
+
+    return adjusted
+
+
+def bonferroni_adjustment(p_values: List[float]) -> List[float]:
+    """Applies Bonferroni Family-Wise Error Rate (FWER) adjustment: p_adj = min(1.0, p * m)."""
+    m = len(p_values)
+    return [min(1.0, max(0.0, float(p * m))) for p in p_values]
+
 
 from feature_schema import extract_discrete_market_state
 from contract_model import ContractOutcomeModel
+
 
 
 # Permanent Invariant: Strategy discovery is strictly advisory and cannot execute orders
@@ -200,17 +258,11 @@ class StrategyDiscoveryEngine:
             p_values_baseline.append(res_dict["raw_p_val_baseline"])
             p_values_hurdle.append(res_dict["raw_p_val_hurdle"])
 
-        # Multiple testing adjustments
-        # 1. Bonferroni: p_adj = min(1.0, p * M)
-        # 2. Benjamini-Hochberg (FDR)
-        bonferroni_p = [min(1.0, p * m_total) for p in p_values_hurdle]
-
-        # FDR calculation
-        sorted_indices = np.argsort(p_values_hurdle)
-        fdr_p = [1.0] * m_total
-        for rank, idx in enumerate(sorted_indices):
-            fdr_val = min(1.0, p_values_hurdle[idx] * m_total / (rank + 1))
-            fdr_p[idx] = fdr_val
+        # Multiple testing adjustments using robust statistical procedures
+        # 1. Bonferroni: Family-Wise Error Rate control
+        bonferroni_p = bonferroni_adjustment(p_values_hurdle)
+        # 2. Benjamini-Hochberg: False Discovery Rate control with reverse cumulative min monotonicity
+        fdr_p = benjamini_hochberg_adjustment(p_values_hurdle)
 
         final_results: List[HypothesisTestResult] = []
         for i, r in enumerate(raw_results):

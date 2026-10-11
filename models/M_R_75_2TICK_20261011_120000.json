@@ -1,14 +1,14 @@
 {
   "model_id": "M_R_75_2TICK_20261011_120000",
-  "model_version": "1.7.4",
-  "created_at_utc": "2026-10-11T17:10:49.798951+00:00",
+  "model_version": "1.7.4.1",
+  "created_at_utc": "2026-10-11T17:54:01.279905+00:00",
   "training_dataset_id": "R_75_master.csv",
   "dataset_checksum": "8273d215bf93f46d3e12d0d82e46f1ebfca59138180ebfcf8cda7d4a9bedd7a3",
   "market_symbol": "R_75",
   "contract_family": "RUNHIGH_RUNLOW",
   "contract_duration": 2,
   "contract_duration_unit": "t",
-  "outcome_definition_version": "1.7.4",
+  "outcome_definition_version": "1.7.4.1",
   "feature_schema_version": "1.5.3",
   "feature_names": [
     "mom_bin",
@@ -24,84 +24,84 @@
   ],
   "model_type": "EMPIRICAL_STATE_CONDITIONAL",
   "model_parameters": {
-    "base_rate_runhigh": 0.25341,
-    "base_rate_runlow": 0.24752,
+    "base_rate_runhigh_train": 0.25706,
+    "base_rate_runlow_train": 0.2425,
     "theoretical_baseline": 0.25,
     "break_even_hurdle": 0.26212,
-    "total_states_discovered": 23,
+    "total_states_discovered": 20,
     "state_tables": {
       "mom_bin=STRONG_BEAR & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
-        "sample_count": 7637,
-        "runhigh_wins": 1938,
-        "runlow_wins": 1949
+        "sample_count": 4577,
+        "runhigh_wins": 1169,
+        "runlow_wins": 1141
       },
       "mom_bin=STRONG_BEAR & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
-        "sample_count": 8344,
-        "runhigh_wins": 2066,
-        "runlow_wins": 2087
+        "sample_count": 4984,
+        "runhigh_wins": 1218,
+        "runlow_wins": 1234
       },
       "mom_bin=STRONG_BULL & streak_bin=HIGH_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
-        "sample_count": 3445,
-        "runhigh_wins": 838,
-        "runlow_wins": 860
+        "sample_count": 2090,
+        "runhigh_wins": 514,
+        "runlow_wins": 517
       },
       "mom_bin=STRONG_BULL & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
-        "sample_count": 7762,
-        "runhigh_wins": 2094,
-        "runlow_wins": 1902
+        "sample_count": 4709,
+        "runhigh_wins": 1293,
+        "runlow_wins": 1119
       },
       "mom_bin=STRONG_BULL & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
-        "sample_count": 8520,
-        "runhigh_wins": 2153,
-        "runlow_wins": 2087
+        "sample_count": 5152,
+        "runhigh_wins": 1338,
+        "runlow_wins": 1240
       },
       "mom_bin=STRONG_BULL & streak_bin=HIGH_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
-        "sample_count": 222,
-        "runhigh_wins": 61,
-        "runlow_wins": 54
+        "sample_count": 130,
+        "runhigh_wins": 37,
+        "runlow_wins": 30
       },
       "mom_bin=STRONG_BEAR & streak_bin=HIGH_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
-        "sample_count": 3430,
-        "runhigh_wins": 798,
-        "runlow_wins": 859
+        "sample_count": 2033,
+        "runhigh_wins": 488,
+        "runlow_wins": 490
       },
       "mom_bin=STRONG_BEAR & streak_bin=HIGH_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
-        "sample_count": 466,
-        "runhigh_wins": 122,
-        "runlow_wins": 116
+        "sample_count": 287,
+        "runhigh_wins": 86,
+        "runlow_wins": 63
       },
       "mom_bin=STRONG_BEAR & streak_bin=EXTREME_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
-        "sample_count": 873,
-        "runhigh_wins": 232,
-        "runlow_wins": 192
+        "sample_count": 474,
+        "runhigh_wins": 129,
+        "runlow_wins": 100
       },
       "mom_bin=STRONG_BEAR & streak_bin=EXTREME_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
-        "sample_count": 410,
-        "runhigh_wins": 105,
-        "runlow_wins": 102
+        "sample_count": 210,
+        "runhigh_wins": 53,
+        "runlow_wins": 51
       },
       "mom_bin=STRONG_BULL & streak_bin=HIGH_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
-        "sample_count": 413,
-        "runhigh_wins": 110,
-        "runlow_wins": 99
+        "sample_count": 260,
+        "runhigh_wins": 71,
+        "runlow_wins": 64
       },
       "mom_bin=STRONG_BULL & streak_bin=EXTREME_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
-        "sample_count": 980,
-        "runhigh_wins": 236,
-        "runlow_wins": 232
+        "sample_count": 616,
+        "runhigh_wins": 156,
+        "runlow_wins": 150
       },
       "mom_bin=STRONG_BULL & streak_bin=EXTREME_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
-        "sample_count": 434,
-        "runhigh_wins": 129,
-        "runlow_wins": 94
+        "sample_count": 245,
+        "runhigh_wins": 72,
+        "runlow_wins": 52
       },
       "mom_bin=STRONG_BEAR & streak_bin=HIGH_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
-        "sample_count": 201,
-        "runhigh_wins": 49,
-        "runlow_wins": 45
+        "sample_count": 114,
+        "runhigh_wins": 29,
+        "runlow_wins": 26
       },
       "mom_bin=MILD_BEAR & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
-        "sample_count": 4,
+        "sample_count": 3,
         "runhigh_wins": 1,
         "runlow_wins": 1
       },
@@ -116,35 +116,40 @@
         "runlow_wins": 0
       },
       "mom_bin=STRONG_BEAR & streak_bin=HIGH_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
-        "sample_count": 4,
+        "sample_count": 3,
         "runhigh_wins": 0,
         "runlow_wins": 0
       },
       "mom_bin=MILD_BULL & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
-        "sample_count": 4,
+        "sample_count": 3,
         "runhigh_wins": 1,
-        "runlow_wins": 2
+        "runlow_wins": 1
       },
       "mom_bin=MILD_BULL & streak_bin=HIGH_UP_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
         "sample_count": 1,
         "runhigh_wins": 1,
         "runlow_wins": 0
-      },
-      "mom_bin=MILD_BEAR & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_DOWN": {
-        "sample_count": 2,
-        "runhigh_wins": 2,
-        "runlow_wins": 0
-      },
-      "mom_bin=MILD_BULL & streak_bin=NEUTRAL_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
-        "sample_count": 1,
-        "runhigh_wins": 0,
-        "runlow_wins": 1
-      },
-      "mom_bin=STRONG_BULL & streak_bin=HIGH_DOWN_STREAK & vol_bin=HIGH_VOL & accel_bin=ACCEL_UP": {
-        "sample_count": 1,
-        "runhigh_wins": 0,
-        "runlow_wins": 0
       }
+    },
+    "partition_info": {
+      "train_ratio": 0.6,
+      "val_ratio": 0.2,
+      "embargo_ticks": 3,
+      "train_sample_count": 25893,
+      "val_sample_count": 8631,
+      "holdout_sample_count": 8626,
+      "train_index_range": [
+        25,
+        25917
+      ],
+      "val_index_range": [
+        25921,
+        34551
+      ],
+      "holdout_index_range": [
+        34555,
+        43180
+      ]
     }
   },
   "calibration_parameters": {
@@ -154,15 +159,26 @@
   },
   "training_sample_count": 25893,
   "validation_sample_count": 8631,
-  "holdout_sample_count": 8632,
+  "holdout_sample_count": 8626,
   "validation_metrics": {
-    "brier_score_runhigh": 0.18919,
-    "brier_score_runlow": 0.18625,
+    "brier_score_runhigh": 0.18785,
+    "brier_score_runlow": 0.18919,
+    "brier_skill_score_runhigh": -0.00061,
+    "brier_skill_score_runlow": -0.00065,
+    "log_loss_runhigh": 0.56316,
+    "log_loss_runlow": 0.56616,
     "break_even_hurdle": 0.26212,
-    "relative_lift_max": 0.0
+    "holdout_metrics": {
+      "brier_score_runhigh": 0.1853,
+      "brier_score_runlow": 0.19098,
+      "brier_skill_score_runhigh": 0.00076,
+      "brier_skill_score_runlow": 0.00066,
+      "empirical_win_rate_runhigh": 0.24565,
+      "empirical_win_rate_runlow": 0.2569
+    }
   },
-  "statistical_status": "EMPIRICAL_BASELINE",
+  "statistical_status": "HISTORICAL_HOLDOUT_EVALUATED",
   "approval_status": "RESEARCH_ONLY",
-  "model_hash": "6f52684818f157a64bac6cd2832a74b6261bbc8c23bc811d3c7061235e307dbe",
+  "model_hash": "2ee7be0d23056cb5a34ac33e5c3e7ad0846cd6475fc77e98b1d935f17e8d24d5",
   "required_lookback": 25
 }
