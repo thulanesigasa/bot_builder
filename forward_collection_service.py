@@ -31,7 +31,7 @@ from typing import Optional, Dict, Any, List, Tuple
 
 from config import DEFAULT_CONFIG
 from forward_journal import ForwardPredictionJournal, STATUS_INCOMPLETE
-from forward_observer import ForwardObserver
+from forward_observer import ForwardObserver, PairedForwardObserver
 from forward_session import ForwardSessionRegistry, ForwardSession, STAGE_EXPLORATORY, STAGE_VALIDATION, STAGE_CONFIRMATION
 from health_monitor import GLOBAL_HEALTH_MONITOR
 from live_collector import LiveTickStreamer, LiveTickRecord
@@ -71,7 +71,10 @@ class ForwardCollectionService:
         research_stage: str = STAGE_EXPLORATORY,
         target_resolved_predictions: Optional[int] = None,
         confirmation_manifest: Optional[Any] = None,
-        enforce_confirmation_admission: bool = False
+        enforce_confirmation_admission: bool = False,
+        dual_duration: bool = False,
+        model_path_2t: Optional[str] = None,
+        model_path_5t: Optional[str] = None
     ):
         if LIVE_EXECUTION_DISABLED is not True:
             raise RuntimeError("Safety invariant violated: LIVE_EXECUTION_DISABLED must be True.")
@@ -100,6 +103,9 @@ class ForwardCollectionService:
         self.target_resolved_predictions = target_resolved_predictions
         self.confirmation_manifest = confirmation_manifest
         self.enforce_confirmation_admission = enforce_confirmation_admission
+        self.dual_duration = dual_duration
+        self.model_path_2t = model_path_2t
+        self.model_path_5t = model_path_5t
 
         # Resolve model ID for session registration
         mgr = ModelManager()
@@ -128,23 +134,39 @@ class ForwardCollectionService:
             confirmation_manifest=self.confirmation_manifest,
             enforce_confirmation_admission=self.enforce_confirmation_admission or (self.research_stage == STAGE_CONFIRMATION)
         )
-        print(f"[Service] Session created: {self.session.session_id[:8]} | Mode: {self.mode} | Stage: {self.research_stage}")
+        print(f"[Service] Session created: {self.session.session_id[:8]} | Mode: {self.mode} | Stage: {self.research_stage} | Dual-Duration: {self.dual_duration}")
 
         # Components with session_id linkage
         self.journal = ForwardPredictionJournal(db_path=self.session.journal_db_path, enforce_session_id=True)
-        self.observer = ForwardObserver(
-            symbol=symbol,
-            mode=self.mode,
-            model_path_or_id=model_path_or_id,
-            app_id=self.app_id,
-            duration_seconds=duration_seconds or 86400.0,
-            quote_interval_seconds=self.quote_interval_seconds,
-            max_quote_age_seconds=max_quote_age_seconds,
-            journal_db_path=self.session.journal_db_path,
-            quote_db_path=self.session.quote_db_path,
-            session_id=self.session.session_id,
-            preload_warmup=self.preload_warmup
-        )
+        if self.dual_duration:
+            self.observer = PairedForwardObserver(
+                symbol=symbol,
+                mode=self.mode,
+                model_path_2t=model_path_2t,
+                model_path_5t=model_path_5t,
+                app_id=self.app_id,
+                duration_seconds=duration_seconds or 86400.0,
+                quote_interval_seconds=self.quote_interval_seconds,
+                max_quote_age_seconds=max_quote_age_seconds,
+                journal_db_path=self.session.journal_db_path,
+                quote_db_path=self.session.quote_db_path,
+                session_id=self.session.session_id,
+                preload_warmup=self.preload_warmup
+            )
+        else:
+            self.observer = ForwardObserver(
+                symbol=symbol,
+                mode=self.mode,
+                model_path_or_id=model_path_or_id,
+                app_id=self.app_id,
+                duration_seconds=duration_seconds or 86400.0,
+                quote_interval_seconds=self.quote_interval_seconds,
+                max_quote_age_seconds=max_quote_age_seconds,
+                journal_db_path=self.session.journal_db_path,
+                quote_db_path=self.session.quote_db_path,
+                session_id=self.session.session_id,
+                preload_warmup=self.preload_warmup
+            )
         self.reporter = SessionReporter(
             reports_dir=self.reports_dir,
             journal=self.journal,
@@ -183,7 +205,11 @@ class ForwardCollectionService:
         # Delegate to observer (evaluates features, inference, journal)
         pred = self.observer.process_incoming_tick(tick)
         if pred is not None:
-            self._total_predictions += 1
+            if isinstance(pred, tuple):
+                p2, p5 = pred
+                self._total_predictions += (1 if p2 else 0) + (1 if p5 else 0)
+            else:
+                self._total_predictions += 1
 
         self._total_ticks += 1
         self._ticks_since_flush += 1
@@ -237,12 +263,14 @@ class ForwardCollectionService:
         from quote_recorder import DerivQuoteRecorder
         recorder = DerivQuoteRecorder(symbol=self.symbol, app_id=self.app_id, session_id=self.session.session_id)
         end_t = (time.time() + self.duration_seconds) if self.duration_seconds else float("inf")
+        d_poll = [2, 5] if getattr(self, "dual_duration", False) else [5]
 
         while self._running and time.time() < end_t:
             try:
                 await recorder.record_quotes_session(
                     duration_seconds=self.quote_interval_seconds * 2,
-                    interval_seconds=self.quote_interval_seconds
+                    interval_seconds=self.quote_interval_seconds,
+                    durations=d_poll
                 )
                 GLOBAL_HEALTH_MONITOR.record_quote(success=True)
             except Exception:
@@ -435,6 +463,7 @@ def main():
     parser.add_argument("--report-dir", default=None, help="Directory for reports")
     parser.add_argument("--notes", default="", help="Session notes")
     parser.add_argument("--no-preload-warmup", action="store_true", help="Disable preloading historical warmup ticks")
+    parser.add_argument("--dual-duration", action="store_true", help="Run concurrent paired 2T and 5T forward observation on a single tick stream")
     args = parser.parse_args()
 
     service = ForwardCollectionService(
@@ -449,7 +478,8 @@ def main():
         reports_dir=args.report_dir,
         notes=args.notes,
         preload_warmup=not args.no_preload_warmup,
-        research_stage=args.stage
+        research_stage=args.stage,
+        dual_duration=args.dual_duration
     )
 
     def handle_sig(sig, frame):

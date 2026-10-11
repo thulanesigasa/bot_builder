@@ -1,7 +1,7 @@
-# Deriv Quantitative Research & Dual-Duration Statistical Validation Framework (V1.7.4.1)
+# Deriv Quantitative Research & Dual-Duration Statistical Validation Framework (V1.7.4.2)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://github.com/thulanesigasa/bot_builder)
-[![Testing](https://img.shields.io/badge/pytest-288%20passed%20(100%25)-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Testing](https://img.shields.io/badge/pytest-304%20passed%20(100%25)-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v1%2Foptions%20Verified-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Safety](https://img.shields.io/badge/Safety-Real--Money%20Trading%20DISABLED-0F172A)](https://github.com/thulanesigasa/bot_builder)
@@ -11,11 +11,11 @@
 [![Contract Spec](https://img.shields.io/badge/Contract%20Spec-Configurable%20Monotonic%20Lifecycle-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Confirmation Authority](https://img.shields.io/badge/Confirmation%20Authority-Unified%20ForwardConfirmationGate-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Reconciliation](https://img.shields.io/badge/Reconciliation-6%20Separated%20Integrity%20Dimensions-0284C7)](https://github.com/thulanesigasa/bot_builder)
-[![Version](https://img.shields.io/badge/Version-V1.7.4.1%20Research%20Integrity-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Version](https://img.shields.io/badge/Version-V1.7.4.2%20Economic%20Integrity-0284C7)](https://github.com/thulanesigasa/bot_builder)
 
 A quantitative financial research, machine-learning inference, and real-market forward observation system engineered for Deriv synthetic index contracts—specifically modeling Only Ups (`RUNHIGH`) and Only Downs (`RUNLOW`) on Volatility 75 (`R_75`).
 
-V1.7.4.1 establishes surgical research-integrity corrections: granular multi-tier quote coverage, separation of reference scenario payouts from verified quotes, strict conservative EV hurdles ($\ge 0.0$), small-sample bootstrap protection, explicit evidence classes, chronological 60/20/20 train/val/holdout partitions with 3-tick embargoes, out-of-sample Brier scoring, monotonic Benjamini-Hochberg FDR control, exact binomial survival, and complete provenance reconciliation. Real-money live execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`).
+V1.7.4.2 establishes surgical economic-integrity corrections: strictly per-decision quote matching across 8 dimensions, verified EV calculations based exclusively on actual matched ask prices and total payouts (with zero reference-fallback substitution), fail-closed candidate qualification where reference scenarios cannot receive economic candidate or execution authorizations, and verified concurrent dual-duration (`PairedForwardObserver`) observation on a shared live tick stream. Real-money live execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`).
 
 ---
 
@@ -137,19 +137,20 @@ bot_builder/
 │   └── M_R_75_2TICK_20261011_120000.json            # Independent 2-tick chronological frozen model
 │
 ├── tests/
-│   ├── test_v1741_integrity_and_reconciliation.py   # 14 new V1.7.4.1 regression & adversarial tests
+│   ├── test_v1742_quote_economics_and_paired_shadow.py # 16 new V1.7.4.2 regression & adversarial tests
+│   ├── test_v1741_integrity_and_reconciliation.py   # 14 V1.7.4.1 regression & adversarial tests
 │   ├── test_v174_dual_duration_and_discovery.py     # 17 V1.7.4 regression tests
 │   ├── test_v173_chronology_and_audit.py            # V1.7.3 chronology & audit tests
 │   ├── test_v1721_reconciliation.py                 # V1.7.2.1 integrity & confirmation tests
-│   └── ... (288 total passing tests)
+│   └── ... (304 total passing tests)
 │
 └── Authoritative Research Reports:
-    ├── V1_7_4_1_ROOT_CAUSE_AUDIT.md                 # Complete defect audit & surgical corrections
-    ├── V1_7_4_1_QUOTE_ECONOMICS_REPORT.md           # Separation of reference vs quote-verified economics
-    ├── V1_7_4_1_MODEL_VALIDATION_REPORT.md          # Chronological partitions & OOS holdout evaluation
-    ├── V1_7_4_1_DUAL_DURATION_EVIDENCE_REPORT.md    # Evidence classification & empirical comparison
-    ├── V1_7_4_1_STRATEGY_DISCOVERY_AUDIT.md         # Multiple-testing corrections & exact binomials
-    └── V1_7_4_1_RELEASE_VALIDATION_REPORT.md        # Release audit & package verification
+    ├── V1_7_4_2_QUOTE_SPECIFIC_EV_AUDIT.md          # Per-decision quote economics & zero-fallback audit
+    ├── V1_7_4_2_REFERENCE_QUALIFICATION_AUDIT.md    # Fail-closed qualification & candidate separation audit
+    ├── V1_7_4_2_PROSPECTIVE_DUAL_DURATION_READINESS.md # Concurrent 2T/5T observation & pre-outcome journaling
+    ├── V1_7_4_2_RELEASE_VALIDATION_REPORT.md        # Release audit & package verification
+    ├── V1_7_4_1_ROOT_CAUSE_AUDIT.md                 # V1.7.4.1 defect audit & surgical corrections
+    └── ...
 ```
 
 ---
@@ -164,7 +165,7 @@ python -m pytest -q
 
 Expected result:
 ```
-288 passed in ~60s (100% green)
+304 passed in ~90s (100% green)
 ```
 
 ---

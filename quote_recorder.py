@@ -86,7 +86,8 @@ class DerivQuoteRecorder:
         ws,
         contract_type: str,
         stake: float = 2.0,
-        timeout: float = 4.0
+        timeout: float = 4.0,
+        duration: int = 5
     ) -> ProposalRecord:
         """Sends proposal request for RUNHIGH or RUNLOW and records precise latency and response."""
         req_time = time.time()
@@ -96,7 +97,7 @@ class DerivQuoteRecorder:
             "basis": "stake",
             "contract_type": contract_type,
             "currency": "USD",
-            "duration": 5,
+            "duration": int(duration),
             "duration_unit": "t",
             "underlying_symbol": self.symbol,
         }
@@ -123,7 +124,7 @@ class DerivQuoteRecorder:
                     response_timestamp=resp_time,
                     market_symbol=self.symbol,
                     contract_type=contract_type,
-                    contract_duration=5,
+                    contract_duration=int(duration),
                     duration_unit="t",
                     stake=ask,
                     total_payout=payout,
@@ -145,7 +146,7 @@ class DerivQuoteRecorder:
                     response_timestamp=resp_time,
                     market_symbol=self.symbol,
                     contract_type=contract_type,
-                    contract_duration=5,
+                    contract_duration=int(duration),
                     duration_unit="t",
                     stake=stake,
                     total_payout=0.0,
@@ -168,7 +169,7 @@ class DerivQuoteRecorder:
                 response_timestamp=resp_time,
                 market_symbol=self.symbol,
                 contract_type=contract_type,
-                contract_duration=5,
+                contract_duration=int(duration),
                 duration_unit="t",
                 stake=stake,
                 total_payout=0.0,
@@ -188,11 +189,13 @@ class DerivQuoteRecorder:
         self,
         duration_seconds: float = 60.0,
         interval_seconds: float = 2.0,
-        output_csv: Optional[str] = None
+        output_csv: Optional[str] = None,
+        durations: Optional[List[int]] = None
     ) -> List[ProposalRecord]:
         """Runs continuous polling session recording direction-specific quotes."""
         session_records = []
         end_time = time.time() + duration_seconds
+        d_list = durations or [5]
 
         primary_url = f"{self.ws_url}?app_id={self.app_id}" if "?" not in self.ws_url else self.ws_url
         endpoints = [
@@ -214,26 +217,27 @@ class DerivQuoteRecorder:
 
         try:
             while time.time() < end_time:
-                # Record RUNHIGH
-                rh_rec = await self.fetch_single_direction_quote(active_ws, "RUNHIGH", stake=self.default_stake)
-                session_records.append(rh_rec)
-                self.records.append(rh_rec)
+                for dur in d_list:
+                    # Record RUNHIGH for duration dur
+                    rh_rec = await self.fetch_single_direction_quote(active_ws, "RUNHIGH", stake=self.default_stake, duration=dur)
+                    session_records.append(rh_rec)
+                    self.records.append(rh_rec)
 
-                # Record RUNLOW
-                rl_rec = await self.fetch_single_direction_quote(active_ws, "RUNLOW", stake=self.default_stake)
-                session_records.append(rl_rec)
-                self.records.append(rl_rec)
+                    # Record RUNLOW for duration dur
+                    rl_rec = await self.fetch_single_direction_quote(active_ws, "RUNLOW", stake=self.default_stake, duration=dur)
+                    session_records.append(rl_rec)
+                    self.records.append(rl_rec)
 
-                if output_csv:
-                    self.append_record_to_csv(output_csv, rh_rec)
-                    self.append_record_to_csv(output_csv, rl_rec)
+                    if output_csv:
+                        self.append_record_to_csv(output_csv, rh_rec)
+                        self.append_record_to_csv(output_csv, rl_rec)
 
-                if self.quote_db is not None:
-                    try:
-                        self.quote_db.store_quote(rh_rec)
-                        self.quote_db.store_quote(rl_rec)
-                    except Exception:
-                        pass
+                    if self.quote_db is not None:
+                        try:
+                            self.quote_db.store_quote(rh_rec)
+                            self.quote_db.store_quote(rl_rec)
+                        except Exception:
+                            pass
 
                 await asyncio.sleep(interval_seconds)
         finally:

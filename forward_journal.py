@@ -329,10 +329,11 @@ class ForwardPredictionJournal:
     def get_accuracy_metrics(
         self,
         symbol: Optional[str] = None,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        contract_duration: Optional[int] = None
     ) -> Dict[str, Any]:
         """Calculates prediction accuracy, Brier Score, calibration metrics on resolved records.
-        Strictly filters by session_id when specified (V1.6.2 Section 10 & 16).
+        Strictly filters by session_id and contract_duration when specified (V1.6.2 & V1.7.4.2).
         """
         with self._get_conn() as conn:
             filters = []
@@ -343,12 +344,15 @@ class ForwardPredictionJournal:
             if session_id:
                 filters.append("session_id = ?")
                 params.append(session_id)
+            if contract_duration is not None:
+                filters.append("contract_duration = ?")
+                params.append(int(contract_duration))
 
             where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
             cur = conn.execute(f"""
                 SELECT runhigh_pred_prob, runlow_pred_prob, runhigh_win, runlow_win,
                        decision, hypothetical_pnl, outcome_status, runhigh_ask, runlow_ask,
-                       session_id
+                       session_id, contract_duration
                 FROM forward_predictions
                 {where_clause}
             """, params)

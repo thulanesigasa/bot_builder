@@ -607,7 +607,8 @@ class ForwardObserver:
             model_id=self.model_artifact.model_id if self.model_artifact else "NONE",
             quote_id=(q_rh.proposal_id if q_rh else (q_rl.proposal_id if q_rl else "")) or "QUOTE_UNAVAILABLE",
             feature_schema_version=FEATURE_SCHEMA_VERSION,
-            source_provenance=getattr(tick, "source", "LIVE_DERIV") or "LIVE_DERIV"
+            source_provenance=getattr(tick, "source", "LIVE_DERIV") or "LIVE_DERIV",
+            contract_duration=self.contract_duration
         )
 
         try:
@@ -679,6 +680,115 @@ class ForwardObserver:
         metrics = self.journal.get_accuracy_metrics(symbol=self.symbol)
         for k, v in metrics.items():
             print(f"  {k}: {v}")
+
+
+class PairedForwardObserver:
+    """Orchestrates paired simultaneous 2-tick and 5-tick forward observation on a single tick stream (V1.7.4.2 Part D).
+    
+    Guarantees:
+    1. Single Shared Market Tick Stream: Both models consume identical live R_75 tick events.
+    2. Independent Inference: 2T model and 5T model evaluate features independently; probabilities are never cross-pollinated.
+    3. Isolated Quote Records: 2T decisions match 2T quotes; 5T decisions match 5T quotes.
+    4. Pre-Outcome Journaling: All 4 combinations (2T RH, 2T RL, 5T RH, 5T RL) are journaled prior to outcome arrival.
+    5. Independent Resolution: 2T resolves after 3 ticks; 5T resolves after 6 ticks.
+    6. Safety Invariant: LIVE_EXECUTION_DISABLED = True permanently enforced.
+    """
+
+    LIVE_EXECUTION_DISABLED: bool = True
+
+    def __init__(
+        self,
+        symbol: str = "R_75",
+        mode: str = "SHADOW",
+        model_path_2t: Optional[str] = None,
+        model_path_5t: Optional[str] = None,
+        app_id: Optional[str] = None,
+        duration_seconds: float = 120.0,
+        quote_interval_seconds: float = 2.0,
+        max_quote_age_seconds: float = 60.0,
+        journal_db_path: Optional[str] = None,
+        quote_db_path: Optional[str] = None,
+        session_id: str = "",
+        risk_db_path: Optional[str] = None,
+        preload_warmup: bool = False,
+        warmup_csv_path: Optional[str] = None,
+    ):
+        self.symbol = symbol
+        self.mode = mode
+        self.session_id = session_id or str(uuid.uuid4())
+        self.duration_seconds = duration_seconds
+        self.quote_interval_seconds = quote_interval_seconds
+        self.max_quote_age_seconds = max_quote_age_seconds
+
+        # Two dedicated duration observers sharing database state
+        self.observer_2t = ForwardObserver(
+            symbol=symbol,
+            mode=mode,
+            model_path_or_id=model_path_2t,
+            app_id=app_id,
+            duration_seconds=duration_seconds,
+            quote_interval_seconds=quote_interval_seconds,
+            max_quote_age_seconds=max_quote_age_seconds,
+            journal_db_path=journal_db_path,
+            quote_db_path=quote_db_path,
+            session_id=self.session_id,
+            risk_db_path=risk_db_path,
+            preload_warmup=preload_warmup,
+            warmup_csv_path=warmup_csv_path,
+            contract_duration=2
+        )
+        self.observer_5t = ForwardObserver(
+            symbol=symbol,
+            mode=mode,
+            model_path_or_id=model_path_5t,
+            app_id=app_id,
+            duration_seconds=duration_seconds,
+            quote_interval_seconds=quote_interval_seconds,
+            max_quote_age_seconds=max_quote_age_seconds,
+            journal_db_path=journal_db_path,
+            quote_db_path=quote_db_path,
+            session_id=self.session_id,
+            risk_db_path=risk_db_path,
+            preload_warmup=preload_warmup,
+            warmup_csv_path=warmup_csv_path,
+            contract_duration=5
+        )
+
+        self.journal = self.observer_5t.journal
+        self.quote_db = self.observer_5t.quote_db
+
+    def process_incoming_tick(self, tick: LiveTickRecord) -> Tuple[Optional[ForwardPredictionRecord], Optional[ForwardPredictionRecord]]:
+        """Processes single incoming tick across both 2T and 5T pipelines simultaneously."""
+        pred_2t = self.observer_2t.process_incoming_tick(tick)
+        pred_5t = self.observer_5t.process_incoming_tick(tick)
+        return pred_2t, pred_5t
+
+    @property
+    def prediction_cutoff_active(self) -> bool:
+        return self.observer_2t.prediction_cutoff_active or self.observer_5t.prediction_cutoff_active
+
+    @prediction_cutoff_active.setter
+    def prediction_cutoff_active(self, val: bool):
+        self.observer_2t.prediction_cutoff_active = val
+        self.observer_5t.prediction_cutoff_active = val
+
+    @property
+    def live_ticks_count(self) -> int:
+        return max(self.observer_2t.live_ticks_count, self.observer_5t.live_ticks_count)
+
+    @property
+    def warmup_ticks_count(self) -> int:
+        return max(self.observer_2t.warmup_ticks_count, self.observer_5t.warmup_ticks_count)
+
+    def get_diagnostics_report(self) -> Dict[str, Any]:
+        return {
+            "symbol": self.symbol,
+            "mode": self.mode,
+            "session_id": self.session_id,
+            "observer_2t": self.observer_2t.get_diagnostics_report(),
+            "observer_5t": self.observer_5t.get_diagnostics_report(),
+            "safety_status": "REAL-MONEY TRADING DISABLED"
+        }
 
 
 def main():

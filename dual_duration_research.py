@@ -19,6 +19,7 @@ Core Research Protocol:
    - Conservative EV (Moving-Block Bootstrap 95% lower bound) must be >= 0.0.
    - Small samples return unavailable conservative EV (None), preventing false qualification.
 """
+import collections
 from enum import Enum
 import math
 import os
@@ -70,23 +71,30 @@ class DurationMetricSummary:
     break_even_hurdle: float
     stake: float
     total_payout: float
-    ordinary_ev: float                    # Ordinary EV based on model prediction (or realized if model unavailable)
-    ordinary_ev_per_dollar: float
+    ordinary_ev: Optional[float]                    # Ordinary EV based on model prediction (or realized if model unavailable)
+    ordinary_ev_per_dollar: Optional[float]
     predicted_ordinary_ev: Optional[float]
-    retrospective_realized_return: float  # Realized hypothetical return per contract: (Wins * Payout - N * Stake) / N
-    conservative_ev_bootstrap: Optional[float]  # 95% MBB lower bound (None if insufficient data)
-    bootstrap_uncertainty_status: str     # 'SUFFICIENT_SAMPLE' or 'INSUFFICIENT_SAMPLE'
+    retrospective_realized_return: Optional[float]  # Realized hypothetical return per contract: (Wins * Payout - N * Stake) / N
+    conservative_ev_bootstrap: Optional[float]      # 95% MBB lower bound (None if insufficient data)
+    bootstrap_uncertainty_status: str               # 'SUFFICIENT_SAMPLE' or 'INSUFFICIENT_SAMPLE'
     bootstrap_sensitivity_summary: Dict[str, Optional[float]]
     win_rate_ci_95: Tuple[float, float]
     raw_quote_coverage_pct: float
     chronological_quote_coverage_pct: float
     economic_quote_coverage_pct: float
     execution_quality_coverage_pct: float
-    quote_availability_pct: float         # Verified quote coverage (0.0 in REFERENCE_SCENARIO)
-    evaluation_mode: str                  # REFERENCE_SCENARIO or QUOTE_VERIFIED
-    evidence_class: str                   # HISTORICAL_REPLAY, etc.
-    is_economically_positive: bool        # True iff ord_ev > 0 AND cons_ev >= 0
+    quote_availability_pct: float                   # Verified quote coverage (0.0 in REFERENCE_SCENARIO)
+    evaluation_mode: str                            # REFERENCE_SCENARIO or QUOTE_VERIFIED
+    evidence_class: str                             # HISTORICAL_REPLAY, etc.
+    is_economically_positive: bool                  # True iff ord_ev > 0 AND cons_ev >= 0
     verdict: str
+    mean_actual_ask_price: Optional[float] = None
+    mean_actual_payout: Optional[float] = None
+    mean_actual_break_even: Optional[float] = None
+    break_even_distribution: Optional[Dict[str, float]] = None
+    eligible_quote_decisions_count: int = 0
+    missing_ev_count: int = 0
+    quote_rejection_reasons: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -251,7 +259,11 @@ class DualDurationEvaluator:
         # Rank strictly by ordinary expected value per dollar
         sorted_labels = sorted(
             metrics_dict.keys(),
-            key=lambda k: metrics_dict[k].ordinary_ev_per_dollar,
+            key=lambda k: (
+                metrics_dict[k].ordinary_ev_per_dollar
+                if metrics_dict[k].ordinary_ev_per_dollar is not None
+                else -float("inf")
+            ),
             reverse=True
         )
 
@@ -266,9 +278,11 @@ class DualDurationEvaluator:
             "Any candidate selected on exploratory data must be frozen and confirmed on untouched future sessions."
         )
 
+        ord_ev_str = f"${top_summary.ordinary_ev:+.4f}" if top_summary.ordinary_ev is not None else "UNAVAILABLE"
+        cons_ev_str = f"{top_summary.conservative_ev_bootstrap}" if top_summary.conservative_ev_bootstrap is not None else "UNAVAILABLE"
         rec = (
-            f"Top Ranked: {top} with Ordinary EV/stake ${top_summary.ordinary_ev:+.4f}. "
-            f"Economically viable: {top_summary.is_economically_positive} (conservative EV: {top_summary.conservative_ev_bootstrap}). "
+            f"Top Ranked: {top} with Ordinary EV/stake {ord_ev_str}. "
+            f"Economically viable: {top_summary.is_economically_positive} (conservative EV: {cons_ev_str}). "
             f"Verdict: {top_summary.verdict}. All tested configurations remain non-trading (NO_TRADE invariant enforced)."
         )
 
@@ -316,57 +330,203 @@ class DualDurationEvaluator:
         bs_ref = float(np.mean([(emp_win_rate - y)**2 for y in outcomes])) if n > 0 else 0.0
         bss = float(1.0 - (bs / bs_ref)) if bs_ref > 0 else 0.0
 
-        # Ex-ante predicted EV vs Retrospective realized return (V1.7.4.1 Part 2 Section 2.3)
-        predicted_ord_ev = (mean_prob * payout) - self.stake
-        retrospective_return = ((wins * payout) - (n * self.stake)) / n if n > 0 else 0.0
+        # Wilson 95% Confidence Interval for win rate
+        ci_lo, ci_hi = wilson_score_interval(wins, n, confidence=0.95)
 
-        ordinary_ev = predicted_ord_ev
-        ord_ev_per_dollar = ordinary_ev / self.stake if self.stake > 0 else 0.0
+        # Separate REFERENCE_SCENARIO and QUOTE_VERIFIED paths strictly (V1.7.4.2 Part B & C)
+        if evaluation_mode == EvaluationMode.REFERENCE_SCENARIO:
+            # REFERENCE_SCENARIO: All results are illustrative. Quote coverage is strictly 0%.
+            # Verified quote-specific EV is unavailable. Reference scenarios CAN NEVER qualify for trading.
+            predicted_ord_ev = (mean_prob * payout) - self.stake
+            retrospective_return = ((wins * payout) - (n * self.stake)) / n if n > 0 else 0.0
+            ordinary_ev = predicted_ord_ev
+            ord_ev_per_dollar = ordinary_ev / self.stake if self.stake > 0 else 0.0
 
-        # Moving-Block Bootstrap for Conservative EV (V1.7.4.1 Part 2 Section 2.5 & 2.6)
+            block_size = max(2, duration + 1)
+            cons_ev, unc_status, sens_dict = self._moving_block_bootstrap_ev(
+                outcomes=outcomes,
+                payout=payout,
+                stake=self.stake,
+                block_size=block_size,
+                iterations=self.bootstrap_iterations,
+                percentile=5.0,
+                seed=42
+            )
+
+            has_positive_ord = ordinary_ev > min_ordinary_ev
+            has_positive_cons = (cons_ev is not None) and (cons_ev >= min_conservative_ev)
+            has_sufficient_samples = (unc_status == "SUFFICIENT_SAMPLE")
+
+            # Reference scenarios can NEVER receive verified economic qualification!
+            is_pos = False
+
+            if unc_status == "INSUFFICIENT_SAMPLE":
+                verdict = "INSUFFICIENT_UNCERTAINTY_EVIDENCE"
+            elif not has_positive_ord:
+                verdict = "NEGATIVE_ORDINARY_EV"
+            elif not has_positive_cons:
+                verdict = "FAILED_CONSERVATIVE_HURDLE"
+            else:
+                verdict = "REFERENCE_SCENARIO_ONLY"
+
+            return DurationMetricSummary(
+                duration=duration,
+                direction=direction,
+                contract_label=label,
+                total_predictions=n,
+                resolved_outcomes=n,
+                wins=wins,
+                losses=losses,
+                empirical_win_rate=round(emp_win_rate, 5),
+                mean_predicted_prob=round(mean_prob, 5),
+                calibration_error_ece=round(ece, 5),
+                brier_score=round(bs, 5),
+                brier_skill_score=round(bss, 5),
+                break_even_hurdle=round(hurdle, 5),
+                stake=self.stake,
+                total_payout=payout,
+                ordinary_ev=round(ordinary_ev, 4),
+                ordinary_ev_per_dollar=round(ord_ev_per_dollar, 4),
+                predicted_ordinary_ev=round(predicted_ord_ev, 4),
+                retrospective_realized_return=round(retrospective_return, 4),
+                conservative_ev_bootstrap=round(cons_ev, 4) if cons_ev is not None else None,
+                bootstrap_uncertainty_status=unc_status,
+                bootstrap_sensitivity_summary=sens_dict,
+                win_rate_ci_95=(round(ci_lo, 5), round(ci_hi, 5)),
+                raw_quote_coverage_pct=0.0,
+                chronological_quote_coverage_pct=0.0,
+                economic_quote_coverage_pct=0.0,
+                execution_quality_coverage_pct=0.0,
+                quote_availability_pct=0.0,
+                evaluation_mode=evaluation_mode.value,
+                evidence_class=evidence_class.value,
+                is_economically_positive=False,
+                verdict=verdict,
+                mean_actual_ask_price=None,
+                mean_actual_payout=None,
+                mean_actual_break_even=None,
+                break_even_distribution=None,
+                eligible_quote_decisions_count=0,
+                missing_ev_count=n,
+                quote_rejection_reasons={"REFERENCE_SCENARIO": n}
+            )
+
+        # QUOTE_VERIFIED mode: Per-decision matching using actual ask prices and payouts
+        matched_quotes, cov_pcts, rej_reasons = self._match_quotes_per_decision(
+            duration=duration,
+            direction=direction,
+            decision_timestamps=decision_timestamps,
+            quote_records=quote_records
+        )
+
+        raw_cov = cov_pcts["raw"]
+        chrono_cov = cov_pcts["chrono"]
+        econ_cov = cov_pcts["econ"]
+        exec_cov = cov_pcts["exec"]
+        quote_avail_pct = exec_cov
+
+        eligible_indices = [idx for idx, q in enumerate(matched_quotes) if q is not None]
+        m = len(eligible_indices)
+
+        if m == 0:
+            # If no genuine eligible quotes exist, mark quote-verified EV as unavailable (None)
+            # Do NOT assign zero EV to missing evidence!
+            return DurationMetricSummary(
+                duration=duration,
+                direction=direction,
+                contract_label=label,
+                total_predictions=n,
+                resolved_outcomes=n,
+                wins=wins,
+                losses=losses,
+                empirical_win_rate=round(emp_win_rate, 5),
+                mean_predicted_prob=round(mean_prob, 5),
+                calibration_error_ece=round(ece, 5),
+                brier_score=round(bs, 5),
+                brier_skill_score=round(bss, 5),
+                break_even_hurdle=round(hurdle, 5),
+                stake=self.stake,
+                total_payout=payout,
+                ordinary_ev=None,
+                ordinary_ev_per_dollar=None,
+                predicted_ordinary_ev=None,
+                retrospective_realized_return=None,
+                conservative_ev_bootstrap=None,
+                bootstrap_uncertainty_status="INSUFFICIENT_SAMPLE",
+                bootstrap_sensitivity_summary={},
+                win_rate_ci_95=(round(ci_lo, 5), round(ci_hi, 5)),
+                raw_quote_coverage_pct=round(raw_cov, 2),
+                chronological_quote_coverage_pct=round(chrono_cov, 2),
+                economic_quote_coverage_pct=round(econ_cov, 2),
+                execution_quality_coverage_pct=round(exec_cov, 2),
+                quote_availability_pct=round(quote_avail_pct, 2),
+                evaluation_mode=evaluation_mode.value,
+                evidence_class=evidence_class.value,
+                is_economically_positive=False,
+                verdict="INSUFFICIENT_QUOTE_COVERAGE",
+                mean_actual_ask_price=None,
+                mean_actual_payout=None,
+                mean_actual_break_even=None,
+                break_even_distribution=None,
+                eligible_quote_decisions_count=0,
+                missing_ev_count=n,
+                quote_rejection_reasons=rej_reasons
+            )
+
+        # Genuine per-decision calculation over eligible matched decisions
+        asks = [matched_quotes[idx]["ask_price"] for idx in eligible_indices]
+        payouts = [matched_quotes[idx]["total_payout"] for idx in eligible_indices]
+        bes = [matched_quotes[idx]["break_even"] for idx in eligible_indices]
+        probs = [pred_probs[idx] for idx in eligible_indices]
+        y_eligible = [outcomes[idx] for idx in eligible_indices]
+
+        # EV_i = P_model_i * TotalPayout_i - AskPrice_i
+        per_decision_ev = [(probs[k] * payouts[k]) - asks[k] for k in range(m)]
+        # Return_i = (y_i * TotalPayout_i) - AskPrice_i
+        per_decision_realized = [(y_eligible[k] * payouts[k]) - asks[k] for k in range(m)]
+
+        mean_ask = float(np.mean(asks))
+        mean_payout = float(np.mean(payouts))
+        mean_be = float(np.mean(bes))
+        be_dist = {
+            "min": round(float(np.min(bes)), 5),
+            "median": round(float(np.median(bes)), 5),
+            "max": round(float(np.max(bes)), 5),
+            "std": round(float(np.std(bes)), 5)
+        }
+
+        ordinary_ev = float(np.mean(per_decision_ev))
+        ord_ev_per_dollar = ordinary_ev / mean_ask if mean_ask > 0 else 0.0
+        predicted_ord_ev = ordinary_ev
+        retrospective_return = float(np.mean(per_decision_realized))
+
+        # Dependence-aware Moving-Block Bootstrap over actual per-decision realized returns
         block_size = max(2, duration + 1)
-        cons_ev, unc_status, sens_dict = self._moving_block_bootstrap_ev(
-            outcomes=outcomes,
-            payout=payout,
-            stake=self.stake,
+        cons_ev, unc_status, sens_dict = self._moving_block_bootstrap_quote_ev(
+            returns=per_decision_realized,
             block_size=block_size,
             iterations=self.bootstrap_iterations,
             percentile=5.0,
             seed=42
         )
 
-        # Wilson 95% Confidence Interval for win rate
-        ci_lo, ci_hi = wilson_score_interval(wins, n, confidence=0.95)
-
-        # Genuine Quote Coverage Computation (V1.7.4.1 Part 2 Section 2.1)
-        raw_cov, chrono_cov, econ_cov, exec_cov = self._compute_quote_coverage(
-            duration=duration,
-            direction=direction,
-            decision_timestamps=decision_timestamps,
-            quote_records=quote_records,
-            evaluation_mode=evaluation_mode
-        )
-
-        quote_avail_pct = exec_cov if evaluation_mode == EvaluationMode.QUOTE_VERIFIED else 0.0
-
-        # Strict Economic Qualification (V1.7.4.1 Part 2 Section 2.4)
-        has_positive_ord = ordinary_ev > min_ordinary_ev
+        has_positive_ord = (ordinary_ev is not None) and (ordinary_ev > min_ordinary_ev)
         has_positive_cons = (cons_ev is not None) and (cons_ev >= min_conservative_ev)
         has_sufficient_samples = (unc_status == "SUFFICIENT_SAMPLE")
-        has_valid_quotes = (evaluation_mode == EvaluationMode.REFERENCE_SCENARIO) or (quote_avail_pct >= 90.0)
+        has_valid_quotes = (quote_avail_pct >= 90.0)
 
         is_pos = has_positive_ord and has_positive_cons and has_sufficient_samples and has_valid_quotes
 
         if unc_status == "INSUFFICIENT_SAMPLE":
-            verdict = "INSUFFICIENT_UNCERTAINTY_EVIDENCE"
-        elif not has_positive_ord:
-            verdict = "NEGATIVE_ORDINARY_EV"
-        elif not has_positive_cons:
-            verdict = "FAILED_CONSERVATIVE_HURDLE"
+            verdict = "INSUFFICIENT_EVIDENCE"
         elif not has_valid_quotes:
             verdict = "INSUFFICIENT_QUOTE_COVERAGE"
+        elif not has_positive_ord:
+            verdict = "FAILED_ECONOMIC_HURDLE"
+        elif not has_positive_cons:
+            verdict = "FAILED_CONSERVATIVE_HURDLE"
         else:
-            verdict = "ECONOMICALLY_QUALIFIED_CANDIDATE"
+            verdict = "QUOTE_VERIFIED_RESEARCH_CANDIDATE"
 
         return DurationMetricSummary(
             duration=duration,
@@ -382,8 +542,8 @@ class DualDurationEvaluator:
             brier_score=round(bs, 5),
             brier_skill_score=round(bss, 5),
             break_even_hurdle=round(hurdle, 5),
-            stake=self.stake,
-            total_payout=payout,
+            stake=round(mean_ask, 2),
+            total_payout=round(mean_payout, 2),
             ordinary_ev=round(ordinary_ev, 4),
             ordinary_ev_per_dollar=round(ord_ev_per_dollar, 4),
             predicted_ordinary_ev=round(predicted_ord_ev, 4),
@@ -400,8 +560,148 @@ class DualDurationEvaluator:
             evaluation_mode=evaluation_mode.value,
             evidence_class=evidence_class.value,
             is_economically_positive=is_pos,
-            verdict=verdict
+            verdict=verdict,
+            mean_actual_ask_price=round(mean_ask, 4),
+            mean_actual_payout=round(mean_payout, 4),
+            mean_actual_break_even=round(mean_be, 5),
+            break_even_distribution=be_dist,
+            eligible_quote_decisions_count=m,
+            missing_ev_count=n - m,
+            quote_rejection_reasons=rej_reasons
         )
+
+    def _match_quotes_per_decision(
+        self,
+        duration: int,
+        direction: str,
+        decision_timestamps: List[float],
+        quote_records: Optional[List[Any]],
+        max_freshness_seconds: float = 60.0
+    ) -> Tuple[List[Optional[Dict[str, Any]]], Dict[str, float], Dict[str, int]]:
+        """Matches an individually identifiable, chronological quote record to each decision point.
+        
+        Strict Quote Matching Rules (V1.7.4.2 Part B):
+        - Same market symbol (self.symbol)
+        - Same contract duration (duration)
+        - Same contract direction (direction)
+        - Valid currency ('USD')
+        - Valid ask price and payout: ask > 0, payout > 0, ask < payout
+        - Chronological response receipt: response_timestamp <= decision_timestamp (zero lookahead tolerance)
+        - Freshness: (decision_timestamp - response_timestamp) <= max_freshness_seconds
+        """
+        n = len(decision_timestamps)
+        if n == 0:
+            return [], {"raw": 0.0, "chrono": 0.0, "econ": 0.0, "exec": 0.0}, {}
+
+        if not quote_records:
+            return [None] * n, {"raw": 0.0, "chrono": 0.0, "econ": 0.0, "exec": 0.0}, {"NO_QUOTES_PROVIDED": n}
+
+        matched_list: List[Optional[Dict[str, Any]]] = []
+        raw_valid = 0
+        chrono_valid = 0
+        econ_valid = 0
+        exec_valid = 0
+        rejection_reasons: Dict[str, int] = collections.defaultdict(int)
+
+        norm_dir = direction.upper()
+        dir_aliases = (norm_dir, "UP" if norm_dir == "RUNHIGH" else "DOWN", "RISE" if norm_dir == "RUNHIGH" else "FALL")
+
+        for t_dec in decision_timestamps:
+            # 1. Match symbol, duration, direction, currency
+            candidates = []
+            for q in quote_records:
+                q_dur = getattr(q, "contract_duration", None)
+                q_type = str(getattr(q, "contract_type", "")).upper()
+                q_sym = str(getattr(q, "market_symbol", "") or getattr(q, "symbol", "")).upper()
+                q_curr = str(getattr(q, "currency", "USD")).upper()
+
+                if q_sym and q_sym != self.symbol.upper():
+                    continue
+                if q_dur != duration:
+                    continue
+                if q_type not in dir_aliases:
+                    continue
+                if q_curr != "USD":
+                    continue
+                candidates.append(q)
+
+            if candidates:
+                raw_valid += 1
+            else:
+                rejection_reasons["QUOTE_WRONG_CONTRACT_OR_SYMBOL"] += 1
+                matched_list.append(None)
+                continue
+
+            # 2. Chronological filter: response_timestamp <= t_dec
+            chrono_candidates = [
+                q for q in candidates
+                if getattr(q, "response_timestamp", None) is not None
+                and not math.isnan(getattr(q, "response_timestamp", float("nan")))
+                and getattr(q, "response_timestamp", float("inf")) <= t_dec
+            ]
+            if chrono_candidates:
+                chrono_valid += 1
+            else:
+                has_future = any(
+                    getattr(q, "response_timestamp", None) is not None and getattr(q, "response_timestamp", 0.0) > t_dec
+                    for q in candidates
+                )
+                if has_future:
+                    rejection_reasons["QUOTE_LOOKAHEAD_REJECTED"] += 1
+                else:
+                    rejection_reasons["QUOTE_RESPONSE_TIME_MISSING"] += 1
+                matched_list.append(None)
+                continue
+
+            # 3. Economic filter: ask > 0, payout > 0, ask < payout
+            econ_candidates = []
+            for q in chrono_candidates:
+                ask = getattr(q, "ask_price", getattr(q, "stake", 0.0))
+                payout = getattr(q, "total_payout", 0.0)
+                status = getattr(q, "collection_status", "QUOTE_AVAILABLE")
+                if ask > 0 and payout > 0 and ask < payout and status == "QUOTE_AVAILABLE":
+                    econ_candidates.append(q)
+
+            if econ_candidates:
+                econ_valid += 1
+            else:
+                rejection_reasons["QUOTE_PRICE_OR_PAYOUT_INVALID"] += 1
+                matched_list.append(None)
+                continue
+
+            # 4. Execution quality filter: freshness <= max_freshness_seconds
+            exec_candidates = [
+                q for q in econ_candidates
+                if (t_dec - getattr(q, "response_timestamp", 0.0)) <= max_freshness_seconds
+            ]
+            if exec_candidates:
+                exec_valid += 1
+                # Select the most recent quote received prior to decision
+                best_q = max(exec_candidates, key=lambda q: getattr(q, "response_timestamp", 0.0))
+                b_ask = float(getattr(best_q, "ask_price", getattr(best_q, "stake", 0.0)))
+                b_pay = float(getattr(best_q, "total_payout", 0.0))
+                b_resp = float(getattr(best_q, "response_timestamp", 0.0))
+                matched_list.append({
+                    "decision_timestamp": t_dec,
+                    "quote_id": str(getattr(best_q, "proposal_id", "") or getattr(best_q, "id", "")),
+                    "response_timestamp": b_resp,
+                    "ask_price": b_ask,
+                    "total_payout": b_pay,
+                    "break_even": b_ask / b_pay,
+                    "age_seconds": t_dec - b_resp,
+                    "quote_source": getattr(best_q, "quote_source", "live_proposal")
+                })
+            else:
+                rejection_reasons["QUOTE_STALE"] += 1
+                matched_list.append(None)
+
+        cov_pcts = {
+            "raw": (raw_valid / n) * 100.0,
+            "chrono": (chrono_valid / n) * 100.0,
+            "econ": (econ_valid / n) * 100.0,
+            "exec": (exec_valid / n) * 100.0
+        }
+        return matched_list, cov_pcts, dict(rejection_reasons)
 
     def _compute_quote_coverage(
         self,
@@ -412,59 +712,15 @@ class DualDurationEvaluator:
         evaluation_mode: EvaluationMode
     ) -> Tuple[float, float, float, float]:
         """Calculates granular quote coverage against decision timestamps."""
-        n = len(decision_timestamps)
-        if n == 0 or evaluation_mode == EvaluationMode.REFERENCE_SCENARIO or not quote_records:
+        if evaluation_mode == EvaluationMode.REFERENCE_SCENARIO or not quote_records:
             return 0.0, 0.0, 0.0, 0.0
-
-        raw_valid = 0
-        chrono_valid = 0
-        econ_valid = 0
-        exec_valid = 0
-
-        max_freshness_seconds = 60.0
-
-        for t_dec in decision_timestamps:
-            # Find matching quotes for this contract duration and direction
-            matching_quotes = []
-            for q in quote_records:
-                q_dur = getattr(q, "contract_duration", None)
-                q_type = str(getattr(q, "contract_type", "")).upper()
-                if q_dur == duration and q_type == direction:
-                    matching_quotes.append(q)
-
-            if matching_quotes:
-                raw_valid += 1
-
-            # Chronological check: quote received before or at decision
-            valid_chrono_quotes = [
-                q for q in matching_quotes
-                if getattr(q, "response_timestamp", float("inf")) <= t_dec
-            ]
-            if valid_chrono_quotes:
-                chrono_valid += 1
-
-            # Economic check: ask > 0 and payout > 0
-            valid_econ_quotes = [
-                q for q in valid_chrono_quotes
-                if getattr(q, "ask_price", 0.0) > 0 and getattr(q, "total_payout", 0.0) > 0
-            ]
-            if valid_econ_quotes:
-                econ_valid += 1
-
-            # Execution quality check: fresh within max_freshness_seconds
-            valid_exec_quotes = [
-                q for q in valid_econ_quotes
-                if (t_dec - getattr(q, "response_timestamp", 0.0)) <= max_freshness_seconds
-            ]
-            if valid_exec_quotes:
-                exec_valid += 1
-
-        return (
-            (raw_valid / n) * 100.0,
-            (chrono_valid / n) * 100.0,
-            (econ_valid / n) * 100.0,
-            (exec_valid / n) * 100.0
+        _, cov_pcts, _ = self._match_quotes_per_decision(
+            duration=duration,
+            direction=direction,
+            decision_timestamps=decision_timestamps,
+            quote_records=quote_records
         )
+        return cov_pcts["raw"], cov_pcts["chrono"], cov_pcts["econ"], cov_pcts["exec"]
 
     def _compute_ece(self, outcomes: List[float], pred_probs: List[float], n_bins: int = 5) -> float:
         """Expected Calibration Error across equal probability bins."""
@@ -485,6 +741,61 @@ class DualDurationEvaluator:
                 ece += (bin_n / total_n) * abs(acc - conf)
         return float(ece)
 
+    def _moving_block_bootstrap_quote_ev(
+        self,
+        returns: List[float],
+        block_size: int,
+        iterations: int = 500,
+        percentile: float = 5.0,
+        seed: int = 42
+    ) -> Tuple[Optional[float], str, Dict[str, Optional[float]]]:
+        """Computes dependence-aware lower percentile of quote-verified EV using moving-block bootstrap.
+        
+        Strict Uncertainty Guard (V1.7.4.2 Part B Section 6 & Part E Section 18):
+        Operates on actual per-decision realized returns (y_i * Payout_i - Ask_i).
+        If n < max(30, block_size * 2), returns unavailable (None).
+        """
+        n = len(returns)
+        if n < max(30, block_size * 2):
+            return None, "INSUFFICIENT_SAMPLE", {}
+
+        arr = np.array(returns)
+        num_blocks = n - block_size + 1
+        blocks = [arr[j : j + block_size] for j in range(num_blocks)]
+        blocks_needed = int(math.ceil(n / block_size))
+
+        rng = np.random.default_rng(seed=seed)
+
+        ev_samples = []
+        for _ in range(iterations):
+            sampled_block_indices = rng.integers(0, num_blocks, size=blocks_needed)
+            sample_arr = np.concatenate([blocks[idx] for idx in sampled_block_indices])[:n]
+            sample_mean = float(np.mean(sample_arr))
+            ev_samples.append(sample_mean)
+
+        cons_ev = float(np.percentile(ev_samples, percentile))
+
+        # Sensitivity analysis across alternative block sizes
+        sens_dict: Dict[str, Optional[float]] = {}
+        alt_sizes = [max(2, block_size - 1), block_size, block_size + 3]
+        for alt_bs in set(alt_sizes):
+            if alt_bs == block_size:
+                sens_dict[f"block_{alt_bs}"] = round(cons_ev, 4)
+            else:
+                if n >= alt_bs * 2:
+                    alt_blocks = [arr[j : j + alt_bs] for j in range(n - alt_bs + 1)]
+                    alt_needed = int(math.ceil(n / alt_bs))
+                    alt_samples = []
+                    for _ in range(iterations):
+                        s_idx = rng.integers(0, len(alt_blocks), size=alt_needed)
+                        s_arr = np.concatenate([alt_blocks[idx] for idx in s_idx])[:n]
+                        alt_samples.append(float(np.mean(s_arr)))
+                    sens_dict[f"block_{alt_bs}"] = round(float(np.percentile(alt_samples, percentile)), 4)
+                else:
+                    sens_dict[f"block_{alt_bs}"] = None
+
+        return cons_ev, "SUFFICIENT_SAMPLE", sens_dict
+
     def _moving_block_bootstrap_ev(
         self,
         outcomes: List[float],
@@ -495,7 +806,7 @@ class DualDurationEvaluator:
         percentile: float = 5.0,
         seed: int = 42
     ) -> Tuple[Optional[float], str, Dict[str, Optional[float]]]:
-        """Computes dependence-aware lower percentile of EV using moving-block bootstrap.
+        """Computes dependence-aware lower percentile of reference EV using moving-block bootstrap.
         
         Strict Uncertainty Guard (V1.7.4.1 Part 2 Section 2.5):
         If n < block_size * 2 or n < 30, conservative bound is UNAVAILABLE (None).
