@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - audit/forward-tick-replay-shadow
+      - research/fresh-artifact-audit-preregistration
     paths:
       - .github/workflows/live-shadow-acceptance.yml
   workflow_dispatch:
@@ -60,6 +61,14 @@ jobs:
         run: |
           if test -f acceptance_artifacts/fresh_forward_shadow.db; then
             python tools/replay_forward_evidence.py --db acceptance_artifacts/fresh_forward_shadow.db --output acceptance_artifacts/fresh-replay.json | tee acceptance_artifacts/replay-log.txt
+          fi
+      - name: Reconcile strict quote-level economics for this fresh capture
+        if: always()
+        shell: bash
+        run: |
+          if test -f acceptance_artifacts/fresh_forward_shadow.db; then
+            set -o pipefail
+            python tools/strict_quote_economics.py --db acceptance_artifacts/fresh_forward_shadow.db --output acceptance_artifacts/fresh-strict-economics.json 2>&1 | tee acceptance_artifacts/fresh-economics-log.txt
           fi
       - name: Upload session evidence
         if: always()
