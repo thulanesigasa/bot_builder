@@ -9,6 +9,7 @@ on:
       - research/freeze-exploratory-feasibility-gates
       - research/independent-confirmation-readiness-gate
       - research/pilot-power-diagnostics
+      - research/separated-calibration-protocol
   pull_request:
   workflow_dispatch:
 
@@ -166,6 +167,17 @@ jobs:
           assert verdict["ready"] is False, "Draft must NOT authorize confirmation"
           assert plan["status"] == "DRAFT_NOT_ACTIVATED"
           print("CONFIRMATION_NOT_AUTHORIZED", json.dumps(verdict, sort_keys=True))
+          PY
+
+      - name: Verify separated calibration protocol is exploratory
+        if: always()
+        run: |
+          python - <<'PY'
+          from calibration_protocol import frozen_protocol
+          p = frozen_protocol()
+          assert p["no_purchases"] is True
+          assert p["no_positive_ev_promotion"] is True
+          print("SEPARATED_CALIBRATION_PROTOCOL", p["protocol_sha256"])
           PY
 
       - name: Upload test and audit outputs
