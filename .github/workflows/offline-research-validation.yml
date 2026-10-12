@@ -1,0 +1,94 @@
+name: Offline research tests and stored-evidence audit
+
+on:
+  push:
+    branches:
+      - ci/run-shadow-research-regression-tests
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-validation:
+    name: Pytest and SHADOW evidence reconciliation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run full offline pytest suite
+        id: pytest
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q --tb=short --disable-warnings 2>&1 | tee pytest-results.txt
+
+      - name: Reconcile stored SHADOW sessions (no network, no purchases)
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee evidence-audit.txt
+          import json
+          import os
+          import sqlite3
+          from canonical_cohort_reconciler import CanonicalCohortReconciler
+
+          databases = [
+              "data/v183_forward_predictions.db",
+              "data/v1831_acceptance_session.db",
+          ]
+          for path in databases:
+              print("DATABASE", path, "exists=", os.path.isfile(path), flush=True)
+              if not os.path.isfile(path):
+                  continue
+              with sqlite3.connect(path) as conn:
+                  conn.row_factory = sqlite3.Row
+                  sessions = conn.execute(
+                      "SELECT session_id, COUNT(*) AS committed, "
+                      "SUM(CASE WHEN outcome_status = 'OUTCOME_RESOLVED' THEN 1 ELSE 0 END) AS resolved, "
+                      "SUM(CASE WHEN outcome_status != 'OUTCOME_RESOLVED' THEN 1 ELSE 0 END) AS unresolved, "
+                      "SUM(CASE WHEN outcome_status != 'OUTCOME_RESOLVED' AND proposal_id IS NOT NULL THEN 1 ELSE 0 END) AS unresolved_quoted, "
+                      "SUM(CASE WHEN proposal_id IS NOT NULL THEN 1 ELSE 0 END) AS quoted "
+                      "FROM forward_observations GROUP BY session_id"
+                  ).fetchall()
+              reconciler = CanonicalCohortReconciler.from_db_path(path)
+              try:
+                  for session in sessions:
+                      record = dict(session)
+                      print("SESSION", json.dumps(record, sort_keys=True), flush=True)
+                      assert record["committed"] == record["resolved"] + record["unresolved"]
+                      authority = reconciler.reconcile_session_authoritative(record["session_id"])
+                      print(
+                          "STRICT_AUTHORITY",
+                          json.dumps({"session_id": record["session_id"], "telemetry": authority["telemetry"]}, sort_keys=True),
+                          flush=True,
+                      )
+                      assert authority["telemetry"]["total_committed"] == record["committed"]
+              finally:
+                  reconciler.close()
+          print("OFFLINE_EVIDENCE_RECONCILIATION_COMPLETED", flush=True)
+          PY
+
+      - name: Upload test and audit outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-research-validation
+          path: |
+            pytest-results.txt
+            evidence-audit.txt
+          if-no-files-found: warn
