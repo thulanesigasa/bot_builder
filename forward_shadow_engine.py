@@ -918,6 +918,8 @@ class DerivLiveShadowCollector:
         # For Only Ups/Downs: consecutive 2-tick or 5-tick probabilities
         p_runhigh_2t = 0.25 * (1.0 + streak * 0.02)
         p_runhigh_5t = 0.03125 * (1.0 + streak * 0.01)
+        p_runlow_2t = 0.25 * (1.0 - streak * 0.02)
+        p_runlow_5t = 0.03125 * (1.0 - streak * 0.01)
 
         # Create observations for enabled combinations
         # We test Rise/Fall 2t & 5t CALL/PUT, and Only Ups/Downs 2t & 5t
@@ -928,6 +930,8 @@ class DerivLiveShadowCollector:
             (FAMILY_RISE_FALL, DIRECTION_PUT, 5, p_put),
             (FAMILY_ONLY_UPS_DOWNS, DIRECTION_RUNHIGH, 2, p_runhigh_2t),
             (FAMILY_ONLY_UPS_DOWNS, DIRECTION_RUNHIGH, 5, p_runhigh_5t),
+            (FAMILY_ONLY_UPS_DOWNS, DIRECTION_RUNLOW, 2, p_runlow_2t),
+            (FAMILY_ONLY_UPS_DOWNS, DIRECTION_RUNLOW, 5, p_runlow_5t),
         ]
 
         decision_ts = signal_tick.received_timestamp
