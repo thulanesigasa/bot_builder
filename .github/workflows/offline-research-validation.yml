@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - ci/run-shadow-research-regression-tests
+      - audit/forward-tick-replay-shadow
   pull_request:
   workflow_dispatch:
 
