@@ -39,6 +39,83 @@ jobs:
           else:
               print("LIVE_SHADOW_SESSION_RECORDED")
           PY
+      - name: Verify stored quote attribution and replay tick-based outcomes
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee shadow-replay-audit.txt
+          import json, os, sqlite3
+          from collections import Counter
+          from forward_shadow_engine import (
+              ContractOutcomeResolvers, FAMILY_RISE_FALL, FAMILY_ONLY_UPS_DOWNS,
+          )
+          from canonical_cohort_reconciler import CanonicalCohortReconciler
+          path = "shadow-acceptance.db"
+          if not os.path.isfile(path):
+              print("NO_SHADOW_DATABASE")
+              raise SystemExit(1)
+          with sqlite3.connect(path) as conn:
+              conn.row_factory = sqlite3.Row
+              ticks = [dict(t) for t in conn.execute(
+                  "SELECT * FROM broker_ticks ORDER BY id ASC"
+              )]
+              observations = [dict(x) for x in conn.execute(
+                  "SELECT * FROM forward_observations ORDER BY decision_timestamp ASC"
+              )]
+              proposals = [dict(p) for p in conn.execute(
+                  "SELECT * FROM broker_proposals"
+              )]
+          errors = []
+          checked = 0
+          for obs in observations:
+              if obs["outcome_status"] != "OUTCOME_RESOLVED":
+                  continue
+              timeline = [
+                  t for t in ticks if t["symbol"] == obs["symbol"]
+                  and t["epoch"] > obs["signal_epoch"]
+              ]
+              dur = obs["duration_ticks"]
+              if len(timeline) < dur + 1:
+                  errors.append((obs["observation_id"], "INSUFFICIENT_PERSISTED_TICKS"))
+                  continue
+              entry = timeline[0]
+              forward = timeline[1:dur + 1]
+              if (obs["entry_epoch"] != entry["epoch"] or
+                  obs["expiry_epoch"] != forward[-1]["epoch"] or
+                  abs(obs["entry_spot"] - entry["quote"]) > 1e-7):
+                  errors.append((obs["observation_id"], "TICK_MAPPING_MISMATCH"))
+                  continue
+              if obs["contract_family"] == FAMILY_RISE_FALL:
+                  outcome, _ = ContractOutcomeResolvers.resolve_rise_fall(
+                      entry["quote"], forward[-1]["quote"], obs["contract_type"]
+                  )
+              elif obs["contract_family"] == FAMILY_ONLY_UPS_DOWNS:
+                  outcome, _ = ContractOutcomeResolvers.resolve_only_ups_downs(
+                      entry["quote"], [t["quote"] for t in forward],
+                      obs["contract_type"], dur
+                  )
+              else:
+                  errors.append((obs["observation_id"], "UNKNOWN_CONTRACT_FAMILY"))
+                  continue
+              if outcome != obs["observed_outcome"]:
+                  errors.append((obs["observation_id"], "OUTCOME_MISMATCH"))
+              checked += 1
+          print("TICK_REPLAY", json.dumps({
+              "ticks": len(ticks), "proposals": len(proposals),
+              "observations": len(observations), "replayed": checked,
+              "errors": errors[:25], "error_count": len(errors),
+          }, sort_keys=True))
+          rec = CanonicalCohortReconciler.from_db_path(path)
+          try:
+              result = rec.reconcile_session_authoritative()
+              print("STRICT_RECONCILIATION", json.dumps(result["telemetry"], sort_keys=True))
+          finally:
+              rec.close()
+          if errors:
+              raise SystemExit("TICK_REPLAY_FAILED")
+          print("TICK_REPLAY_PASS")
+          PY
       - name: Publish raw acceptance evidence (do not certify profitability)
         if: always()
         uses: actions/upload-artifact@v4
@@ -47,4 +124,5 @@ jobs:
           path: |
             shadow-acceptance.db
             shadow-acceptance.json
+            shadow-replay-audit.txt
           if-no-files-found: warn
