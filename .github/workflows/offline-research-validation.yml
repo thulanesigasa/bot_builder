@@ -7,6 +7,7 @@ on:
       - audit/forward-tick-replay-shadow
       - research/strict-quote-economics-v190
       - research/freeze-exploratory-feasibility-gates
+      - research/independent-confirmation-readiness-gate
   pull_request:
   workflow_dispatch:
 
@@ -151,6 +152,20 @@ jobs:
         run: |
           python freeze_shadow_pilot.py --output /tmp/shadow-pilot-manifest.json
           python freeze_shadow_pilot.py --output /tmp/shadow-pilot-manifest.json --verify
+
+      - name: Assert confirmation draft remains unactivated
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools.confirmation_readiness_gate import evaluate
+          plan = json.loads(Path("research/confirmation_plan_DRAFT.json").read_text(encoding="utf-8"))
+          verdict = evaluate(plan)
+          assert verdict["ready"] is False, "Draft must NOT authorize confirmation"
+          assert plan["status"] == "DRAFT_NOT_ACTIVATED"
+          print("CONFIRMATION_NOT_AUTHORIZED", json.dumps(verdict, sort_keys=True))
+          PY
 
       - name: Upload test and audit outputs
         if: always()

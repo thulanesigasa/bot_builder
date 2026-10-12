@@ -1,0 +1,21 @@
+{
+  "status": "DRAFT_NOT_ACTIVATED",
+  "primary_market": null,
+  "primary_contract": null,
+  "primary_duration_ticks": null,
+  "frozen_model_sha256": null,
+  "analysis_code_sha256": null,
+  "primary_alternative": "mean_net_return_greater_than_zero",
+  "alpha": 0.05,
+  "power": 0.8,
+  "minimum_economically_relevant_ev": null,
+  "expected_return_stddev": null,
+  "dependence_inflation_factor": null,
+  "expected_quote_coverage": null,
+  "fixed_eligible_sample_size": null,
+  "maximum_collection_sessions": null,
+  "preregistration_utc": null,
+  "confirmation_start_utc": null,
+  "pilot_observations_excluded": true,
+  "notes": "Primary hypothesis, effect size, dependence-adjusted power, and holdout schedule must be frozen before an independent campaign. Do not select winning pilot results as confirmation."
+}
