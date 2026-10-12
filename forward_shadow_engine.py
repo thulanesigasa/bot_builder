@@ -620,6 +620,8 @@ class DerivLiveShadowCollector:
                 self.proposal_schedule.append((m, FAMILY_ONLY_UPS_DOWNS, DIRECTION_RUNHIGH, dur))
                 self.proposal_schedule.append((m, FAMILY_ONLY_UPS_DOWNS, DIRECTION_RUNLOW, dur))
 
+        self._proposal_request_seq = 0
+        self._pending_quote_requests: Dict[int, Dict[str, Any]] = {}
         self.proposals_captured_count = 0
         self.ticks_captured_count = 0
         self.predictions_committed_count = 0
@@ -715,7 +717,14 @@ class DerivLiveShadowCollector:
                             "duration_unit": "t",
                             "underlying_symbol": sym,
                         }
+                        self._proposal_request_seq += 1
+                        req_id = self._proposal_request_seq
+                        req_payload["req_id"] = req_id
                         t_req = time.time()
+                        self._pending_quote_requests[req_id] = {
+                            "symbol": sym, "family": fam, "direction": ctype,
+                            "duration": dur, "request_timestamp": t_req,
+                        }
                         await ws.send(json.dumps(req_payload))
                         last_proposal_time = now
 
@@ -728,7 +737,10 @@ class DerivLiveShadowCollector:
                         if "tick" in msg:
                             await self._handle_incoming_tick(msg["tick"], recv_ts)
                         elif "proposal" in msg:
-                            self._handle_incoming_proposal(msg["proposal"], recv_ts)
+                            self._handle_incoming_proposal(
+                                msg["proposal"], recv_ts, req_id=msg.get("req_id"),
+                                echo_req=msg.get("echo_req"),
+                            )
                         elif "error" in msg:
                             # Log and continue (fail-closed on error)
                             err = msg["error"]
@@ -831,73 +843,54 @@ class DerivLiveShadowCollector:
         if len(self.tick_windows.get(sym, [])) >= 5:
             self._commit_prospective_observation(sym, tick)
 
-    def _handle_incoming_proposal(self, prop_data: Dict[str, Any], recv_timestamp: float) -> None:
-        """Stores authenticated broker proposal quote response."""
-        prop_id = prop_data.get("id", str(uuid.uuid4()))
-        ask = float(prop_data.get("ask_price", 0.0))
-        payout = float(prop_data.get("payout", 0.0))
-        spot = float(prop_data.get("spot", 0.0))
-        spot_time = int(prop_data.get("spot_time", 0))
-        longcode = prop_data.get("longcode", "")
+    def _handle_incoming_proposal(
+        self, prop_data: Dict[str, Any], recv_timestamp: float,
+        req_id: Optional[int] = None, echo_req: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Persist a quote only when tied to our exact, outstanding broker request.
 
-        # Infer contract family and direction from longcode or terms
-        if "strictly higher" in longcode:
-            fam = FAMILY_RISE_FALL
-            ctype = DIRECTION_CALL
-        elif "strictly lower" in longcode:
-            fam = FAMILY_RISE_FALL
-            ctype = DIRECTION_PUT
-        elif "rises successively" in longcode or "RUNHIGH" in longcode:
-            fam = FAMILY_ONLY_UPS_DOWNS
-            ctype = DIRECTION_RUNHIGH
-        elif "falls successively" in longcode or "RUNLOW" in longcode:
-            fam = FAMILY_ONLY_UPS_DOWNS
-            ctype = DIRECTION_RUNLOW
-        else:
-            fam = FAMILY_RISE_FALL
-            ctype = DIRECTION_CALL
-
-        # Parse duration from longcode (e.g. "after 5 ticks")
-        dur = 5
-        for d_cand in [2, 3, 5, 10]:
-            if f"{d_cand} ticks" in longcode:
-                dur = d_cand
-                break
-
-        # Discover symbol from longcode or active list
-        sym = "R_75"
-        for s in RESEARCH_MARKETS:
-            if s.replace("_", " ") in longcode or s in longcode:
-                sym = s
-                break
-        if "Volatility 75" in longcode:
-            sym = "R_75"
-        elif "Volatility 100 (1s)" in longcode:
-            sym = "1HZ100V"
-        elif "Volatility 100" in longcode:
-            sym = "R_100"
-
+        Longcode text is NEVER used to infer symbol, direction or duration.
+        """
+        request = self._pending_quote_requests.pop(req_id, None) if isinstance(req_id, int) else None
+        if not request:
+            return
+        if not isinstance(prop_data, dict):
+            return
+        if echo_req and isinstance(echo_req, dict):
+            if (echo_req.get("contract_type") != request["direction"]
+                or echo_req.get("underlying_symbol") != request["symbol"]
+                or echo_req.get("duration") != request["duration"]
+                or echo_req.get("duration_unit") != "t"):
+                return
+        prop_id = prop_data.get("id")
+        try:
+            ask = float(prop_data.get("ask_price", 0))
+            payout = float(prop_data.get("payout", 0))
+            spot = float(prop_data.get("spot", 0))
+            spot_time = int(prop_data.get("spot_time", 0))
+        except (TypeError, ValueError):
+            return
+        if not prop_id or not math.isfinite(ask) or not math.isfinite(payout) or ask <= 0 or payout <= 0:
+            return
         raw_str = json.dumps(prop_data, sort_keys=True)
         raw_hash = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
-
         prop = LiveBrokerProposal(
-            proposal_id=prop_id,
-            underlying_symbol=sym,
-            contract_family=fam,
-            contract_type=ctype,
-            duration=dur,
+            proposal_id=str(prop_id),
+            underlying_symbol=request["symbol"],
+            contract_family=request["family"],
+            contract_type=request["direction"],
+            duration=request["duration"],
             duration_unit="t",
             ask_price=ask,
             total_payout=payout,
             spot_price=spot,
             spot_time=spot_time,
-            request_timestamp=recv_timestamp - 0.1,
+            request_timestamp=request["request_timestamp"],
             response_timestamp=recv_timestamp,
-            longcode=longcode,
+            longcode=prop_data.get("longcode", ""),
             session_id=self.session_id,
             payload_hash=raw_hash,
         )
-
         self.db.insert_proposal(prop)
         self.proposals_captured_count += 1
 
