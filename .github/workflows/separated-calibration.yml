@@ -1,0 +1,86 @@
+name: Time-separated non-purchasing calibration
+on:
+  schedule:
+    - cron: '15 0,4,8,12 13,14 10 *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r75-separated-calibration-20261013-14
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    # workflow_dispatch is inspection-only; never launch an unscheduled session.
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - id: gate
+        name: Verify locked UTC start slot and protocol
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from scheduled_calibration import resolve_window
+          from forward_shadow_engine import LIVE_EXECUTION_DISABLED, DECISION
+          assert LIVE_EXECUTION_DISABLED is True and DECISION == "NO_TRADE"
+          slot = resolve_window()
+          os.makedirs("calibration", exist_ok=True)
+          with open("calibration/window.json", "w", encoding="utf-8") as f:
+              json.dump(slot, f, indent=2)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"index={slot['index']}\n")
+          print("PREREGISTERED_WINDOW", json.dumps(slot, sort_keys=True))
+          PY
+      - name: Capture one 75-second SHADOW session
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee calibration/collection.log
+          import asyncio, json
+          from forward_shadow_engine import DerivLiveShadowCollector, LIVE_EXECUTION_DISABLED, DECISION
+          from calibration_protocol import frozen_protocol
+          assert LIVE_EXECUTION_DISABLED is True and DECISION == "NO_TRADE"
+          p = frozen_protocol()
+          collector = DerivLiveShadowCollector(
+              target_markets=[p["market"]],
+              db_path="calibration/session.db",
+              proposal_interval_sec=1.5,
+              max_quote_age_sec=5.0,
+          )
+          try:
+              result = asyncio.run(collector.execute_shadow_session(
+                  duration_seconds=p["session_duration_seconds"]))
+          finally:
+              collector.db.close()
+          with open("calibration/session.json", "w", encoding="utf-8") as f:
+              json.dump(result, f, indent=2)
+          print("CALIBRATION_SESSION", json.dumps(result, sort_keys=True), flush=True)
+          if result.get("status") != "COMPLETED" or result.get("ticks_captured", 0) < 5 or result.get("proposals_captured", 0) < 1:
+              raise SystemExit("SESSION_QUALITY_GATE_FAILED")
+          PY
+      - name: Independent replay and per-quote economics
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/replay_forward_evidence.py --db calibration/session.db --output calibration/replay.json | tee calibration/replay.log
+          python tools/strict_quote_economics.py --db calibration/session.db --output calibration/quote-economics.json | tee calibration/economics.log
+      - name: Preserve evidence even if validation fails
+        if: always() && steps.gate.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: r75-calibration-slot-${{ steps.gate.outputs.index }}
+          path: calibration/
+          retention-days: 90
+          if-no-files-found: error
