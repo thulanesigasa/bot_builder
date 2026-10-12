@@ -10,6 +10,7 @@ on:
       - research/independent-confirmation-readiness-gate
       - research/pilot-power-diagnostics
       - research/separated-calibration-protocol
+      - research/scheduled-calibration-capture
   pull_request:
   workflow_dispatch:
 
