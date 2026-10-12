@@ -36,6 +36,46 @@ jobs:
           set -o pipefail
           python -m pytest -q --tb=short --disable-warnings 2>&1 | tee pytest-results.txt
 
+      - name: Audit broker CSV checksums against companion provenance
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee provenance-hash-audit.txt
+          import json, os
+          from data_provenance import DataProvenanceAuditor, compute_file_sha256
+
+          records = DataProvenanceAuditor.generate_manifest()
+          failed = False
+          for sym, rel_path, _cadence, prov_json in DataProvenanceAuditor.MARKET_SPECS:
+              if sym not in records:
+                  print("MISSING_MARKET", sym, rel_path, flush=True)
+                  failed = True
+                  continue
+              rec = records[sym]
+              meta = {}
+              if os.path.isfile(prov_json):
+                  with open(prov_json, encoding="utf-8") as stream:
+                      meta = json.load(stream)
+              actual = compute_file_sha256(rel_path)
+              expected = meta.get("sha256_checksum")
+              summary = {
+                  "symbol": sym,
+                  "integrity": rec["file_integrity_status"],
+                  "lineage": rec["transformation_lineage_status"],
+                  "source_authenticity": rec["source_authenticity_status"],
+                  "sha256_computed": actual,
+                  "sha256_companion": expected,
+                  "checksum_matches": actual == expected,
+              }
+              print("PROVENANCE", json.dumps(summary, sort_keys=True), flush=True)
+              if actual != expected or rec["file_integrity_status"] != "FILE_INTEGRITY_VERIFIED":
+                  failed = True
+          if failed:
+              raise SystemExit("INTEGRITY_CHECK_FAILED: do not promote these datasets to verified")
+          print("ALL_COMPANION_HASHES_MATCH", flush=True)
+          PY
+
       - name: Reconcile stored SHADOW sessions (no network, no purchases)
         if: always()
         shell: bash
@@ -90,5 +130,6 @@ jobs:
           name: offline-research-validation
           path: |
             pytest-results.txt
+            provenance-hash-audit.txt
             evidence-audit.txt
           if-no-files-found: warn
