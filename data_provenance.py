@@ -219,10 +219,14 @@ class DataProvenanceAuditor:
                             f"app_id={app_id}, request_time={req_time}"
                         )
                         # Checksum cross-check
-                        if prov_hash and prov_hash != sha256:
+                        if not prov_hash or prov_hash != sha256:
+                            # Never certify broker provenance when the companion
+                            # checksum disagrees with the byte-identical source file.
                             file_integrity = STATUS_FILE_INTEGRITY_FAILED
-                            missing_evidence.append("PROVENANCE_CHECKSUM_MISMATCH")
-                            details += " (WARNING: Provenance checksum does not match current file SHA-256)"
+                            source_class = SOURCE_UNVERIFIED_SOURCE
+                            source_auth = STATUS_SOURCE_AUTHENTICITY_UNVERIFIED
+                            missing_evidence.append("PROVENANCE_CHECKSUM_MISMATCH_OR_MISSING")
+                            details += " (QUARANTINED: no matching original acquisition evidence)"
 
                 except json.JSONDecodeError:
                     source_class = SOURCE_CORRUPTED_SOURCE
