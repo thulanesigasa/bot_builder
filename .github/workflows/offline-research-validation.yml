@@ -69,11 +69,18 @@ jobs:
                   "checksum_matches": actual == expected,
               }
               print("PROVENANCE", json.dumps(summary, sort_keys=True), flush=True)
-              if actual != expected or rec["file_integrity_status"] != "FILE_INTEGRITY_VERIFIED":
+              if actual != expected:
+                  if (rec["file_integrity_status"] != "FILE_INTEGRITY_FAILED"
+                      or rec["source_authenticity_status"] != "SOURCE_AUTHENTICITY_UNVERIFIED"
+                      or rec["is_eligible_for_authoritative_research"]):
+                      failed = True
+                  else:
+                      print("EXPECTED_QUARANTINE", sym, flush=True)
+              elif rec["file_integrity_status"] != "FILE_INTEGRITY_VERIFIED":
                   failed = True
           if failed:
-              raise SystemExit("INTEGRITY_CHECK_FAILED: do not promote these datasets to verified")
-          print("ALL_COMPANION_HASHES_MATCH", flush=True)
+              raise SystemExit("FAIL_OPEN_PROVENANCE_DETECTED: integrity labels do not match evidence")
+          print("ALL_PROVENANCE_CLASSIFICATIONS_MATCH_ACTUAL_FILES", flush=True)
           PY
 
       - name: Reconcile stored SHADOW sessions (no network, no purchases)
