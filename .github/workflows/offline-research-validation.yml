@@ -6,6 +6,7 @@ on:
       - ci/run-shadow-research-regression-tests
       - audit/forward-tick-replay-shadow
       - research/strict-quote-economics-v190
+      - research/freeze-exploratory-feasibility-gates
   pull_request:
   workflow_dispatch:
 
@@ -144,6 +145,12 @@ jobs:
         run: |
           set -o pipefail
           python tools/strict_quote_economics.py --db data/v183_forward_predictions.db --db data/v1831_acceptance_session.db --output strict-quote-economics.json 2>&1 | tee strict-quote-economics.log
+
+      - name: Validate deterministic SHADOW pilot protocol
+        if: always()
+        run: |
+          python freeze_shadow_pilot.py --output /tmp/shadow-pilot-manifest.json
+          python freeze_shadow_pilot.py --output /tmp/shadow-pilot-manifest.json --verify
 
       - name: Upload test and audit outputs
         if: always()
