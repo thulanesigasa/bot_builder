@@ -1,21 +1,19 @@
-# Deriv Quantitative Research & Dual-Duration Statistical Validation Framework (V1.7.4.3)
+# Deriv Quantitative Research & Dual-Duration Statistical Validation Framework (V1.7.4.4)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://github.com/thulanesigasa/bot_builder)
-[![Testing](https://img.shields.io/badge/pytest-320%20passed%20(100%25)-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Testing](https://img.shields.io/badge/pytest-328%20passed%20(100%25)-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v1%2Foptions%20Verified-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Safety](https://img.shields.io/badge/Safety-Real--Money%20Trading%20DISABLED-0F172A)](https://github.com/thulanesigasa/bot_builder)
 [![Dual Duration](https://img.shields.io/badge/Architecture-Dual--Duration%202T%20%7C%205T-0284C7)](https://github.com/thulanesigasa/bot_builder)
-[![Strategy Discovery](https://img.shields.io/badge/Strategy%20Discovery-Advisory--Only%20FWER%20Controlled-0284C7)](https://github.com/thulanesigasa/bot_builder)
-[![Evidence Integrity](https://img.shields.io/badge/Evidence%20Integrity-Authoritative%20Reconciled-brightgreen.svg)](https://github.com/thulanesigasa/bot_builder)
-[![Contract Spec](https://img.shields.io/badge/Contract%20Spec-Configurable%20Monotonic%20Lifecycle-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Schema Integrity](https://img.shields.io/badge/Schema%20Integrity-Authoritative%20Adapter%20Verified-brightgreen.svg)](https://github.com/thulanesigasa/bot_builder)
+[![Outcome Reconstruction](https://img.shields.io/badge/Outcome%20Reconstruction-Zero%20Discrepancies%20Audited-brightgreen.svg)](https://github.com/thulanesigasa/bot_builder)
 [![Confirmation Authority](https://img.shields.io/badge/Confirmation%20Authority-Unified%20ForwardConfirmationGate-0284C7)](https://github.com/thulanesigasa/bot_builder)
-[![Reconciliation](https://img.shields.io/badge/Reconciliation-6%20Separated%20Integrity%20Dimensions-0284C7)](https://github.com/thulanesigasa/bot_builder)
-[![Version](https://img.shields.io/badge/Version-V1.7.4.3%20Strict%20Provenance-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Version](https://img.shields.io/badge/Version-V1.7.4.4%20Schema%20Integrity-0284C7)](https://github.com/thulanesigasa/bot_builder)
 
 A quantitative financial research, machine-learning inference, and real-market forward observation system engineered for Deriv synthetic index contracts—specifically modeling Only Ups (`RUNHIGH`) and Only Downs (`RUNLOW`) on Volatility 75 (`R_75`).
 
-V1.7.4.3 establishes complete strict quote provenance across 8 dimensions (Identity, Symbol, Currency, Duration, Direction, Causality, Freshness, Session Attribution), composite quote IDs (`QR_{session}_{proposal}_{int(ts)}`), tick-aware quote invalidation on intervening price changes, 14-dimension rejection tracking, pre-outcome timestamp causality verification, live paired dual-duration SHADOW observation on Deriv production WebSocket infrastructure, and authoritative statistical validation under the Positive-EV Evidence Ladder (Level 0 verdict: `NO_VALIDATED_POSITIVE_EV_EDGE`). Real-money live execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`).
+V1.7.4.4 resolves the prospective evaluation database-schema mismatch by introducing a canonical record adaptation layer (`ResearchObservation`), enforcing strict 3-way outcome classification (`WIN`, `LOSS`, `UNAVAILABLE`), prohibiting synthetic zero defaults and theoretical probability fallbacks, independently reconstructing all historical live outcomes with zero discrepancies from raw ticks, recalculating authentic quote-verified economics, and conducting prospective paired SHADOW verification on Deriv production WebSocket infrastructure. Real-money live execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`).
 
 ---
 
@@ -30,6 +28,7 @@ V1.7.4.3 establishes complete strict quote provenance across 8 dimensions (Ident
 - **The Economic Hurdle**: The break-even probability for 2 ticks is **26.212%**, which is strictly higher than both the empirical base rate (25.34%) and observed live win rates.
 - **Economic Return**: The unconditional 2-tick contract produces an average loss of **-$0.0925** per $2.00 stake (-4.62% per dollar).
 - **Uncertainty Lower Bound**: When dependence-aware moving-block bootstrap uncertainty is applied, both durations produce negative conservative expected values (-$2.0000 across all 4 configurations). Neither clears the authoritative confirmation hurdle.
+- **Verdict**: Authoritative Positive-EV Evidence Ladder Level 0 (`NO_VALIDATED_POSITIVE_EV_EDGE`).
 
 ---
 
@@ -72,21 +71,21 @@ Entry Spot S_0 = tick i + 1
 
 ---
 
-## Research Integrity & Strict Provenance Architecture
+## Prospective Evidence & Schema Integrity Architecture (V1.7.4.4)
 
 ```text
-                           QUANTITATIVE INTEGRITY SYSTEM (V1.7.4.3)
+                           PROSPECTIVE EVIDENCE PIPELINE (V1.7.4.4)
                                               |
-      +-------------------+-------------------+-------------------+-------------------+
-      |                   |                   |                   |                   |
-      v                   v                   v                   v                   v
-EVIDENCE CLASSES    EVALUATION MODES     PROVENANCE ENGINE    CHRONO PARTITIONS    STATISTICAL RIGOR
-+--------------+    +----------------+   +----------------+   +-----------------+  +-----------------+
-|HIST_REPLAY   |    |REFERENCE_SCEN  |   |8-Dim Matching  |   |Train: 60%       |  |Monotonic BH FDR |
-|HIST_HOLDOUT  |    |(0% Coverage)   |   |Tick Invalidate |   |Embargo: 3 Ticks |  |Bonferroni FWER  |
-|PROSPECT_SHAD |    |QUOTE_VERIFIED  |   |14 Rejections   |   |Val: 20% (OOS BS)|  |Exact Binomial   |
-|INDEP_CONFIRM |    |(Matched Quotes)|   |Composite QID   |   |Holdout: 20%     |  |MBB Seeded Boot  |
-+--------------+    +----------------+   +----------------+   +-----------------+  +-----------------+
+       +-------------------+-------------------+-------------------+-------------------+
+       |                   |                   |                   |                   |
+       v                   v                   v                   v                   v
+CANONICAL ADAPTER   THREE-WAY OUTCOME   PROBABILITY GUARD   RECONSTRUCTION AUDIT  PROSPECTIVE AUTHORITY
++--------------+    +----------------+  +-----------------+ +-------------------+ +---------------------+
+|Typed Record  |    |WIN: 1.0        |  |Authentic [0, 1] | |Raw Tick Replay    | |Feature Cutoff       |
+|runhigh_win   |    |LOSS: 0.0       |  |Preserve 0.0     | |Zero Discrepancies | |Inference Timestamp  |
+|runlow_win    |    |UNAVAILABLE:    |  |Prohibit 0.25    | |Cross-Table Join   | |Journal Commit       |
+|pred_prob     |    |Pending/Gaps    |  |Fallback Banned  | |Monotonic Check    | |T_feat <= T_inf <= T |
++--------------+    +----------------+  +-----------------+ +-------------------+ +---------------------+
 ```
 
 ---
@@ -122,7 +121,7 @@ bot_builder/
 ├── risk.py                                          # Institutional persistent risk engine
 │
 ├── strategy_discovery.py                            # Advisory-only hypothesis engine with Monotonic BH
-├── dual_duration_research.py                        # Paired 2T vs 5T research comparison & 14-dim accounting
+├── dual_duration_research.py                        # Canonical adapter, 3-way outcomes & prospective evaluator
 ├── research_metrics_engine.py                       # Research metrics aggregation engine
 │
 ├── data/
@@ -133,28 +132,30 @@ bot_builder/
 │   ├── quotes.db                                    # SQLite proposal quotes database
 │   ├── sessions.db                                  # SQLite session registry
 │   ├── risk_state.db                                # SQLite persistent risk limits
-│   └── v1743_session_evidence.json                  # Machine-readable prospective session evidence
+│   └── v1744_session_evidence.json                  # Sanitized machine-readable prospective evidence
 │
 ├── models/
 │   ├── M_R_75_5TICK_20261008_132512.json            # Preserved authoritative 5-tick frozen model
 │   └── M_R_75_2TICK_20261011_120000.json            # Preserved independent 2-tick frozen model
 │
 ├── tests/
+│   ├── test_v1744_schema_repair_and_reconstruction.py # 8 V1.7.4.4 schema repair & regression tests
 │   ├── test_v1743_strict_provenance_and_live_shadow.py # 16 V1.7.4.3 strict provenance & shadow tests
 │   ├── test_v1742_quote_economics_and_paired_shadow.py # 16 V1.7.4.2 regression & adversarial tests
 │   ├── test_v1741_integrity_and_reconciliation.py   # 14 V1.7.4.1 regression & adversarial tests
 │   ├── test_v174_dual_duration_and_discovery.py     # 17 V1.7.4 regression tests
 │   ├── test_v173_chronology_and_audit.py            # V1.7.3 chronology & audit tests
 │   ├── test_v1721_reconciliation.py                 # V1.7.2.1 integrity & confirmation tests
-│   └── ... (320 total passing tests)
+│   └── ... (328 total passing tests)
 │
 └── Authoritative Research Reports:
-    ├── V1_7_4_3_QUOTE_PROVENANCE_AUDIT.md          # 8-dimension quote provenance & rejection audit
-    ├── V1_7_4_3_LIVE_SESSION_EXECUTION_REPORT.md    # 60s & 300s live paired shadow execution report
-    ├── V1_7_4_3_PAIRED_FORWARD_RESULTS.md          # Paired empirical 2T vs 5T prospective results
-    ├── V1_7_4_3_STRATEGY_EDGE_ASSESSMENT.md        # 6 hypothesis evaluations & Level 0 edge verdict
-    ├── V1_7_4_3_EVIDENCE_INTEGRITY_REPORT.md        # Relational schema, query, and zero-orphan audit
-    └── V1_7_4_3_RELEASE_VALIDATION_REPORT.md        # Release audit & package verification
+    ├── V1_7_4_4_ROOT_CAUSE_REPORT.md                # Schema mismatch root cause analysis & audit
+    ├── V1_7_4_4_INDEPENDENT_OUTCOME_AUDIT.md        # Raw-tick independent reconstruction & zero discrepancies
+    ├── V1_7_4_4_CORRECTED_FORWARD_RESULTS.md        # Corrected prospective empirical results & metrics
+    ├── V1_7_4_4_QUOTE_ECONOMICS_AUDIT.md            # Recalculated quote EV and retrospective returns
+    ├── V1_7_4_4_STRATEGY_EDGE_ASSESSMENT.md        # Statistical edge assessment & Evidence Ladder verdict
+    ├── V1_7_4_4_30_MIN_LIVE_SESSION_REPORT.md       # Live paired prospective SHADOW session audit
+    └── V1_7_4_4_RELEASE_VALIDATION_REPORT.md        # Release audit & package verification
 ```
 
 ---
@@ -169,7 +170,7 @@ python -m pytest -q
 
 Expected result:
 ```text
-320 passed in ~70s (100% green)
+328 passed in ~73s (100% green)
 ```
 
 ---
@@ -181,5 +182,5 @@ Expected result:
 3. **No Real-Money Endpoints**: The software contains zero real-money order routing code.
 4. **`IS_ADVISORY_ONLY = True`**: AI strategy discovery is locked behind an advisory firewall.
 5. **Authoritative NO_TRADE**: Every observation in SHADOW mode resolves to `decision: NO_TRADE`.
-6. **No Lookahead**: Strict causal timestamp enforcement: $\text{QuoteResponse} \le \text{DecisionTime}$.
-7. **No Artificial Coverage**: Quotes are never presumed 100% available without timestamp verification.
+6. **Strict 3-Way Outcomes**: Missing or unresolved outcomes are marked `UNAVAILABLE` and never coerced to losses.
+7. **No Fallback Probabilities**: Model probabilities must be authentic floating-point values; random-walk fallbacks are prohibited.

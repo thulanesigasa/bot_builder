@@ -40,6 +40,10 @@ from contract_specification import (
 from probability import wilson_score_interval
 
 
+# Absolute compile-time safety invariant
+LIVE_EXECUTION_DISABLED: bool = True
+
+
 class EvidenceClass(str, Enum):
     """Classification of empirical research evidence."""
     HISTORICAL_REPLAY = "HISTORICAL_REPLAY"
@@ -130,6 +134,12 @@ class DurationMetricSummary:
     ambiguous_proposal_count: int = 0
     invalidated_quote_count: int = 0
     quote_validity_unverified_count: int = 0
+    complete_resolved_count: int = 0
+    incomplete_count: int = 0
+    data_gap_count: int = 0
+    discrepancy_count: int = 0
+    missing_probability_count: int = 0
+    unavailable_outcome_count: int = 0
 
 
 @dataclass
@@ -159,6 +169,156 @@ class DualDurationComparisonReport:
             "selection_bias_warning": self.selection_bias_warning,
             "recommendation": self.recommendation
         }
+
+
+@dataclass
+class ResearchObservation:
+    """Canonical typed research observation adapted from authoritative persistence layers (V1.7.4.4)."""
+    prediction_id: str
+    session_id: str
+    contract_duration: int
+    decision_timestamp: float
+    model_id: Optional[str] = None
+    model_checksum: Optional[str] = None
+    quote_id: Optional[str] = None
+    
+    # Model probabilities (strictly validated, None if missing/invalid, no fallback)
+    runhigh_pred_prob: Optional[float] = None
+    runlow_pred_prob: Optional[float] = None
+    
+    # Outcomes: strict 3-way ("WIN", "LOSS", "UNAVAILABLE")
+    runhigh_outcome: str = "UNAVAILABLE"
+    runlow_outcome: str = "UNAVAILABLE"
+    
+    # Outcome status & integrity classification
+    outcome_status: str = "UNRESOLVED"
+    unresolved_reason: Optional[str] = None
+    is_discrepant: bool = False
+    is_incomplete: bool = False
+    is_data_gap: bool = False
+    
+    # Chronological timestamps
+    feature_cutoff_timestamp: Optional[float] = None
+    inference_completion_timestamp: Optional[float] = None
+    journal_commit_timestamp: Optional[float] = None
+    entry_epoch: Optional[int] = None
+    expiry_epoch: Optional[int] = None
+    resolution_timestamp: Optional[float] = None
+
+
+def adapt_prediction_record(
+    pred_row: Dict[str, Any],
+    outcome_row: Optional[Dict[str, Any]] = None
+) -> ResearchObservation:
+    """Maps authoritative persistence schema fields into a typed research observation (V1.7.4.4).
+    
+    Guarantees:
+    1. Zero fallback substitution for missing/invalid model probabilities.
+    2. Strict 3-way classification: WIN (1), LOSS (0), UNAVAILABLE (missing/corrupt/pending/discrepant).
+    3. Cross-table consistency check between forward_predictions and forward_outcomes.
+    """
+    pid = str(pred_row.get("prediction_id", ""))
+    sid = str(pred_row.get("session_id", ""))
+    dur = int(pred_row.get("contract_duration", 0) or 0)
+    ts = float(pred_row.get("timestamp", 0.0) or 0.0)
+    model_id = pred_row.get("model_id")
+    model_checksum = pred_row.get("model_checksum")
+    quote_id = pred_row.get("quote_id")
+    
+    # 1. Model probabilities: strictly finite in [0.0, 1.0], no theoretical fallbacks!
+    def clean_prob(p_val: Any) -> Optional[float]:
+        if p_val is None:
+            return None
+        try:
+            val = float(p_val)
+            if math.isnan(val) or math.isinf(val) or val < 0.0 or val > 1.0:
+                return None
+            return val
+        except (ValueError, TypeError):
+            return None
+
+    raw_rh_p = pred_row.get("runhigh_pred_prob")
+    if raw_rh_p is None:
+        raw_rh_p = pred_row.get("prob_runhigh")
+    rh_prob = clean_prob(raw_rh_p)
+    
+    raw_rl_p = pred_row.get("runlow_pred_prob")
+    if raw_rl_p is None:
+        raw_rl_p = pred_row.get("prob_runlow")
+    rl_prob = clean_prob(raw_rl_p)
+    
+    # 2. Status inspection
+    raw_status = str(pred_row.get("outcome_status", "")).strip().upper()
+    is_incomplete = False
+    is_data_gap = False
+    if raw_status in ("PENDING", "UNRESOLVED", "INCOMPLETE") or not raw_status:
+        is_incomplete = True
+    elif raw_status == "DATA_GAP":
+        is_data_gap = True
+        
+    # 3. Cross-table discrepancy verification
+    is_discrepant = False
+    if outcome_row:
+        o_rh = outcome_row.get("runhigh_win")
+        o_rl = outcome_row.get("runlow_win")
+        p_rh = pred_row.get("runhigh_win")
+        p_rl = pred_row.get("runlow_win")
+        if (p_rh is not None and o_rh is not None and abs(float(p_rh) - float(o_rh)) > 1e-4) or \
+           (p_rl is not None and o_rl is not None and abs(float(p_rl) - float(o_rl)) > 1e-4):
+            is_discrepant = True
+
+    # 4. Strict 3-way outcome classification
+    def classify_outcome(raw_val: Any) -> str:
+        if is_discrepant or is_incomplete or is_data_gap or raw_status not in ("OUTCOME_RESOLVED", "OUTCOME_RECONSTRUCTED"):
+            return "UNAVAILABLE"
+        if raw_val is None:
+            return "UNAVAILABLE"
+        try:
+            f = float(raw_val)
+            if math.isnan(f) or math.isinf(f):
+                return "UNAVAILABLE"
+            if abs(f - 1.0) < 1e-4:
+                return "WIN"
+            elif abs(f - 0.0) < 1e-4:
+                return "LOSS"
+            return "UNAVAILABLE"
+        except (ValueError, TypeError):
+            return "UNAVAILABLE"
+
+    raw_rh_w = pred_row.get("runhigh_win")
+    if raw_rh_w is None:
+        raw_rh_w = pred_row.get("outcome_runhigh")
+    rh_outcome = classify_outcome(raw_rh_w)
+    
+    raw_rl_w = pred_row.get("runlow_win")
+    if raw_rl_w is None:
+        raw_rl_w = pred_row.get("outcome_runlow")
+    rl_outcome = classify_outcome(raw_rl_w)
+
+    return ResearchObservation(
+        prediction_id=pid,
+        session_id=sid,
+        contract_duration=dur,
+        decision_timestamp=ts,
+        model_id=model_id,
+        model_checksum=model_checksum,
+        quote_id=quote_id,
+        runhigh_pred_prob=rh_prob,
+        runlow_pred_prob=rl_prob,
+        runhigh_outcome=rh_outcome,
+        runlow_outcome=rl_outcome,
+        outcome_status=raw_status,
+        unresolved_reason=pred_row.get("unresolved_reason"),
+        is_discrepant=is_discrepant,
+        is_incomplete=is_incomplete,
+        is_data_gap=is_data_gap,
+        feature_cutoff_timestamp=pred_row.get("feature_cutoff_timestamp"),
+        inference_completion_timestamp=pred_row.get("inference_completion_timestamp"),
+        journal_commit_timestamp=pred_row.get("journal_commit_timestamp"),
+        entry_epoch=pred_row.get("entry_epoch"),
+        expiry_epoch=pred_row.get("expiry_epoch"),
+        resolution_timestamp=outcome_row.get("resolution_timestamp") if outcome_row else None
+    )
 
 
 class DualDurationEvaluator:
@@ -369,25 +529,61 @@ class DualDurationEvaluator:
         min_ordinary_ev: float = 0.0,
         min_conservative_ev: float = 0.0,
         expected_session_id: Optional[str] = None,
-        tick_records: Optional[List[Any]] = None
+        tick_records: Optional[List[Any]] = None,
+        observations: Optional[List[Any]] = None
     ) -> DurationMetricSummary:
-        n = len(outcomes)
-        wins = int(sum(outcomes))
-        losses = n - wins
-        emp_win_rate = (wins / n) if n > 0 else 0.0
-
-        mean_prob = float(np.mean(pred_probs)) if pred_probs else 0.0
-
-        # Calibration Error (ECE - 5 equal bins)
-        ece = self._compute_ece(outcomes, pred_probs, n_bins=5)
-
-        # Brier Score & BSS
-        bs = float(np.mean([(p - y)**2 for p, y in zip(pred_probs, outcomes)])) if n > 0 else 0.0
-        bs_ref = float(np.mean([(emp_win_rate - y)**2 for y in outcomes])) if n > 0 else 0.0
-        bss = float(1.0 - (bs / bs_ref)) if bs_ref > 0 else 0.0
-
-        # Wilson 95% Confidence Interval for win rate
-        ci_lo, ci_hi = wilson_score_interval(wins, n, confidence=0.95)
+        if observations is not None:
+            n = len(observations)
+            dir_lower = direction.lower()
+            complete_resolved_count = sum(1 for o in observations if getattr(o, f"{dir_lower}_outcome") in ("WIN", "LOSS"))
+            wins = sum(1 for o in observations if getattr(o, f"{dir_lower}_outcome") == "WIN")
+            losses = sum(1 for o in observations if getattr(o, f"{dir_lower}_outcome") == "LOSS")
+            incomplete_count = sum(1 for o in observations if o.is_incomplete)
+            data_gap_count = sum(1 for o in observations if o.is_data_gap)
+            discrepancy_count = sum(1 for o in observations if o.is_discrepant)
+            unavailable_outcome_count = sum(1 for o in observations if getattr(o, f"{dir_lower}_outcome") == "UNAVAILABLE")
+            missing_probability_count = sum(1 for o in observations if getattr(o, f"{dir_lower}_pred_prob") is None)
+            
+            resolved_outcomes = complete_resolved_count
+            emp_win_rate = (wins / resolved_outcomes) if resolved_outcomes > 0 else 0.0
+            
+            valid_pairs = [
+                (getattr(o, f"{dir_lower}_pred_prob"), 1.0 if getattr(o, f"{dir_lower}_outcome") == "WIN" else 0.0)
+                for o in observations
+                if getattr(o, f"{dir_lower}_outcome") in ("WIN", "LOSS") and getattr(o, f"{dir_lower}_pred_prob") is not None
+            ]
+            if valid_pairs:
+                mean_prob = float(np.mean([p for p, y in valid_pairs]))
+                ece = self._compute_ece([y for p, y in valid_pairs], [p for p, y in valid_pairs], n_bins=5)
+                bs = float(np.mean([(p - y)**2 for p, y in valid_pairs]))
+                bs_ref = float(np.mean([(emp_win_rate - y)**2 for p, y in valid_pairs]))
+                bss = float(1.0 - (bs / bs_ref)) if bs_ref > 0 else 0.0
+            else:
+                valid_probs = [getattr(o, f"{dir_lower}_pred_prob") for o in observations if getattr(o, f"{dir_lower}_pred_prob") is not None]
+                mean_prob = float(np.mean(valid_probs)) if valid_probs else 0.0
+                ece = 0.0
+                bs = 0.0
+                bss = 0.0
+            
+            ci_lo, ci_hi = wilson_score_interval(wins, resolved_outcomes, confidence=0.95) if resolved_outcomes > 0 else (0.0, 0.0)
+        else:
+            n = len(outcomes)
+            wins = int(sum(outcomes))
+            losses = n - wins
+            resolved_outcomes = n
+            complete_resolved_count = n
+            incomplete_count = 0
+            data_gap_count = 0
+            discrepancy_count = 0
+            missing_probability_count = 0
+            unavailable_outcome_count = 0
+            emp_win_rate = (wins / n) if n > 0 else 0.0
+            mean_prob = float(np.mean(pred_probs)) if pred_probs else 0.0
+            ece = self._compute_ece(outcomes, pred_probs, n_bins=5)
+            bs = float(np.mean([(p - y)**2 for p, y in zip(pred_probs, outcomes)])) if n > 0 else 0.0
+            bs_ref = float(np.mean([(emp_win_rate - y)**2 for y in outcomes])) if n > 0 else 0.0
+            bss = float(1.0 - (bs / bs_ref)) if bs_ref > 0 else 0.0
+            ci_lo, ci_hi = wilson_score_interval(wins, n, confidence=0.95) if n > 0 else (0.0, 0.0)
 
         tot_quotes = len(quote_records) if quote_records else 0
 
@@ -432,7 +628,7 @@ class DualDurationEvaluator:
                 direction=direction,
                 contract_label=label,
                 total_predictions=n,
-                resolved_outcomes=n,
+                resolved_outcomes=resolved_outcomes,
                 wins=wins,
                 losses=losses,
                 empirical_win_rate=round(emp_win_rate, 5),
@@ -480,7 +676,13 @@ class DualDurationEvaluator:
                 wrong_session_count=0,
                 ambiguous_proposal_count=0,
                 invalidated_quote_count=0,
-                quote_validity_unverified_count=0
+                quote_validity_unverified_count=0,
+                complete_resolved_count=complete_resolved_count,
+                incomplete_count=incomplete_count,
+                data_gap_count=data_gap_count,
+                discrepancy_count=discrepancy_count,
+                missing_probability_count=missing_probability_count,
+                unavailable_outcome_count=unavailable_outcome_count
             )
 
         # QUOTE_VERIFIED mode: Per-decision matching using actual ask prices and payouts
@@ -523,7 +725,7 @@ class DualDurationEvaluator:
                 direction=direction,
                 contract_label=label,
                 total_predictions=n,
-                resolved_outcomes=n,
+                resolved_outcomes=resolved_outcomes,
                 wins=wins,
                 losses=losses,
                 empirical_win_rate=round(emp_win_rate, 5),
@@ -571,20 +773,38 @@ class DualDurationEvaluator:
                 wrong_session_count=wrong_sess,
                 ambiguous_proposal_count=ambig_q,
                 invalidated_quote_count=inval_q,
-                quote_validity_unverified_count=unverif_q
+                quote_validity_unverified_count=unverif_q,
+                complete_resolved_count=complete_resolved_count,
+                incomplete_count=incomplete_count,
+                data_gap_count=data_gap_count,
+                discrepancy_count=discrepancy_count,
+                missing_probability_count=missing_probability_count,
+                unavailable_outcome_count=unavailable_outcome_count
             )
 
         # Genuine per-decision calculation over eligible matched decisions
         asks = [matched_quotes[idx]["ask_price"] for idx in eligible_indices]
         payouts = [matched_quotes[idx]["total_payout"] for idx in eligible_indices]
         bes = [matched_quotes[idx]["break_even"] for idx in eligible_indices]
-        probs = [pred_probs[idx] for idx in eligible_indices]
-        y_eligible = [outcomes[idx] for idx in eligible_indices]
 
-        # EV_i = P_model_i * TotalPayout_i - AskPrice_i
-        per_decision_ev = [(probs[k] * payouts[k]) - asks[k] for k in range(m)]
-        # Return_i = (y_i * TotalPayout_i) - AskPrice_i
-        per_decision_realized = [(y_eligible[k] * payouts[k]) - asks[k] for k in range(m)]
+        if observations is not None:
+            dir_lower = direction.lower()
+            per_decision_ev = []
+            per_decision_realized = []
+            for k, idx in enumerate(eligible_indices):
+                obs = observations[idx]
+                p_val = getattr(obs, f"{dir_lower}_pred_prob")
+                o_val = getattr(obs, f"{dir_lower}_outcome")
+                if p_val is not None:
+                    per_decision_ev.append((p_val * payouts[k]) - asks[k])
+                if o_val in ("WIN", "LOSS"):
+                    y_val = 1.0 if o_val == "WIN" else 0.0
+                    per_decision_realized.append((y_val * payouts[k]) - asks[k])
+        else:
+            probs = [pred_probs[idx] for idx in eligible_indices]
+            y_eligible = [outcomes[idx] for idx in eligible_indices]
+            per_decision_ev = [(probs[k] * payouts[k]) - asks[k] for k in range(m)]
+            per_decision_realized = [(y_eligible[k] * payouts[k]) - asks[k] for k in range(m)]
 
         mean_ask = float(np.mean(asks))
         mean_payout = float(np.mean(payouts))
@@ -596,10 +816,10 @@ class DualDurationEvaluator:
             "std": round(float(np.std(bes)), 5)
         }
 
-        ordinary_ev = float(np.mean(per_decision_ev))
-        ord_ev_per_dollar = ordinary_ev / mean_ask if mean_ask > 0 else 0.0
+        ordinary_ev = float(np.mean(per_decision_ev)) if per_decision_ev else None
+        ord_ev_per_dollar = (ordinary_ev / mean_ask) if (ordinary_ev is not None and mean_ask > 0) else None
         predicted_ord_ev = ordinary_ev
-        retrospective_return = float(np.mean(per_decision_realized))
+        retrospective_return = float(np.mean(per_decision_realized)) if per_decision_realized else None
 
         # Dependence-aware Moving-Block Bootstrap over actual per-decision realized returns
         block_size = max(2, duration + 1)
@@ -634,7 +854,7 @@ class DualDurationEvaluator:
             direction=direction,
             contract_label=label,
             total_predictions=n,
-            resolved_outcomes=n,
+            resolved_outcomes=resolved_outcomes,
             wins=wins,
             losses=losses,
             empirical_win_rate=round(emp_win_rate, 5),
@@ -645,10 +865,10 @@ class DualDurationEvaluator:
             break_even_hurdle=round(hurdle, 5),
             stake=round(mean_ask, 2),
             total_payout=round(mean_payout, 2),
-            ordinary_ev=round(ordinary_ev, 4),
-            ordinary_ev_per_dollar=round(ord_ev_per_dollar, 4),
-            predicted_ordinary_ev=round(predicted_ord_ev, 4),
-            retrospective_realized_return=round(retrospective_return, 4),
+            ordinary_ev=round(ordinary_ev, 4) if ordinary_ev is not None else None,
+            ordinary_ev_per_dollar=round(ord_ev_per_dollar, 4) if ord_ev_per_dollar is not None else None,
+            predicted_ordinary_ev=round(predicted_ord_ev, 4) if predicted_ord_ev is not None else None,
+            retrospective_realized_return=round(retrospective_return, 4) if retrospective_return is not None else None,
             conservative_ev_bootstrap=round(cons_ev, 4) if cons_ev is not None else None,
             bootstrap_uncertainty_status=unc_status,
             bootstrap_sensitivity_summary=sens_dict,
@@ -682,7 +902,13 @@ class DualDurationEvaluator:
             wrong_session_count=wrong_sess,
             ambiguous_proposal_count=ambig_q,
             invalidated_quote_count=inval_q,
-            quote_validity_unverified_count=unverif_q
+            quote_validity_unverified_count=unverif_q,
+            complete_resolved_count=complete_resolved_count,
+            incomplete_count=incomplete_count,
+            data_gap_count=data_gap_count,
+            discrepancy_count=discrepancy_count,
+            missing_probability_count=missing_probability_count,
+            unavailable_outcome_count=unavailable_outcome_count
         )
 
     def _match_quotes_per_decision(
@@ -1096,22 +1322,50 @@ class DualDurationEvaluator:
         j_path = journal_db_path or DEFAULT_FORWARD_DB
         q_path = quote_db_path or DEFAULT_QUOTES_DB
 
-        # Resolve full session_id if short prefix passed
+        # Resolve full session_id if short prefix passed (V1.7.4.4 Section 7.1)
         target_sid = session_id
         if len(session_id) < 32 and os.path.exists(j_path):
             conn_temp = sqlite3.connect(j_path)
             try:
-                row_sid = conn_temp.execute(
-                    "SELECT session_id FROM forward_predictions WHERE session_id LIKE ? LIMIT 1",
+                rows_sid = conn_temp.execute(
+                    "SELECT DISTINCT session_id FROM forward_predictions WHERE session_id LIKE ?",
                     (f"{session_id}%",)
-                ).fetchone()
-                if row_sid:
-                    target_sid = row_sid[0]
+                ).fetchall()
+                if len(rows_sid) > 1:
+                    matching = [r[0] for r in rows_sid]
+                    raise ValueError(
+                        f"Ambiguous session_id prefix '{session_id}' matches multiple sessions in predictions: {matching}. "
+                        "Please provide the complete session ID."
+                    )
+                elif len(rows_sid) == 1:
+                    target_sid = rows_sid[0][0]
             finally:
                 conn_temp.close()
 
-        # 1. Load predictions
+        if len(target_sid) < 32:
+            from forward_session import DEFAULT_SESSIONS_DB
+            sess_db = DEFAULT_SESSIONS_DB
+            if os.path.exists(sess_db):
+                conn_temp = sqlite3.connect(sess_db)
+                try:
+                    rows_sid = conn_temp.execute(
+                        "SELECT DISTINCT session_id FROM sessions WHERE session_id LIKE ?",
+                        (f"{session_id}%",)
+                    ).fetchall()
+                    if len(rows_sid) > 1:
+                        matching = [r[0] for r in rows_sid]
+                        raise ValueError(
+                            f"Ambiguous session_id prefix '{session_id}' matches multiple sessions: {matching}. "
+                            "Please provide the complete session ID."
+                        )
+                    elif len(rows_sid) == 1:
+                        target_sid = rows_sid[0][0]
+                finally:
+                    conn_temp.close()
+
+        # 1. Load predictions & linked outcomes (V1.7.4.4 Section 2.2 & 4.1)
         preds = []
+        outcomes_by_pid = {}
         if os.path.exists(j_path):
             conn = sqlite3.connect(j_path)
             conn.row_factory = sqlite3.Row
@@ -1121,8 +1375,20 @@ class DualDurationEvaluator:
                     (target_sid,)
                 ).fetchall()
                 preds = [dict(r) for r in rows]
+
+                rows_out = conn.execute(
+                    "SELECT * FROM forward_outcomes WHERE session_id = ?",
+                    (target_sid,)
+                ).fetchall()
+                outcomes_by_pid = {r["prediction_id"]: dict(r) for r in rows_out}
             finally:
                 conn.close()
+
+        # Adapt raw database records into typed research observations
+        adapted_obs = [
+            adapt_prediction_record(p, outcomes_by_pid.get(p.get("prediction_id")))
+            for p in preds
+        ]
 
         # 2. Load quotes
         quotes = []
@@ -1148,58 +1414,66 @@ class DualDurationEvaluator:
             except Exception:
                 manifest = None
 
-        # Fail-closed evidence classification
-        if not preds or not manifest:
-            evidence_class = EvidenceClass.HISTORICAL_REPLAY
+        # Fail-closed prospective evidence authority classification (V1.7.4.4 Section 6)
+        evidence_class = EvidenceClass.HISTORICAL_REPLAY
+        authority_reason = ""
+
+        if not adapted_obs or not manifest:
+            authority_reason = f"EVIDENCE AUTHORITY FAIL-CLOSED: Missing predictions or manifest for session '{target_sid}'."
         else:
-            evidence_class = EvidenceClass.PROSPECTIVE_SHADOW
+            is_live_mode = str(manifest.get("mode", "")).upper() in ("SHADOW", "DEMO", "LIVE")
+            has_model_id = all(o.model_id for o in adapted_obs)
+            
+            # Verify chronological event ordering:
+            # feature_cutoff <= inference_completion <= journal_commit
+            ts_ordered = True
+            for o in adapted_obs:
+                fc = o.feature_cutoff_timestamp
+                ic = o.inference_completion_timestamp
+                jc = o.journal_commit_timestamp
+                if fc is not None and ic is not None and jc is not None:
+                    if not (fc <= ic <= jc):
+                        ts_ordered = False
+                        break
+            
+            if is_live_mode and has_model_id and ts_ordered:
+                evidence_class = EvidenceClass.PROSPECTIVE_SHADOW
+                authority_reason = (
+                    f"Prospective evaluation for session {session_id}. "
+                    f"Evidence Class: {evidence_class.value}. Evaluation Mode: QUOTE_VERIFIED."
+                )
+            else:
+                evidence_class = EvidenceClass.HISTORICAL_REPLAY
+                authority_reason = (
+                    f"PROSPECTIVE_AUTHORITY_REJECTED: live_mode={is_live_mode}, "
+                    f"has_model_id={has_model_id}, ts_ordered={ts_ordered}. Reverted to HISTORICAL_REPLAY."
+                )
 
-        # If predictions exist, extract outcomes and timestamps
-        preds_2t = [p for p in preds if p.get("contract_duration") == 2]
-        preds_5t = [p for p in preds if p.get("contract_duration") == 5]
+        # Partition by contract duration (V1.7.4.4 Section 7.2)
+        obs_2t = [o for o in adapted_obs if o.contract_duration == 2]
+        obs_5t = [o for o in adapted_obs if o.contract_duration == 5]
 
-        # Extract timestamps
-        dec_ts_2t = [p["timestamp"] for p in preds_2t if "timestamp" in p]
-        dec_ts_5t = [p["timestamp"] for p in preds_5t if "timestamp" in p]
-
-        # Construct outcomes and probabilities
-        def extract_series(pred_subset, direction):
-            y_true = []
-            y_prob = []
-            for p in pred_subset:
-                out_high = p.get("outcome_runhigh")
-                out_low = p.get("outcome_runlow")
-                if direction == "RUNHIGH":
-                    y_true.append(1.0 if out_high == 1 else 0.0)
-                    y_prob.append(float(p.get("prob_runhigh") or (0.25 if p.get("contract_duration") == 2 else 0.03125)))
-                else:
-                    y_true.append(1.0 if out_low == 1 else 0.0)
-                    y_prob.append(float(p.get("prob_runlow") or (0.25 if p.get("contract_duration") == 2 else 0.03125)))
-            return y_true, y_prob
-
-        outcomes_2t_rh, probs_2t_rh = extract_series(preds_2t, "RUNHIGH")
-        outcomes_2t_rl, probs_2t_rl = extract_series(preds_2t, "RUNLOW")
-        outcomes_5t_rh, probs_5t_rh = extract_series(preds_5t, "RUNHIGH")
-        outcomes_5t_rl, probs_5t_rl = extract_series(preds_5t, "RUNLOW")
+        dec_ts_2t = [o.decision_timestamp for o in obs_2t]
+        dec_ts_5t = [o.decision_timestamp for o in obs_5t]
 
         hurdle_2t = self.stake / self.payout_2t if self.payout_2t > 0 else 0.0
         hurdle_5t = self.stake / self.payout_5t if self.payout_5t > 0 else 0.0
 
         configs = [
-            ("2T_RUNHIGH", 2, "RUNHIGH", outcomes_2t_rh, probs_2t_rh, self.payout_2t, hurdle_2t, dec_ts_2t),
-            ("2T_RUNLOW",  2, "RUNLOW",  outcomes_2t_rl, probs_2t_rl, self.payout_2t, hurdle_2t, dec_ts_2t),
-            ("5T_RUNHIGH", 5, "RUNHIGH", outcomes_5t_rh, probs_5t_rh, self.payout_5t, hurdle_5t, dec_ts_5t),
-            ("5T_RUNLOW",  5, "RUNLOW",  outcomes_5t_rl, probs_5t_rl, self.payout_5t, hurdle_5t, dec_ts_5t),
+            ("2T_RUNHIGH", 2, "RUNHIGH", obs_2t, self.payout_2t, hurdle_2t, dec_ts_2t),
+            ("2T_RUNLOW",  2, "RUNLOW",  obs_2t, self.payout_2t, hurdle_2t, dec_ts_2t),
+            ("5T_RUNHIGH", 5, "RUNHIGH", obs_5t, self.payout_5t, hurdle_5t, dec_ts_5t),
+            ("5T_RUNLOW",  5, "RUNLOW",  obs_5t, self.payout_5t, hurdle_5t, dec_ts_5t),
         ]
 
         metrics_dict: Dict[str, DurationMetricSummary] = {}
-        for label, dur, direct, y_true, y_prob, payout, hurdle, ts_list in configs:
+        for label, dur, direct, obs_subset, payout, hurdle, ts_list in configs:
             summary = self._compute_metrics(
                 label=label,
                 duration=dur,
                 direction=direct,
-                outcomes=y_true,
-                pred_probs=y_prob,
+                outcomes=[],
+                pred_probs=[],
                 payout=payout,
                 hurdle=hurdle,
                 evidence_class=evidence_class,
@@ -1209,7 +1483,8 @@ class DualDurationEvaluator:
                 min_ordinary_ev=self.min_ordinary_ev,
                 min_conservative_ev=self.min_conservative_ev,
                 expected_session_id=target_sid,
-                tick_records=tick_records
+                tick_records=tick_records,
+                observations=obs_subset
             )
             metrics_dict[label] = summary
 
@@ -1240,12 +1515,28 @@ class DualDurationEvaluator:
             metrics=metrics_dict,
             economic_ranking=sorted_labels,
             winning_candidate=winning,
-            selection_bias_warning=(
-                f"Prospective evaluation for session {session_id}. "
-                f"Evidence Class: {evidence_class.value}. Evaluation Mode: QUOTE_VERIFIED."
-            ),
+            selection_bias_warning=authority_reason,
             recommendation=rec,
             evidence_class=evidence_class.value,
             evaluation_mode=EvaluationMode.QUOTE_VERIFIED.value
         )
+
+
+def evaluate_prospective_session(
+    session_id: str,
+    manifest_path: Optional[str] = None,
+    journal_db_path: Optional[str] = None,
+    quote_db_path: Optional[str] = None,
+    tick_records: Optional[List[Any]] = None,
+    symbol: str = "R_75"
+) -> DualDurationComparisonReport:
+    """Convenience top-level evaluator for prospective sessions (V1.7.4.4 Section 7)."""
+    evaluator = DualDurationEvaluator(symbol=symbol)
+    return evaluator.evaluate_prospective_session(
+        session_id=session_id,
+        manifest_path=manifest_path,
+        journal_db_path=journal_db_path,
+        quote_db_path=quote_db_path,
+        tick_records=tick_records
+    )
 

@@ -1,0 +1,48 @@
+=== DERIV QUANTITATIVE RESEARCH — DAILY REPORT ===
+Generated at: 2026-10-12T06:04:28+00:00
+Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)
+
+--- AUTHORITATIVE SESSION REGISTRY ---
+  Total Registered Sessions: 10
+  Sessions in Window (24h) : 4
+  Exploratory Sessions     : 10
+  Confirmation Sessions    : 0
+  Completed Sessions       : 10
+  Reconciled Sessions      : 8
+
+--- LIFECYCLE & OBSERVATION COUNTS ---
+  Ticks Received      : N/A
+  Live Genuine Ticks  : 0
+  Warm-up Ticks       : 0
+  Duplicate Ticks     : 0
+  Rejected Ticks      : 0
+  Quotes Recorded     : 766
+  Predictions Total   : 2203
+  Outcomes Resolved   : 2177
+  Outcomes Pending    : 0
+  Outcomes Incomplete : 8
+  Outcomes Data Gap   : 12
+  Outcomes Unverified : 6
+
+--- STATISTICAL EVIDENCE ---
+  RUNHIGH Est Prob    : 0.04849
+  RUNLOW Est Prob     : 0.04436
+  RUNHIGH Obs Prob    : 0.0565
+  RUNLOW Obs Prob     : 0.03307
+  Brier RH            : 0.04973
+  Brier RL            : 0.03085
+  Brier Skill Score RH: None
+  Brier Skill Score RL: None
+  Calib Error RH (ECE): 0.00801
+  Calib Error RL (ECE): 0.01129
+  N Effective (RH)    : None
+  Quote Coverage      : 48.03%
+
+--- ECONOMIC PERFORMANCE (HYPOTHETICAL) ---
+  Paper Trade Signals : 0
+  Resolved Trades     : 0
+  Win Rate            : None
+  Cumulative PnL      : 0.0
+  Mean PnL/Trade      : None
+  Max Drawdown        : 0.0
+
