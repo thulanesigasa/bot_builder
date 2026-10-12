@@ -1,0 +1,67 @@
+=== DERIV QUANTITATIVE RESEARCH — SESSION REPORT ===
+Generated at: 2026-10-12T06:36:44+00:00
+Safety: REAL-MONEY TRADING DISABLED (Zero buy orders / Research Only)
+
+Session ID   : 1cc84e31
+Symbol       : R_75
+Mode         : SHADOW
+Stage        : EXPLORATORY_FORWARD
+Research Verd: NO_VALIDATED_EDGE
+Rationale    : Observed win rate (0.1421) does not exceed break-even hurdle (0.1474).
+Model ID     : M_R_75_2TICK_20261011_120000.json
+Status       : COMPLETED
+Start UTC    : 2026-10-12T06:06:41.185061+00:00
+Duration (s) : 1802.0
+
+--- LIFECYCLE & OBSERVATION COUNTS ---
+  Ticks Received      : 898
+  Live Genuine Ticks  : 887
+  Warm-up Ticks       : 0
+  Duplicate Ticks     : 0
+  Rejected Ticks      : 0
+  Quotes Recorded     : 1096
+  Predictions Total   : 1774
+  Outcomes Resolved   : 1774
+  Outcomes Pending    : 0
+  Outcomes Incomplete : 0
+  Outcomes Data Gap   : 0
+  Outcomes Unverified : 0
+
+--- DATA INTEGRITY & RECONCILIATION ---
+  Reconciliation Status: RECONCILED
+  Statistically Verified: True
+  Live Deriv Provenance : True
+  Chronology Violations : 0
+  Future Quote Violations: 0
+
+--- STATISTICAL EVIDENCE ---
+  RUNHIGH Est Prob    : 0.14216
+  RUNLOW Est Prob     : 0.13313
+  RUNHIGH Obs Prob    : 0.14205
+  RUNLOW Obs Prob     : 0.14543
+  Brier RH            : 0.111159
+  Brier RL            : 0.112502
+  Brier Skill Score RH: 0.16934
+  Brier Skill Score RL: 0.18284
+  Calib Error RH (ECE): 0.00799
+  Calib Error RL (ECE): 0.01277
+  N Effective (RH)    : 674.04
+  Quote Coverage      : 100.0%
+  RH Block Boot 95% CI: [12.01%, 16.60%] (Moving Block, L=5)
+
+--- ECONOMIC PERFORMANCE (HYPOTHETICAL) ---
+  Paper Trade Signals : 0
+  Resolved Trades     : 0
+  Win Rate            : None
+  Cumulative PnL      : 0.0
+  Mean PnL/Trade      : None
+  Max Drawdown        : 0.0
+  Break-Even Hurdle RH: 14.744%
+  Ordinary EV (RH)    : $-0.037
+  Conservative EV (RH): $1.585
+
+--- VALIDATION GATE ---
+  Gate Passed         : False
+  Recommended Action  : INSUFFICIENT_DATA
+  Demotion Triggered  : False
+    - INSUFFICIENT_DATA: only 0/200 resolved observations

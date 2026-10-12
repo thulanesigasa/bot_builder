@@ -1,6 +1,6 @@
 {
   "release": "V1.7.4.4",
-  "timestamp_utc": "2026-10-12T08:10:00Z",
+  "timestamp_utc": "2026-10-12T06:37:00Z",
   "symbol": "R_75",
   "safety_invariant": {
     "LIVE_EXECUTION_DISABLED": true,
@@ -15,9 +15,17 @@
   "sessions": {
     "session_7b82fef5_60s": {
       "session_id": "7b82fef5-fc65-4b38-9750-251aae55395d",
+      "duration_seconds": 60.0,
       "evidence_class": "PROSPECTIVE_SHADOW",
       "evaluation_mode": "QUOTE_VERIFIED",
       "decision_points_count": 34,
+      "economic_ranking": [
+        "5T_RUNHIGH",
+        "2T_RUNHIGH",
+        "5T_RUNLOW",
+        "2T_RUNLOW"
+      ],
+      "winning_candidate": null,
       "configurations": {
         "2T_RUNHIGH": {
           "duration_ticks": 2,
@@ -27,12 +35,18 @@
           "wins": 1,
           "losses": 16,
           "empirical_win_rate": 0.05882,
+          "win_rate_ci_95": [
+            0.01046,
+            0.26982
+          ],
           "mean_predicted_prob": 0.25217,
           "calibration_ece": 0.19335,
           "brier_score": 0.09416,
+          "break_even_hurdle": 0.26212,
           "ordinary_ev": -0.0759,
           "retrospective_realized_return": -1.5512,
           "conservative_ev_bootstrap": null,
+          "bootstrap_status": "INSUFFICIENT_SAMPLE",
           "verdict": "INSUFFICIENT_EVIDENCE"
         },
         "2T_RUNLOW": {
@@ -43,12 +57,18 @@
           "wins": 7,
           "losses": 10,
           "empirical_win_rate": 0.41176,
+          "win_rate_ci_95": [
+            0.21611,
+            0.63995
+          ],
           "mean_predicted_prob": 0.23194,
           "calibration_ece": 0.22543,
           "brier_score": 0.26836,
+          "break_even_hurdle": 0.26212,
           "ordinary_ev": -0.2303,
           "retrospective_realized_return": 1.1418,
           "conservative_ev_bootstrap": null,
+          "bootstrap_status": "INSUFFICIENT_SAMPLE",
           "verdict": "INSUFFICIENT_EVIDENCE"
         },
         "5T_RUNHIGH": {
@@ -59,12 +79,18 @@
           "wins": 0,
           "losses": 17,
           "empirical_win_rate": 0.0,
+          "win_rate_ci_95": [
+            0.0,
+            0.18432
+          ],
           "mean_predicted_prob": 0.03228,
           "calibration_ece": 0.03228,
           "brier_score": 0.00105,
+          "break_even_hurdle": 0.03275,
           "ordinary_ev": -0.0286,
           "retrospective_realized_return": -2.0,
           "conservative_ev_bootstrap": null,
+          "bootstrap_status": "INSUFFICIENT_SAMPLE",
           "verdict": "INSUFFICIENT_EVIDENCE"
         },
         "5T_RUNLOW": {
@@ -75,21 +101,35 @@
           "wins": 3,
           "losses": 14,
           "empirical_win_rate": 0.17647,
+          "win_rate_ci_95": [
+            0.06191,
+            0.41029
+          ],
           "mean_predicted_prob": 0.03018,
           "calibration_ece": 0.14629,
           "brier_score": 0.16659,
+          "break_even_hurdle": 0.03275,
           "ordinary_ev": -0.1568,
           "retrospective_realized_return": 8.7771,
           "conservative_ev_bootstrap": null,
+          "bootstrap_status": "INSUFFICIENT_SAMPLE",
           "verdict": "INSUFFICIENT_EVIDENCE"
         }
       }
     },
     "session_c14ac5fb_300s": {
       "session_id": "c14ac5fb-afaf-440c-ad4e-1a2187f0c42e",
+      "duration_seconds": 300.0,
       "evidence_class": "PROSPECTIVE_SHADOW",
       "evaluation_mode": "QUOTE_VERIFIED",
       "decision_points_count": 272,
+      "economic_ranking": [
+        "5T_RUNHIGH",
+        "2T_RUNHIGH",
+        "5T_RUNLOW",
+        "2T_RUNLOW"
+      ],
+      "winning_candidate": null,
       "configurations": {
         "2T_RUNHIGH": {
           "duration_ticks": 2,
@@ -99,12 +139,18 @@
           "wins": 42,
           "losses": 94,
           "empirical_win_rate": 0.30882,
+          "win_rate_ci_95": [
+            0.23732,
+            0.39083
+          ],
           "mean_predicted_prob": 0.25606,
           "calibration_ece": 0.05276,
           "brier_score": 0.21768,
+          "break_even_hurdle": 0.26212,
           "ordinary_ev": -0.0463,
           "retrospective_realized_return": 0.3563,
           "conservative_ev_bootstrap": -0.2608,
+          "bootstrap_status": "SUFFICIENT_SAMPLE",
           "verdict": "FAILED_ECONOMIC_HURDLE"
         },
         "2T_RUNLOW": {
@@ -115,12 +161,18 @@
           "wins": 19,
           "losses": 117,
           "empirical_win_rate": 0.13971,
+          "win_rate_ci_95": [
+            0.0913,
+            0.20791
+          ],
           "mean_predicted_prob": 0.23741,
           "calibration_ece": 0.0977,
           "brier_score": 0.12928,
+          "break_even_hurdle": 0.26212,
           "ordinary_ev": -0.1886,
           "retrospective_realized_return": -0.934,
           "conservative_ev_bootstrap": -1.3296,
+          "bootstrap_status": "SUFFICIENT_SAMPLE",
           "verdict": "FAILED_ECONOMIC_HURDLE"
         },
         "5T_RUNHIGH": {
@@ -131,12 +183,18 @@
           "wins": 10,
           "losses": 126,
           "empirical_win_rate": 0.07353,
+          "win_rate_ci_95": [
+            0.04043,
+            0.13006
+          ],
           "mean_predicted_prob": 0.03369,
           "calibration_ece": 0.03984,
           "brier_score": 0.06978,
+          "break_even_hurdle": 0.03275,
           "ordinary_ev": 0.0572,
           "retrospective_realized_return": 2.4904,
           "conservative_ev_bootstrap": -0.6529,
+          "bootstrap_status": "SUFFICIENT_SAMPLE",
           "verdict": "FAILED_CONSERVATIVE_HURDLE"
         },
         "5T_RUNLOW": {
@@ -147,12 +205,122 @@
           "wins": 1,
           "losses": 135,
           "empirical_win_rate": 0.00735,
+          "win_rate_ci_95": [
+            0.0013,
+            0.04047
+          ],
           "mean_predicted_prob": 0.03028,
           "calibration_ece": 0.02293,
           "brier_score": 0.00783,
+          "break_even_hurdle": 0.03275,
           "ordinary_ev": -0.1508,
           "retrospective_realized_return": -1.551,
           "conservative_ev_bootstrap": -2.0,
+          "bootstrap_status": "SUFFICIENT_SAMPLE",
+          "verdict": "FAILED_ECONOMIC_HURDLE"
+        }
+      }
+    },
+    "session_1cc84e31_1800s": {
+      "session_id": "1cc84e31-5e48-4287-b94d-8af7bebb5260",
+      "duration_seconds": 1800.0,
+      "evidence_class": "PROSPECTIVE_SHADOW",
+      "evaluation_mode": "QUOTE_VERIFIED",
+      "decision_points_count": 1774,
+      "economic_ranking": [
+        "5T_RUNHIGH",
+        "2T_RUNHIGH",
+        "5T_RUNLOW",
+        "2T_RUNLOW"
+      ],
+      "winning_candidate": null,
+      "configurations": {
+        "2T_RUNHIGH": {
+          "duration_ticks": 2,
+          "direction": "RUNHIGH",
+          "total_predictions": 887,
+          "resolved_outcomes": 887,
+          "wins": 219,
+          "losses": 668,
+          "empirical_win_rate": 0.2469,
+          "win_rate_ci_95": [
+            0.21965,
+            0.27633
+          ],
+          "mean_predicted_prob": 0.25144,
+          "calibration_ece": 0.0092,
+          "brier_score": 0.1864,
+          "break_even_hurdle": 0.26212,
+          "ordinary_ev": -0.0815,
+          "retrospective_realized_return": -0.1162,
+          "conservative_ev_bootstrap": -0.3488,
+          "bootstrap_status": "SUFFICIENT_SAMPLE",
+          "verdict": "FAILED_ECONOMIC_HURDLE"
+        },
+        "2T_RUNLOW": {
+          "duration_ticks": 2,
+          "direction": "RUNLOW",
+          "total_predictions": 887,
+          "resolved_outcomes": 887,
+          "wins": 226,
+          "losses": 661,
+          "empirical_win_rate": 0.25479,
+          "win_rate_ci_95": [
+            0.22722,
+            0.28448
+          ],
+          "mean_predicted_prob": 0.23644,
+          "calibration_ece": 0.01835,
+          "brier_score": 0.19022,
+          "break_even_hurdle": 0.26212,
+          "ordinary_ev": -0.196,
+          "retrospective_realized_return": -0.0559,
+          "conservative_ev_bootstrap": -0.2796,
+          "bootstrap_status": "SUFFICIENT_SAMPLE",
+          "verdict": "FAILED_ECONOMIC_HURDLE"
+        },
+        "5T_RUNHIGH": {
+          "duration_ticks": 5,
+          "direction": "RUNHIGH",
+          "total_predictions": 887,
+          "resolved_outcomes": 887,
+          "wins": 33,
+          "losses": 854,
+          "empirical_win_rate": 0.0372,
+          "win_rate_ci_95": [
+            0.02661,
+            0.05179
+          ],
+          "mean_predicted_prob": 0.03288,
+          "calibration_ece": 0.00433,
+          "brier_score": 0.03592,
+          "break_even_hurdle": 0.03275,
+          "ordinary_ev": 0.0078,
+          "retrospective_realized_return": 0.2721,
+          "conservative_ev_bootstrap": -0.6264,
+          "bootstrap_status": "SUFFICIENT_SAMPLE",
+          "verdict": "FAILED_CONSERVATIVE_HURDLE"
+        },
+        "5T_RUNLOW": {
+          "duration_ticks": 5,
+          "direction": "RUNLOW",
+          "total_predictions": 887,
+          "resolved_outcomes": 887,
+          "wins": 32,
+          "losses": 855,
+          "empirical_win_rate": 0.03608,
+          "win_rate_ci_95": [
+            0.02567,
+            0.05049
+          ],
+          "mean_predicted_prob": 0.02982,
+          "calibration_ece": 0.00626,
+          "brier_score": 0.03479,
+          "break_even_hurdle": 0.03275,
+          "ordinary_ev": -0.1791,
+          "retrospective_realized_return": 0.2032,
+          "conservative_ev_bootstrap": -0.8984,
+          "bootstrap_status": "SUFFICIENT_SAMPLE",
           "verdict": "FAILED_ECONOMIC_HURDLE"
         }
       }
