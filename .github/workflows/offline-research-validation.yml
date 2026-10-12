@@ -8,6 +8,7 @@ on:
       - research/strict-quote-economics-v190
       - research/freeze-exploratory-feasibility-gates
       - research/independent-confirmation-readiness-gate
+      - research/pilot-power-diagnostics
   pull_request:
   workflow_dispatch:
 
