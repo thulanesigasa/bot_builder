@@ -5,6 +5,7 @@ on:
     branches:
       - ci/run-shadow-research-regression-tests
       - audit/forward-tick-replay-shadow
+      - research/strict-quote-economics-v190
   pull_request:
   workflow_dispatch:
 
@@ -137,6 +138,13 @@ jobs:
         run: |
           python tools/replay_forward_evidence.py --db data/v183_forward_predictions.db --db data/v1831_acceptance_session.db --output forward-tick-replay-audit.json 2>&1 | tee tick-replay-results.txt
 
+      - name: Independently calculate strict quote-level SHADOW economics
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/strict_quote_economics.py --db data/v183_forward_predictions.db --db data/v1831_acceptance_session.db --output strict-quote-economics.json 2>&1 | tee strict-quote-economics.log
+
       - name: Upload test and audit outputs
         if: always()
         uses: actions/upload-artifact@v4
@@ -148,4 +156,6 @@ jobs:
             evidence-audit.txt
             forward-tick-replay-audit.json
             tick-replay-results.txt
+            strict-quote-economics.json
+            strict-quote-economics.log
           if-no-files-found: warn
