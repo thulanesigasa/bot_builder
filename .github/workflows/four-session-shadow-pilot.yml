@@ -1,0 +1,73 @@
+name: Four-session SHADOW feasibility pilot
+
+on:
+  push:
+    branches:
+      - research/execute-four-session-feasibility
+    paths:
+      - .github/workflows/four-session-shadow-pilot.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pilot:
+    name: Four bounded non-purchasing sessions
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.txt
+      - name: Verify protocol and safety invariants before collection
+        run: |
+          python freeze_shadow_pilot.py --output pilot/protocol.json
+          python freeze_shadow_pilot.py --output pilot/protocol.json --verify
+      - name: Run four fixed sessions and immediately validate each
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee pilot/pilot-collection.log
+          import asyncio, json, os, subprocess, sys
+          from forward_shadow_engine import DerivLiveShadowCollector, LIVE_EXECUTION_DISABLED, DECISION
+          from freeze_shadow_pilot import PILOT
+          assert LIVE_EXECUTION_DISABLED is True and DECISION == "NO_TRADE"
+          assert PILOT["pilot_fixed_sessions"] == 4
+          assert PILOT["pilot_session_seconds"] == 75
+          os.makedirs("pilot", exist_ok=True)
+          outcomes=[]
+          for i in range(1, PILOT["pilot_fixed_sessions"] + 1):
+              p=f"pilot/session_{i}.db"
+              collector=DerivLiveShadowCollector(
+                  target_markets=PILOT["markets"], db_path=p,
+                  proposal_interval_sec=1.5, max_quote_age_sec=5.0)
+              try:
+                  result=asyncio.run(collector.execute_shadow_session(
+                      duration_seconds=PILOT["pilot_session_seconds"]))
+              finally:
+                  collector.db.close()
+              result["pilot_session_index"]=i
+              outcomes.append(result)
+              print("PILOT_SESSION_RESULT", json.dumps(result, sort_keys=True), flush=True)
+              with open(f"pilot/session_{i}_result.json","w") as f:
+                  json.dump(result,f,indent=2)
+              if result.get("status")!="COMPLETED" or result.get("ticks_captured",0)<5 or result.get("proposals_captured",0)<1:
+                  raise SystemExit(f"INCOMPLETE_PILOT_SESSION_{i}")
+              subprocess.run([sys.executable,"tools/replay_forward_evidence.py",
+                  "--db",p,"--output",f"pilot/session_{i}_replay.json"],check=True)
+              subprocess.run([sys.executable,"tools/strict_quote_economics.py",
+                  "--db",p,"--output",f"pilot/session_{i}_economics.json"],check=True)
+          with open("pilot/session_summaries.json","w") as f:
+              json.dump(outcomes,f,indent=2)
+          print("PILOT_FOUR_SESSIONS_COMPLETED",flush=True)
+          PY
+      - name: Upload immutable pilot evidence for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bounded-shadow-pilot-evidence
+          path: pilot/
+          if-no-files-found: warn
