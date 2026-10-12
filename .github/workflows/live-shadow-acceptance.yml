@@ -1,0 +1,72 @@
+name: Bounded live Deriv SHADOW acceptance
+
+on:
+  push:
+    branches:
+      - audit/forward-tick-replay-shadow
+    paths:
+      - .github/workflows/live-shadow-acceptance.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  non_purchasing-acceptance:
+    name: Read-only live tick and proposal acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install runtime requirements
+        run: python -m pip install -r requirements.txt
+      - name: Capture bounded public broker data (zero purchases)
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee live-shadow-session-log.txt
+          import asyncio
+          import json
+          import os
+          from forward_shadow_engine import (
+              DerivLiveShadowCollector, LIVE_EXECUTION_DISABLED, DECISION
+          )
+          assert LIVE_EXECUTION_DISABLED is True and DECISION == "NO_TRADE"
+          os.makedirs("acceptance_artifacts", exist_ok=True)
+          collector = DerivLiveShadowCollector(
+              target_markets=["R_75"],
+              db_path="acceptance_artifacts/fresh_forward_shadow.db",
+              proposal_interval_sec=1.5,
+              max_quote_age_sec=5.0,
+          )
+          try:
+              result = asyncio.run(collector.execute_shadow_session(duration_seconds=75.0))
+          finally:
+              collector.db.close()
+          print("LIVE_ACCEPTANCE_RESULT", json.dumps(result, sort_keys=True), flush=True)
+          with open("acceptance_artifacts/session-summary.json", "w", encoding="utf-8") as f:
+              json.dump(result, f, indent=2)
+          if result.get("status") != "COMPLETED":
+              raise SystemExit("LIVE_SHADOW_SESSION_NOT_COMPLETED")
+          if result.get("ticks_captured", 0) < 5 or result.get("proposals_captured", 0) < 1:
+              raise SystemExit("INSUFFICIENT_LIVE_ACCEPTANCE_TELEMETRY")
+          PY
+      - name: Independently replay new forward outcomes
+        if: always()
+        shell: bash
+        run: |
+          if test -f acceptance_artifacts/fresh_forward_shadow.db; then
+            python tools/replay_forward_evidence.py --db acceptance_artifacts/fresh_forward_shadow.db --output acceptance_artifacts/fresh-replay.json | tee acceptance_artifacts/replay-log.txt
+          fi
+      - name: Upload session evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fresh-shadow-acceptance
+          path: |
+            acceptance_artifacts/
+            live-shadow-session-log.txt
+          if-no-files-found: warn
