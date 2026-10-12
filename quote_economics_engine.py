@@ -1,4 +1,4 @@
-"""Quote-Level Economic Matching & Evaluation Engine (V1.8.1).
+"""Quote-Level Economic Matching & Evaluation Engine (V1.8.2).
 
 Enforces strict, per-observation quote economics:
   - Every observation matches an authentic broker proposal response:
@@ -11,8 +11,11 @@ Enforces strict, per-observation quote economics:
       predicted_ev_i = (model_probability_i * total_payout_i - ask_price_i)
       realized_return_i = (observed_outcome_i * total_payout_i - ask_price_i)
   - Fails closed: Missing quotes classified as QUOTE_UNAVAILABLE / ECONOMIC_EVIDENCE_INELIGIBLE.
-  - Reference economics mode explicitly marked REFERENCE_ECONOMICS_ONLY and prohibited
-    from satisfying candidate qualification.
+  - Type-safe verified evidence object: VerifiedEconomicObservation (Section 4.4).
+  - Explicit evaluation modes:
+      * QUOTE_VERIFIED: Requires authenticated observation quote records.
+      * REFERENCE_ECONOMICS_ONLY: Illustrative fallback, permanently prohibited from qualifying.
+      * UNPRICED_PREDICTION_EVALUATION: Signal accuracy without economic pricing.
 
 Safety invariant: LIVE_EXECUTION_DISABLED = True. Strictly non-purchasing research.
 """
@@ -25,6 +28,7 @@ import numpy as np
 
 LIVE_EXECUTION_DISABLED: bool = True
 
+# Evidence Statuses
 STATUS_ELIGIBLE = "ECONOMIC_EVIDENCE_ELIGIBLE"
 STATUS_QUOTE_UNAVAILABLE = "QUOTE_UNAVAILABLE"
 STATUS_STALE_QUOTE = "STALE_QUOTE"
@@ -34,9 +38,12 @@ STATUS_CROSS_MARKET_MISMATCH = "CROSS_MARKET_MISMATCH"
 STATUS_CROSS_DURATION_MISMATCH = "CROSS_DURATION_MISMATCH"
 STATUS_CROSS_DIRECTION_MISMATCH = "CROSS_DIRECTION_MISMATCH"
 STATUS_INVALID_PRICE_TERMS = "INVALID_PRICE_TERMS"
+STATUS_INVALID_PROPOSAL_ID = "INVALID_PROPOSAL_ID"
 
+# Research Evaluation Modes (Section 4.3)
 MODE_QUOTE_VERIFIED = "QUOTE_VERIFIED"
 MODE_REFERENCE_ECONOMICS_ONLY = "REFERENCE_ECONOMICS_ONLY"
+MODE_UNPRICED_PREDICTION_EVALUATION = "UNPRICED_PREDICTION_EVALUATION"
 
 
 @dataclass
@@ -77,8 +84,68 @@ class ProposalQuoteRecord:
 
 
 @dataclass
+class VerifiedEconomicObservation:
+    """Type-safe verified observation-level economic record (V1.8.2 Section 4.4).
+    
+    Contains complete audit trail connecting prediction, proposal quote, outcome, and economics.
+    """
+    observation_id: str
+    session_id: Optional[str]
+    market_symbol: str
+    contract_type: str
+    contract_duration: int
+    decision_epoch: float
+    prediction_journal_id: Optional[str]
+    model_checksum: Optional[str]
+    predicted_prob: Optional[float]
+    quote_response_id: Optional[str]
+    proposal_id: Optional[str]
+    quote_request_epoch: Optional[float]
+    quote_response_epoch: Optional[float]
+    ask_price: Optional[float]
+    total_payout: Optional[float]
+    break_even_rate: Optional[float]
+    predicted_ev: Optional[float]
+    observed_outcome: Optional[int]
+    hypothetical_return: Optional[float]
+    entry_mapping_version: str = "MAPPING_V1_NEXT_TICK_ENTRY"
+    source_evidence_status: str = "GENUINE_BROKER_API"
+    quote_eligibility_status: str = STATUS_ELIGIBLE
+    economic_evidence_status: str = MODE_QUOTE_VERIFIED
+    exclusion_reason: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "observation_id": self.observation_id,
+            "session_id": self.session_id,
+            "market_symbol": self.market_symbol,
+            "contract_type": self.contract_type,
+            "contract_duration": self.contract_duration,
+            "decision_epoch": self.decision_epoch,
+            "prediction_journal_id": self.prediction_journal_id,
+            "model_checksum": self.model_checksum,
+            "predicted_prob": round(self.predicted_prob, 4) if self.predicted_prob is not None else None,
+            "quote_response_id": self.quote_response_id,
+            "proposal_id": self.proposal_id,
+            "quote_request_epoch": self.quote_request_epoch,
+            "quote_response_epoch": self.quote_response_epoch,
+            "ask_price": round(self.ask_price, 4) if self.ask_price is not None else None,
+            "total_payout": round(self.total_payout, 4) if self.total_payout is not None else None,
+            "break_even_rate": round(self.break_even_rate, 4) if self.break_even_rate is not None else None,
+            "predicted_ev": round(self.predicted_ev, 4) if self.predicted_ev is not None else None,
+            "observed_outcome": self.observed_outcome,
+            "hypothetical_return": round(self.hypothetical_return, 4) if self.hypothetical_return is not None else None,
+            "entry_mapping_version": self.entry_mapping_version,
+            "source_evidence_status": self.source_evidence_status,
+            "quote_eligibility_status": self.quote_eligibility_status,
+            "economic_evidence_status": self.economic_evidence_status,
+            "exclusion_reason": self.exclusion_reason,
+        }
+
+
+@dataclass
 class PerObservationEconomicRecord:
-    """Per-observation matched economic record."""
+    """Per-observation matched economic record (backward compatible)."""
     decision_epoch: float
     symbol: str
     contract_type: str
@@ -138,7 +205,7 @@ class AggregatedEconomicSummary:
     mean_realized_ev: Optional[float]
     rejection_reasons: Dict[str, int] = field(default_factory=dict)
     is_quote_verified: bool = False
-    is_candidate_eligible: bool = False  # False if reference scenario or missing predicted EV
+    is_candidate_eligible: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -210,11 +277,15 @@ class QuoteLevelEconomicEngine:
             if q.contract_duration != duration_ticks:
                 continue
 
+            # Proposal ID validity check
+            if not q.proposal_id or not str(q.proposal_id).strip():
+                continue
+
             # Missing response timestamp check
             if q.response_timestamp is None:
                 continue
 
-            # Response received strictly at or before decision epoch
+            # Chronology check: Response received strictly at or before decision epoch (Section 4.2 / 5)
             if q.response_timestamp > decision_epoch:
                 continue
 
@@ -279,18 +350,11 @@ class QuoteLevelEconomicEngine:
         max_freshness_seconds: float = 5.0,
         reference_fallback: Optional[Tuple[float, float]] = None,
     ) -> Tuple[List[PerObservationEconomicRecord], AggregatedEconomicSummary]:
-        """Evaluates a batch of observations using quote-level matching or reference fallback.
-        
-        Args:
-            observations: List of dicts with keys 'decision_epoch', 'predicted_prob', 'observed_outcome'
-            quotes: List of ProposalQuoteRecord
-            reference_fallback: Optional (ask, payout) for illustrative reference scenarios only.
-        """
+        """Evaluates a batch of observations using quote-level matching or reference fallback."""
         records: List[PerObservationEconomicRecord] = []
         reasons: Dict[str, int] = {}
 
         is_ref_mode = (reference_fallback is not None and len(quotes) == 0)
-        mode = MODE_REFERENCE_ECONOMICS_ONLY if is_ref_mode else MODE_QUOTE_VERIFIED
 
         # Index quotes by symbol, direction, duration for fast lookup
         matching_quotes = [
@@ -348,7 +412,6 @@ class QuoteLevelEconomicEngine:
         cov_pct = (n_elig / total_n * 100.0) if total_n > 0 else 0.0
 
         if is_ref_mode:
-            # Aggregation for reference economics
             mean_ask = reference_fallback[0]
             mean_payout = reference_fallback[1]
             mean_be = mean_ask / mean_payout
@@ -374,7 +437,7 @@ class QuoteLevelEconomicEngine:
                 mean_realized_ev=float(np.mean(valid_real_ev)) if valid_real_ev else None,
                 rejection_reasons={"REFERENCE_SCENARIO_PROHIBITED_FROM_QUALIFICATION": total_n},
                 is_quote_verified=False,
-                is_candidate_eligible=False,  # Reference mode can NEVER qualify!
+                is_candidate_eligible=False,
             )
             return records, summary
 
@@ -415,8 +478,6 @@ class QuoteLevelEconomicEngine:
         mean_pred_ev = float(np.mean(pred_ev_list)) if pred_ev_list else None
         mean_real_ev = float(np.mean(real_ev_list)) if real_ev_list else None
 
-        # Qualification check for predictive model strategy:
-        # Requires: mean_predicted_ev > 0 AND mean_realized_ev > 0
         cand_eligible = (
             mean_pred_ev is not None and mean_pred_ev > 0.0 and
             mean_real_ev is not None and mean_real_ev > 0.0 and
