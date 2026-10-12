@@ -244,7 +244,11 @@ class StrictCohortAuthorityValidator:
             quote_valid = False
             quote_reason = f"Invalid quote pricing terms: ask={ask_price}, payout={total_payout}."
             rejection_reasons.append(quote_reason)
-        elif active_conn:
+        elif active_conn is None:
+            quote_valid = False
+            quote_reason = "Proposal verification requires a broker evidence database."
+            rejection_reasons.append(quote_reason)
+        else:
             # Check physical broker_proposals table
             cur = active_conn.cursor()
             bp_check = cur.execute(
