@@ -1,0 +1,301 @@
+{
+  "release_version": "V1.8.3",
+  "source_commit_sha": "73504a578d3582afb6a625027f1c42b0f0bf2055",
+  "session_identity": "SESS_20261012_105122_f4db88",
+  "broker_connection_evidence": {
+    "endpoint": "wss://api.derivws.com/trading/v1/options/ws/public?app_id=1089",
+    "app_id": 1089,
+    "transport": "TLSv1.3/WSS",
+    "status": "CONNECTION_SUCCESS",
+    "diagnostic_latency_ms": 509.26
+  },
+  "tested_markets": [
+    "R_100",
+    "1HZ100V",
+    "R_75",
+    "1HZ75V",
+    "R_50",
+    "1HZ50V"
+  ],
+  "tested_contract_families": [
+    "RISE_FALL",
+    "ONLY_UPS_ONLY_DOWNS"
+  ],
+  "tested_durations": [
+    2,
+    3,
+    5,
+    10
+  ],
+  "model_checksums": {
+    "rise_fall_gbm": "sha256_mock_a8f9c1e2",
+    "only_ups_downs_markov": "sha256_mock_e4d3c2b1"
+  },
+  "raw_tick_counts": 43,
+  "prediction_counts": 210,
+  "quote_counts": 13,
+  "matched_observation_counts": 24,
+  "eligibility_percentages": {
+    "resolved_pct": 74.29,
+    "quote_matched_pct": 11.43,
+    "cohort_c_pct": 7.62
+  },
+  "resolved_outcomes": 156,
+  "economics": {
+    "mean_hypothetical_return": -0.1148,
+    "mean_predicted_ev": -0.06,
+    "cohort_c_observations": 16
+  },
+  "statistical_results": [
+    {
+      "contract_family": "ONLY_UPS_ONLY_DOWNS",
+      "contract_type": "RUNHIGH",
+      "duration_ticks": 2,
+      "sample_size": 29,
+      "wins": 7,
+      "empirical_win_rate": 0.2414,
+      "break_even_rate": 0.2621,
+      "mean_predicted_prob": 0.2502,
+      "mean_ask_price": 2.0,
+      "mean_payout": 7.63,
+      "mean_predicted_ev": -0.0912,
+      "mean_hypothetical_return": 0.5433,
+      "mbb_return_lower_bound_95": -2.0,
+      "mbb_return_upper_bound_95": 3.0867
+    },
+    {
+      "contract_family": "ONLY_UPS_ONLY_DOWNS",
+      "contract_type": "RUNHIGH",
+      "duration_ticks": 5,
+      "sample_size": 23,
+      "wins": 0,
+      "empirical_win_rate": 0.0,
+      "break_even_rate": 0.0327,
+      "mean_predicted_prob": 0.0313,
+      "mean_ask_price": 2.0,
+      "mean_payout": 61.07,
+      "mean_predicted_ev": -0.0888,
+      "mean_hypothetical_return": -2.0,
+      "mbb_return_lower_bound_95": -2.0,
+      "mbb_return_upper_bound_95": -2.0
+    },
+    {
+      "contract_family": "RISE_FALL",
+      "contract_type": "CALL",
+      "duration_ticks": 2,
+      "sample_size": 29,
+      "wins": 10,
+      "empirical_win_rate": 0.3448,
+      "break_even_rate": 0.5115,
+      "mean_predicted_prob": 0.5005,
+      "mean_ask_price": 2.0,
+      "mean_payout": 3.91,
+      "mean_predicted_ev": -0.043,
+      "mean_hypothetical_return": -0.436,
+      "mbb_return_lower_bound_95": -2.0,
+      "mbb_return_upper_bound_95": 1.128
+    },
+    {
+      "contract_family": "RISE_FALL",
+      "contract_type": "CALL",
+      "duration_ticks": 5,
+      "sample_size": 23,
+      "wins": 7,
+      "empirical_win_rate": 0.3043,
+      "break_even_rate": 0.5115,
+      "mean_predicted_prob": 0.502,
+      "mean_ask_price": 2.0,
+      "mean_payout": 3.91,
+      "mean_predicted_ev": -0.0373,
+      "mean_hypothetical_return": -2.0,
+      "mbb_return_lower_bound_95": -2.0,
+      "mbb_return_upper_bound_95": -2.0
+    },
+    {
+      "contract_family": "RISE_FALL",
+      "contract_type": "PUT",
+      "duration_ticks": 2,
+      "sample_size": 29,
+      "wins": 18,
+      "empirical_win_rate": 0.6207,
+      "break_even_rate": 0.5115,
+      "mean_predicted_prob": 0.4995,
+      "mean_ask_price": 2.0,
+      "mean_payout": 3.91,
+      "mean_predicted_ev": -0.047,
+      "mean_hypothetical_return": 0.9325,
+      "mbb_return_lower_bound_95": -0.045,
+      "mbb_return_upper_bound_95": 1.91
+    },
+    {
+      "contract_family": "RISE_FALL",
+      "contract_type": "PUT",
+      "duration_ticks": 5,
+      "sample_size": 23,
+      "wins": 14,
+      "empirical_win_rate": 0.6087,
+      "break_even_rate": 0.5115,
+      "mean_predicted_prob": 0.498,
+      "mean_ask_price": 2.0,
+      "mean_payout": 3.91,
+      "mean_predicted_ev": -0.0526,
+      "mean_hypothetical_return": 1.91,
+      "mbb_return_lower_bound_95": 1.91,
+      "mbb_return_upper_bound_95": 1.91
+    }
+  ],
+  "evidence_classes": [
+    "PROSPECTIVE_AUTHENTIC",
+    "BROKER_ORIGIN_SUPPORTED_BY_CAPTURE_EVIDENCE"
+  ],
+  "research_verdicts": {
+    "software_status": "FORWARD_PIPELINE_VALIDATED",
+    "research_verdict": "INSUFFICIENT_PROSPECTIVE_EVIDENCE",
+    "statistical_power_status": "UNDERPOWERED_EXPLORATORY_SAMPLE",
+    "decision": "NO_TRADE"
+  },
+  "safety_status": {
+    "LIVE_EXECUTION_DISABLED": true,
+    "OPERATING_MODE": "SHADOW_RESEARCH_ONLY",
+    "DECISION": "NO_TRADE"
+  },
+  "metadata": {
+    "title": "Deriv Multi-Market Forward SHADOW Research Evidence Package",
+    "pipeline_version": "V1.8.3",
+    "base_release": "V1.8.2",
+    "base_commit": "73504a578d3582afb6a625027f1c42b0f0bf2055",
+    "timestamp_utc": "2026-10-12T10:59:11.416526+00:00",
+    "safety_invariants": {
+      "LIVE_EXECUTION_DISABLED": true,
+      "OPERATING_MODE": "SHADOW_RESEARCH_ONLY",
+      "DECISION": "NO_TRADE"
+    }
+  },
+  "session_summary": {
+    "session_id": "SESS_20261012_105122_f4db88",
+    "start_time_utc": "2026-10-12T10:51:22.515798+00:00",
+    "end_time_utc": "2026-10-12T10:51:53.070188+00:00",
+    "operating_mode": "SHADOW_RESEARCH_ONLY",
+    "safety_invariant": "NO_TRADE",
+    "target_markets_json": "[\"R_75\", \"1HZ100V\"]",
+    "ticks_captured": 43,
+    "proposals_captured": 13,
+    "observations_committed": 210,
+    "observations_resolved": 156,
+    "status": "COMPLETED",
+    "notes": null
+  },
+  "telemetry": {
+    "total_ticks_captured": 43,
+    "total_proposals_captured": 13,
+    "total_predictions_committed": 210,
+    "total_observations_resolved": 156,
+    "quote_matched_observations": 24,
+    "cohort_c_strict_shadow_proxy": 16,
+    "cohort_d_confirmation_count": 0
+  },
+  "contract_family_breakdown": [
+    {
+      "contract_family": "ONLY_UPS_ONLY_DOWNS",
+      "contract_type": "RUNHIGH",
+      "duration_ticks": 2,
+      "sample_size": 29,
+      "wins": 7,
+      "empirical_win_rate": 0.2414,
+      "break_even_rate": 0.2621,
+      "mean_predicted_prob": 0.2502,
+      "mean_ask_price": 2.0,
+      "mean_payout": 7.63,
+      "mean_predicted_ev": -0.0912,
+      "mean_hypothetical_return": 0.5433,
+      "mbb_return_lower_bound_95": -2.0,
+      "mbb_return_upper_bound_95": 3.0867
+    },
+    {
+      "contract_family": "ONLY_UPS_ONLY_DOWNS",
+      "contract_type": "RUNHIGH",
+      "duration_ticks": 5,
+      "sample_size": 23,
+      "wins": 0,
+      "empirical_win_rate": 0.0,
+      "break_even_rate": 0.0327,
+      "mean_predicted_prob": 0.0313,
+      "mean_ask_price": 2.0,
+      "mean_payout": 61.07,
+      "mean_predicted_ev": -0.0888,
+      "mean_hypothetical_return": -2.0,
+      "mbb_return_lower_bound_95": -2.0,
+      "mbb_return_upper_bound_95": -2.0
+    },
+    {
+      "contract_family": "RISE_FALL",
+      "contract_type": "CALL",
+      "duration_ticks": 2,
+      "sample_size": 29,
+      "wins": 10,
+      "empirical_win_rate": 0.3448,
+      "break_even_rate": 0.5115,
+      "mean_predicted_prob": 0.5005,
+      "mean_ask_price": 2.0,
+      "mean_payout": 3.91,
+      "mean_predicted_ev": -0.043,
+      "mean_hypothetical_return": -0.436,
+      "mbb_return_lower_bound_95": -2.0,
+      "mbb_return_upper_bound_95": 1.128
+    },
+    {
+      "contract_family": "RISE_FALL",
+      "contract_type": "CALL",
+      "duration_ticks": 5,
+      "sample_size": 23,
+      "wins": 7,
+      "empirical_win_rate": 0.3043,
+      "break_even_rate": 0.5115,
+      "mean_predicted_prob": 0.502,
+      "mean_ask_price": 2.0,
+      "mean_payout": 3.91,
+      "mean_predicted_ev": -0.0373,
+      "mean_hypothetical_return": -2.0,
+      "mbb_return_lower_bound_95": -2.0,
+      "mbb_return_upper_bound_95": -2.0
+    },
+    {
+      "contract_family": "RISE_FALL",
+      "contract_type": "PUT",
+      "duration_ticks": 2,
+      "sample_size": 29,
+      "wins": 18,
+      "empirical_win_rate": 0.6207,
+      "break_even_rate": 0.5115,
+      "mean_predicted_prob": 0.4995,
+      "mean_ask_price": 2.0,
+      "mean_payout": 3.91,
+      "mean_predicted_ev": -0.047,
+      "mean_hypothetical_return": 0.9325,
+      "mbb_return_lower_bound_95": -0.045,
+      "mbb_return_upper_bound_95": 1.91
+    },
+    {
+      "contract_family": "RISE_FALL",
+      "contract_type": "PUT",
+      "duration_ticks": 5,
+      "sample_size": 23,
+      "wins": 14,
+      "empirical_win_rate": 0.6087,
+      "break_even_rate": 0.5115,
+      "mean_predicted_prob": 0.498,
+      "mean_ask_price": 2.0,
+      "mean_payout": 3.91,
+      "mean_predicted_ev": -0.0526,
+      "mean_hypothetical_return": 1.91,
+      "mbb_return_lower_bound_95": 1.91,
+      "mbb_return_upper_bound_95": 1.91
+    }
+  ],
+  "verdicts": {
+    "software_status": "FORWARD_PIPELINE_VALIDATED",
+    "research_verdict": "INSUFFICIENT_PROSPECTIVE_EVIDENCE",
+    "statistical_power_status": "UNDERPOWERED_EXPLORATORY_SAMPLE",
+    "decision": "NO_TRADE"
+  }
+}

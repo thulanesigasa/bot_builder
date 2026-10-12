@@ -1,5 +1,5 @@
 {
-  "timestamp_utc": "2026-10-11T14:55:56.123580+00:00",
+  "timestamp_utc": "2026-10-12T10:44:32.418393+00:00",
   "target_symbol": "R_75",
   "app_id": "1089",
   "endpoint_url": "wss://api.derivws.com/trading/v1/options/ws/public?app_id=1089",
@@ -7,7 +7,7 @@
   "stages": {
     "stage_1_dns": {
       "status": "SUCCESS",
-      "latency_ms": 30.64,
+      "latency_ms": 23.33,
       "resolved_ips": [
         "104.18.12.218",
         "104.18.13.218"
@@ -15,54 +15,54 @@
     },
     "stage_2_tcp": {
       "status": "SUCCESS",
-      "latency_ms": 13.53,
+      "latency_ms": 9.36,
       "connected_ip": "104.18.12.218"
     },
     "stage_3_tls": {
       "status": "SUCCESS",
-      "latency_ms": 58.74,
+      "latency_ms": 41.27,
       "version": "TLSv1.3",
       "cipher": "TLS_AES_256_GCM_SHA384"
     },
     "stage_4_websocket_handshake": {
       "status": "SUCCESS",
       "endpoint": "wss://api.derivws.com/trading/v1/options/ws/public?app_id=1089",
-      "latency_ms": 1172.72
+      "latency_ms": 973.26
     },
     "stage_5_api_response": {
       "status": "SUCCESS",
-      "ping_latency_ms": 508.5,
-      "server_epoch": 1791730555
+      "ping_latency_ms": 509.26,
+      "server_epoch": 1791801873
     },
     "stage_6_tick_subscription": {
       "status": "SUCCESS",
-      "sample_quote": 41540.0638,
-      "sample_epoch": 1791730558,
+      "sample_quote": 44668.261,
+      "sample_epoch": 1791801874,
       "server_symbol": "R_75",
-      "latency_ms": 2459.67
+      "latency_ms": 351.8
     },
     "stage_7_proposal_verification": {
       "status": "SUCCESS",
       "runhigh": {
-        "proposal_id": "a3edf804-8aa8-2113-07a3-cb5bfd43f606",
+        "proposal_id": "4a6fc42c-1320-4580-8e4d-18299e922ea9",
         "ask_price": 2.0,
         "total_payout": 61.07,
         "implied_break_even": 0.03275,
-        "latency_ms": 409.65
+        "latency_ms": 310.71
       },
       "runlow": {
-        "proposal_id": "04b42d76-e405-2417-80a6-df1e5c425e81",
+        "proposal_id": "8023a2ce-e73f-4960-a480-434a54b001d7",
         "ask_price": 2.0,
         "total_payout": 61.07,
         "implied_break_even": 0.03275,
-        "latency_ms": 305.4
+        "latency_ms": 366.02
       }
     },
     "stage_8_persistence": {
       "status": "SUCCESS",
       "quotes_stored": 2,
       "retrieval_verified": true,
-      "session_id": "diag_1791730561"
+      "session_id": "diag_1791801875"
     }
   },
   "quotes_persisted": 2,
