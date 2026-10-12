@@ -453,12 +453,22 @@ class TestV181DataProvenanceAndEvidenceIntegrity:
         manifest = auditor.generate_manifest()
         assert "R_100" in manifest
         assert "1HZ50V" in manifest
+        # Metadata asserting a broker origin is not sufficient when the
+        # companion checksum fails. Initial-import datasets are quarantined.
+        from data_provenance import (
+            STATUS_FILE_INTEGRITY_FAILED,
+            STATUS_SOURCE_AUTHENTICITY_UNVERIFIED,
+            SOURCE_UNVERIFIED_SOURCE,
+        )
         for sym, rec in manifest.items():
-            assert rec["source_classification"] == DATA_CLASSIFICATION_GENUINE_BROKER
             assert len(rec["sha256_checksum"]) == 64
             assert rec["duplicates_count"] == 0
             assert rec["inversions_count"] == 0
             assert rec["gaps_count"] == 0
+            if rec["file_integrity_status"] == STATUS_FILE_INTEGRITY_FAILED:
+                assert rec["source_classification"] == SOURCE_UNVERIFIED_SOURCE
+                assert rec["source_authenticity_status"] == STATUS_SOURCE_AUTHENTICITY_UNVERIFIED
+                assert not rec["is_eligible_for_authoritative_research"]
 
     def test_simulated_dataset_cannot_acquire_broker_status(self):
         sim_rec = DataProvenanceAuditor.audit_file("data/quarantine/simulated.csv")
