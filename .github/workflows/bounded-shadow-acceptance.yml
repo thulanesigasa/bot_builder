@@ -1,0 +1,50 @@
+name: Bounded live SHADOW acceptance (NO TRADE)
+on:
+  push:
+    branches: [fix/forward-quote-correlation-and-audit]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-broker-shadow-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Collect bounded non-purchasing broker research
+        run: |
+          python - <<'PY' | tee shadow-acceptance.json
+          import asyncio, json, os
+          from forward_shadow_engine import (
+              DerivLiveShadowCollector, LIVE_EXECUTION_DISABLED, DECISION,
+          )
+          assert LIVE_EXECUTION_DISABLED is True and DECISION == "NO_TRADE"
+          path = "shadow-acceptance.db"
+          collector = DerivLiveShadowCollector(
+              target_markets=["R_75"],
+              db_path=path,
+              proposal_interval_sec=1.5,
+          )
+          result = asyncio.run(collector.execute_shadow_session(duration_seconds=45))
+          collector.db.close()
+          print("ACCEPTANCE_SUMMARY", json.dumps(result, sort_keys=True))
+          if result.get("status") != "COMPLETED":
+              print("LIVE_COLLECTION_BLOCKED_OR_ERROR")
+          elif result.get("ticks_captured", 0) <= 0:
+              print("NO_GENUINE_TICKS_CAPTURED")
+          else:
+              print("LIVE_SHADOW_SESSION_RECORDED")
+          PY
+      - name: Publish raw acceptance evidence (do not certify profitability)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadow-acceptance-evidence
+          path: |
+            shadow-acceptance.db
+            shadow-acceptance.json
+          if-no-files-found: warn
