@@ -1,7 +1,7 @@
 # Deriv Quantitative Research Bot — Strict Cohort Authority & Model Provenance (V1.8.3.2)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://github.com/thulanesigasa/bot_builder)
-[![Testing](https://img.shields.io/badge/pytest-449%20passed%20(100%25)-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Testing](https://img.shields.io/badge/pytest-453%20passed%20(100%25)-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v1%2Foptions%20Verified-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Safety](https://img.shields.io/badge/Safety-Real--Money%20Trading%20DISABLED-0F172A)](https://github.com/thulanesigasa/bot_builder)
@@ -150,11 +150,12 @@ bot_builder/
 │   ├── 1HZ75V_ticks.csv                             # Volatility 75 (1s) Index raw ticks (200,000 ticks)
 │   ├── R_50_ticks.csv                               # Volatility 50 Index raw ticks (200,000 ticks)
 │   └── 1HZ50V_ticks.csv                             # Volatility 50 (1s) Index raw ticks (200,000 ticks)
-├── tests/                                           # Automated regression test suite (449 tests, 100% passing)
+├── tests/                                           # Automated regression test suite (453 tests, 100% passing)
+│   ├── test_v1833_evidence_integrity.py             # V1.8.3.3 fail-closed evidence, quote & commit tests (4 tests)
 │   ├── test_v1832_strict_cohort_authority.py        # V1.8.3.2 strict authority, model check & synthetic fixture tests (11 tests)
 │   ├── test_v1831_reconciliation_and_authenticity.py# V1.8.3.1 adversarial, cohort, model & synthetic fixture tests (14 tests)
 │   ├── test_v183_forward_shadow_research.py         # V1.8.3 safety, resolver, quote & pipeline tests (19 tests)
-│   └── ... (35 total test modules)
+│   └── ... (36 total test modules)
 ├── releases/                                        # Packaged release archives (.zip)
 │   ├── bot_builder_v1.8.3.2.zip                     # Official V1.8.3.2 Release Package
 │   ├── bot_builder_v1.8.3.1.zip                     # Historical V1.8.3.1 Release Package
