@@ -133,27 +133,37 @@ class StrictCohortAuthorityValidator:
             source_reason = f"Symbol '{symbol}' not in authorized research markets: {RESEARCH_MARKETS}."
             rejection_reasons.append(source_reason)
 
+        # Missing source evidence is not a passing verification result.
         src_class = obs.get("source_classification")
-        if src_class and src_class != SOURCE_BROKER_CAPTURED:
+        if src_class != SOURCE_BROKER_CAPTURED:
             source_valid = False
-            source_reason = f"Source classification '{src_class}' is not '{SOURCE_BROKER_CAPTURED}'."
+            source_reason = "Missing or unverified broker source classification."
             rejection_reasons.append(source_reason)
 
-        if active_conn and source_valid:
-            # Check if signal tick exists in broker_ticks (if table exists)
+        if active_conn is None:
+            source_valid = False
+            source_reason = "Source verification requires a database connection."
+            rejection_reasons.append(source_reason)
+        else:
             cur = active_conn.cursor()
             table_check = cur.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='broker_ticks'"
             ).fetchone()
-            if table_check:
+            if not table_check:
+                source_valid = False
+                source_reason = "Required broker_ticks source table is missing."
+                rejection_reasons.append(source_reason)
+            elif source_valid:
                 cur.execute(
-                    "SELECT count(*) FROM broker_ticks WHERE symbol = ? AND epoch = ?",
-                    (symbol, obs.get("signal_epoch", 0)),
+                    "SELECT COUNT(*) FROM broker_ticks WHERE symbol = ? AND epoch = ?",
+                    (symbol, obs.get("signal_epoch")),
                 )
-                tick_cnt = cur.fetchone()[0]
-                if tick_cnt == 0:
+                if cur.fetchone()[0] == 0:
                     source_valid = False
-                    source_reason = f"Signal tick (epoch {obs.get('signal_epoch')}) not found in broker_ticks."
+                    source_reason = (
+                        f"Signal tick (epoch {obs.get('signal_epoch')}) "
+                        "not found in persisted broker_ticks."
+                    )
                     rejection_reasons.append(source_reason)
 
         # ---------------------------------------------------------------------
@@ -183,17 +193,14 @@ class StrictCohortAuthorityValidator:
                 chronology_reason = f"Chronology violation: First future tick arrived {-lead_time_s*1000:.2f}ms BEFORE journal commit completion."
                 rejection_reasons.append(chronology_reason)
 
-        if first_future_epoch is not None:
-            if first_future_epoch <= signal_epoch:
-                chronology_valid = False
-                chronology_reason = f"Epoch monotonicity violation: first_future_tick_epoch ({first_future_epoch}) <= signal_epoch ({signal_epoch})."
-                rejection_reasons.append(chronology_reason)
-
-        if expiry_epoch is not None and first_future_epoch is not None:
-            if expiry_epoch < first_future_epoch:
-                chronology_valid = False
-                chronology_reason = f"Expiry epoch ({expiry_epoch}) < first future tick epoch ({first_future_epoch})."
-                rejection_reasons.append(chronology_reason)
+        if first_future_epoch is None or expiry_epoch is None:
+            chronology_valid = False
+            chronology_reason = "Missing future or expiry epoch; tick ordering cannot be proven."
+            rejection_reasons.append(chronology_reason)
+        elif first_future_epoch <= signal_epoch or expiry_epoch < first_future_epoch:
+            chronology_valid = False
+            chronology_reason = "Invalid chronological order of signal, entry and expiry epochs."
+            rejection_reasons.append(chronology_reason)
 
         # ---------------------------------------------------------------------
         # 3. MODEL PROVENANCE VALIDATION
@@ -257,48 +264,58 @@ class StrictCohortAuthorityValidator:
                 else:
                     p_dict = dict(prop_row)
                     input_refs["proposal_response_ts"] = p_dict.get("response_timestamp")
-                # Symbol match
-                if p_dict.get("underlying_symbol") != symbol:
-                    quote_valid = False
-                    quote_reason = f"Cross-market quote mismatch: proposal symbol '{p_dict.get('underlying_symbol')}' != observation '{symbol}'."
-                    rejection_reasons.append(quote_reason)
-                # Contract type match
-                if p_dict.get("contract_type") != obs.get("contract_type"):
-                    quote_valid = False
-                    quote_reason = f"Cross-contract quote mismatch: proposal type '{p_dict.get('contract_type')}' != observation '{obs.get('contract_type')}'."
-                    rejection_reasons.append(quote_reason)
-                # Duration match
-                if p_dict.get("duration") != obs.get("duration_ticks"):
-                    quote_valid = False
-                    quote_reason = f"Cross-duration quote mismatch: proposal duration {p_dict.get('duration')} != observation {obs.get('duration_ticks')}."
-                    rejection_reasons.append(quote_reason)
-                # Duration unit
-                if p_dict.get("duration_unit") != "t":
-                    quote_valid = False
-                    quote_reason = f"Invalid duration unit: proposal unit '{p_dict.get('duration_unit')}' != 't'."
-                    rejection_reasons.append(quote_reason)
-                # Quote chronology
-                prop_resp_ts = p_dict.get("response_timestamp", 0.0)
-                if prop_resp_ts > decision_ts + 0.001:
-                    quote_valid = False
-                    quote_reason = f"Future quote chronology violation: response_timestamp ({prop_resp_ts}) > decision_timestamp ({decision_ts})."
-                    rejection_reasons.append(quote_reason)
-                # Quote freshness
-                quote_age = decision_ts - prop_resp_ts
-                input_refs["quote_age_sec"] = round(quote_age, 4)
-                if quote_age > self.max_quote_age_sec:
-                    quote_valid = False
-                    quote_reason = f"Stale quote: age {quote_age:.2f}s exceeds maximum threshold {self.max_quote_age_sec}s."
-                    rejection_reasons.append(quote_reason)
-                # Terms consistency
-                if abs(p_dict.get("ask_price", 0.0) - ask_price) > 1e-4:
-                    quote_valid = False
-                    quote_reason = f"Ask price discrepancy: proposal ask {p_dict.get('ask_price')} != observation ask {ask_price}."
-                    rejection_reasons.append(quote_reason)
-                if abs(p_dict.get("total_payout", 0.0) - total_payout) > 1e-4:
-                    quote_valid = False
-                    quote_reason = f"Payout discrepancy: proposal payout {p_dict.get('total_payout')} != observation payout {total_payout}."
-                    rejection_reasons.append(quote_reason)
+                if prop_row:
+                    p_dict = dict(prop_row)
+                    if p_dict.get("session_id") != obs.get("session_id"):
+                        quote_valid = False
+                        quote_reason = "Quote session does not match observation session."
+                        rejection_reasons.append(quote_reason)
+                    if p_dict.get("contract_family") != obs.get("contract_family"):
+                        quote_valid = False
+                        quote_reason = "Cross-family proposal match is prohibited."
+                        rejection_reasons.append(quote_reason)
+                    # Symbol match
+                    if p_dict.get("underlying_symbol") != symbol:
+                        quote_valid = False
+                        quote_reason = f"Cross-market quote mismatch: proposal symbol '{p_dict.get('underlying_symbol')}' != observation '{symbol}'."
+                        rejection_reasons.append(quote_reason)
+                    # Contract type match
+                    if p_dict.get("contract_type") != obs.get("contract_type"):
+                        quote_valid = False
+                        quote_reason = f"Cross-contract quote mismatch: proposal type '{p_dict.get('contract_type')}' != observation '{obs.get('contract_type')}'."
+                        rejection_reasons.append(quote_reason)
+                    # Duration match
+                    if p_dict.get("duration") != obs.get("duration_ticks"):
+                        quote_valid = False
+                        quote_reason = f"Cross-duration quote mismatch: proposal duration {p_dict.get('duration')} != observation {obs.get('duration_ticks')}."
+                        rejection_reasons.append(quote_reason)
+                    # Duration unit
+                    if p_dict.get("duration_unit") != "t":
+                        quote_valid = False
+                        quote_reason = f"Invalid duration unit: proposal unit '{p_dict.get('duration_unit')}' != 't'."
+                        rejection_reasons.append(quote_reason)
+                    # Quote chronology
+                    prop_resp_ts = p_dict.get("response_timestamp", 0.0)
+                    if prop_resp_ts > decision_ts + 0.001:
+                        quote_valid = False
+                        quote_reason = f"Future quote chronology violation: response_timestamp ({prop_resp_ts}) > decision_timestamp ({decision_ts})."
+                        rejection_reasons.append(quote_reason)
+                    # Quote freshness
+                    quote_age = decision_ts - prop_resp_ts
+                    input_refs["quote_age_sec"] = round(quote_age, 4)
+                    if quote_age > self.max_quote_age_sec:
+                        quote_valid = False
+                        quote_reason = f"Stale quote: age {quote_age:.2f}s exceeds maximum threshold {self.max_quote_age_sec}s."
+                        rejection_reasons.append(quote_reason)
+                    # Terms consistency
+                    if abs(p_dict.get("ask_price", 0.0) - ask_price) > 1e-4:
+                        quote_valid = False
+                        quote_reason = f"Ask price discrepancy: proposal ask {p_dict.get('ask_price')} != observation ask {ask_price}."
+                        rejection_reasons.append(quote_reason)
+                    if abs(p_dict.get("total_payout", 0.0) - total_payout) > 1e-4:
+                        quote_valid = False
+                        quote_reason = f"Payout discrepancy: proposal payout {p_dict.get('total_payout')} != observation payout {total_payout}."
+                        rejection_reasons.append(quote_reason)
 
         # ---------------------------------------------------------------------
         # 5. OUTCOME INTEGRITY VALIDATION
