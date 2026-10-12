@@ -54,6 +54,17 @@ class OutcomeClassification(str, Enum):
     DEMO_SETTLEMENT_MATCH_VERIFIED = "DEMO_SETTLEMENT_MATCH_VERIFIED"
 
 
+class ContractEntryMappingVersion(str, Enum):
+    """Entry spot mapping version provenance (V1.7.4.5 Section 5)."""
+    MAPPING_V1_NEXT_TICK_ENTRY = "MAPPING_V1_NEXT_TICK_ENTRY"  # Official Broker: S_0 is first tick after contract start
+    MAPPING_V0_SIGNAL_TICK_ENTRY = "MAPPING_V0_SIGNAL_TICK_ENTRY"  # Naive shortcut: S_0 is signal tick itself
+
+
+CONTRACT_SPECIFICATION_VERSION: str = "1.7.4.5"
+ENTRY_MAPPING_VERSION_DEFAULT: str = ContractEntryMappingVersion.MAPPING_V1_NEXT_TICK_ENTRY.value
+OUTCOME_RESOLVER_VERSION_DEFAULT: str = "1.7.4.5"
+
+
 # Legacy and Compatibility Status Aliases
 STATUS_RESOLVED = "RESOLVED"
 STATUS_RECONSTRUCTED = "OUTCOME_RECONSTRUCTED"
@@ -71,11 +82,13 @@ class CanonicalContractSpec:
     required_ticks_total: int = 6       # S_0 entry + duration movements
     gap_threshold_seconds: float = 5.0
     official_source_url: str = "https://developers.deriv.com/docs/api-guide/contracts/"
-    access_date: str = "2026-10-11"
-    resolver_version: str = "V1.7.4"
+    access_date: str = "2026-10-12"
+    resolver_version: str = "V1.7.4.5"
+    contract_specification_version: str = CONTRACT_SPECIFICATION_VERSION
+    entry_mapping_version: str = ENTRY_MAPPING_VERSION_DEFAULT
 
 
-# Dual-Duration Canonical Specs (V1.7.4)
+# Dual-Duration Canonical Specs (V1.7.4.5)
 CANONICAL_RUNHIGH_2T_SPEC = CanonicalContractSpec(contract_type="RUNHIGH", commercial_name="Only Ups 2T", duration_ticks=2, required_ticks_total=3)
 CANONICAL_RUNLOW_2T_SPEC  = CanonicalContractSpec(contract_type="RUNLOW", commercial_name="Only Downs 2T", duration_ticks=2, required_ticks_total=3)
 CANONICAL_RUNHIGH_5T_SPEC = CanonicalContractSpec(contract_type="RUNHIGH", commercial_name="Only Ups 5T", duration_ticks=5, required_ticks_total=6)
@@ -316,4 +329,56 @@ def evaluate_tick_stream_outcome(
     """Evaluates outcome given S_0 entry price and subsequent forward ticks across configurable duration."""
     full_path = [entry_price] + list(subsequent_prices)
     return evaluate_monotonic_outcome(full_path, duration_ticks=duration_ticks)
+
+
+def compare_entry_mappings(
+    prices: List[float],
+    signal_price: float,
+    duration_ticks: int = 5
+) -> Dict[str, Any]:
+    """Compares contract outcomes between official broker mapping (V1) and naive signal-tick entry (V0).
+    
+    Mapping V1 (Broker Next-Tick Entry):
+      Entry Spot S_0 = prices[0] (first forward tick after contract start)
+      Sequence evaluated = prices[:duration_ticks + 1]
+      
+    Mapping V0 (Signal-Tick Entry):
+      Entry Spot S_0 = signal_price (shortcut assuming entry at signal tick)
+      Sequence evaluated = [signal_price] + prices[:duration_ticks]
+    """
+    needed = duration_ticks + 1
+    if len(prices) < needed:
+        return {
+            "duration_ticks": duration_ticks,
+            "status": "INCOMPLETE",
+            "v1_runhigh_win": None,
+            "v1_runlow_win": None,
+            "v0_runhigh_win": None,
+            "v0_runlow_win": None,
+            "is_discrepant_runhigh": False,
+            "is_discrepant_runlow": False,
+        }
+
+    # V1: Official Deriv broker next-tick entry
+    p_v1 = [float(x) for x in prices[:needed]]
+    v1_rh = 1.0 if all(p_v1[k] > p_v1[k - 1] for k in range(1, needed)) else 0.0
+    v1_rl = 1.0 if all(p_v1[k] < p_v1[k - 1] for k in range(1, needed)) else 0.0
+
+    # V0: Naive signal-tick entry
+    p_v0 = [float(signal_price)] + [float(x) for x in prices[:duration_ticks]]
+    v0_rh = 1.0 if all(p_v0[k] > p_v0[k - 1] for k in range(1, needed)) else 0.0
+    v0_rl = 1.0 if all(p_v0[k] < p_v0[k - 1] for k in range(1, needed)) else 0.0
+
+    return {
+        "duration_ticks": duration_ticks,
+        "status": "RESOLVED",
+        "v1_runhigh_win": v1_rh,
+        "v1_runlow_win": v1_rl,
+        "v0_runhigh_win": v0_rh,
+        "v0_runlow_win": v0_rl,
+        "is_discrepant_runhigh": (v1_rh != v0_rh),
+        "is_discrepant_runlow": (v1_rl != v0_rl),
+        "v1_prices": p_v1,
+        "v0_prices": p_v0
+    }
 

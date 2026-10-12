@@ -20,6 +20,7 @@ Core Research Protocol:
    - Small samples return unavailable conservative EV (None), preventing false qualification.
 """
 import collections
+import copy
 from enum import Enum
 import json
 import math
@@ -50,6 +51,15 @@ class EvidenceClass(str, Enum):
     HISTORICAL_HOLDOUT = "HISTORICAL_HOLDOUT"
     PROSPECTIVE_SHADOW = "PROSPECTIVE_SHADOW"
     INDEPENDENT_CONFIRMATION = "INDEPENDENT_CONFIRMATION"
+    PROSPECTIVE_AUTHORITY_UNVERIFIED = "PROSPECTIVE_AUTHORITY_UNVERIFIED"
+
+
+class ResearchCohort(str, Enum):
+    """Four strict reporting cohorts (V1.7.4.5 Section 7.2)."""
+    COHORT_A_ALL_RESOLVED = "COHORT_A_ALL_RESOLVED"
+    COHORT_B_CHRONOLOGICALLY_QUOTED = "COHORT_B_CHRONOLOGICALLY_QUOTED"
+    COHORT_C_EXECUTION_QUALITY_PROXY = "COHORT_C_EXECUTION_QUALITY_PROXY"
+    COHORT_D_INDEPENDENT_CONFIRMATION = "COHORT_D_INDEPENDENT_CONFIRMATION"
 
 
 class EvaluationMode(str, Enum):
@@ -155,6 +165,7 @@ class DualDurationComparisonReport:
     recommendation: str
     evidence_class: str = EvidenceClass.HISTORICAL_REPLAY.value
     evaluation_mode: str = EvaluationMode.REFERENCE_SCENARIO.value
+    cohort_metrics: Dict[str, Dict[str, DurationMetricSummary]] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -164,6 +175,10 @@ class DualDurationComparisonReport:
             "evidence_class": self.evidence_class,
             "evaluation_mode": self.evaluation_mode,
             "metrics": {k: v.__dict__ for k, v in self.metrics.items()},
+            "cohort_metrics": {
+                c_name: {k: v.__dict__ for k, v in c_dict.items()}
+                for c_name, c_dict in self.cohort_metrics.items()
+            },
             "economic_ranking": self.economic_ranking,
             "winning_candidate": self.winning_candidate,
             "selection_bias_warning": self.selection_bias_warning,
@@ -173,7 +188,7 @@ class DualDurationComparisonReport:
 
 @dataclass
 class ResearchObservation:
-    """Canonical typed research observation adapted from authoritative persistence layers (V1.7.4.4)."""
+    """Canonical typed research observation adapted from authoritative persistence layers (V1.7.4.5)."""
     prediction_id: str
     session_id: str
     contract_duration: int
@@ -197,25 +212,35 @@ class ResearchObservation:
     is_incomplete: bool = False
     is_data_gap: bool = False
     
-    # Chronological timestamps
+    # Mandatory chronological timestamps & event origin (V1.7.4.5 Section 4)
     feature_cutoff_timestamp: Optional[float] = None
     inference_completion_timestamp: Optional[float] = None
     journal_commit_timestamp: Optional[float] = None
     entry_epoch: Optional[int] = None
     expiry_epoch: Optional[int] = None
     resolution_timestamp: Optional[float] = None
+    tick_stream_id: Optional[str] = None
+
+    # Strict chronology validity
+    has_mandatory_chronology: bool = True
+    chronology_error_reason: Optional[str] = None
+
+    # Broker mapping version provenance (V1.7.4.5 Section 5)
+    entry_mapping_version: str = "MAPPING_V1_NEXT_TICK_ENTRY"
+    contract_spec_version: str = "1.7.4.5"
 
 
 def adapt_prediction_record(
     pred_row: Dict[str, Any],
     outcome_row: Optional[Dict[str, Any]] = None
 ) -> ResearchObservation:
-    """Maps authoritative persistence schema fields into a typed research observation (V1.7.4.4).
+    """Maps authoritative persistence schema fields into a typed research observation (V1.7.4.5).
     
     Guarantees:
     1. Zero fallback substitution for missing/invalid model probabilities.
     2. Strict 3-way classification: WIN (1), LOSS (0), UNAVAILABLE (missing/corrupt/pending/discrepant).
     3. Cross-table consistency check between forward_predictions and forward_outcomes.
+    4. Strict mandatory chronology & complete causal ordering verification (Section 4).
     """
     pid = str(pred_row.get("prediction_id", ""))
     sid = str(pred_row.get("session_id", ""))
@@ -224,6 +249,7 @@ def adapt_prediction_record(
     model_id = pred_row.get("model_id")
     model_checksum = pred_row.get("model_checksum")
     quote_id = pred_row.get("quote_id")
+    tick_stream_id = pred_row.get("symbol") or "R_75"
     
     # 1. Model probabilities: strictly finite in [0.0, 1.0], no theoretical fallbacks!
     def clean_prob(p_val: Any) -> Optional[float]:
@@ -295,6 +321,80 @@ def adapt_prediction_record(
         raw_rl_w = pred_row.get("outcome_runlow")
     rl_outcome = classify_outcome(raw_rl_w)
 
+    # 5. Strict Mandatory Chronology & Causal Ordering Verification (V1.7.4.5 Section 4)
+    def clean_finite_ts(val: Any) -> Optional[float]:
+        if val is None:
+            return None
+        try:
+            f = float(val)
+            if math.isnan(f) or math.isinf(f) or f <= 0:
+                return None
+            return f
+        except (ValueError, TypeError):
+            return None
+
+    fc_val = clean_finite_ts(pred_row.get("feature_cutoff_timestamp"))
+    ic_val = clean_finite_ts(pred_row.get("inference_completion_timestamp"))
+    jc_val = clean_finite_ts(pred_row.get("journal_commit_timestamp"))
+    dec_val = clean_finite_ts(ts)
+    raw_ee = pred_row.get("entry_epoch")
+    ee_val = clean_finite_ts(raw_ee) if raw_ee is not None else None
+    raw_xe = pred_row.get("expiry_epoch")
+    xe_val = clean_finite_ts(raw_xe) if raw_xe is not None else None
+    res_val = clean_finite_ts(outcome_row.get("resolution_timestamp")) if outcome_row else None
+
+    has_mandatory_chronology = True
+    chron_errors = []
+
+    # Check presence of pre-outcome timestamps
+    if fc_val is None:
+        has_mandatory_chronology = False
+        chron_errors.append("MISSING_OR_INVALID_FEATURE_CUTOFF_TIMESTAMP")
+    if ic_val is None:
+        has_mandatory_chronology = False
+        chron_errors.append("MISSING_OR_INVALID_INFERENCE_COMPLETION_TIMESTAMP")
+    if jc_val is None:
+        has_mandatory_chronology = False
+        chron_errors.append("MISSING_OR_INVALID_JOURNAL_COMMIT_TIMESTAMP")
+    if dec_val is None:
+        has_mandatory_chronology = False
+        chron_errors.append("MISSING_OR_INVALID_DECISION_TIMESTAMP")
+    if not sid or sid == "LEGACY_UNATTRIBUTED" or not sid.strip():
+        has_mandatory_chronology = False
+        chron_errors.append("MISSING_OR_LEGACY_SESSION_ID")
+
+    # Check pre-outcome causal sequence: FeatureCutoff <= InferenceCompletion <= JournalCommit
+    if fc_val is not None and ic_val is not None:
+        if fc_val > (ic_val + 1e-4):
+            has_mandatory_chronology = False
+            chron_errors.append(f"CAUSAL_VIOLATION_FEATURE_AFTER_INFERENCE: fc={fc_val} > ic={ic_val}")
+    if ic_val is not None and jc_val is not None:
+        if ic_val > (jc_val + 1e-4):
+            has_mandatory_chronology = False
+            chron_errors.append(f"CAUSAL_VIOLATION_INFERENCE_AFTER_JOURNAL: ic={ic_val} > jc={jc_val}")
+
+    # Forward causality: JournalCommit < FirstOutcomeEvent (entry_epoch) <= expiry_epoch
+    if jc_val is not None and ee_val is not None:
+        if jc_val > (ee_val + 1e-4):
+            has_mandatory_chronology = False
+            chron_errors.append(f"CAUSAL_VIOLATION_JOURNAL_AFTER_ENTRY: jc={jc_val} > ee={ee_val}")
+    if ee_val is not None and xe_val is not None:
+        if ee_val > (xe_val + 1e-4):
+            has_mandatory_chronology = False
+            chron_errors.append(f"CAUSAL_VIOLATION_ENTRY_AFTER_EXPIRY: ee={ee_val} > xe={xe_val}")
+
+    # Outcome resolution causality: FirstOutcomeEvent <= OutcomeResolution
+    if ee_val is not None and res_val is not None:
+        if ee_val > (res_val + 1e-4):
+            has_mandatory_chronology = False
+            chron_errors.append(f"CAUSAL_VIOLATION_ENTRY_AFTER_RESOLUTION: ee={ee_val} > res={res_val}")
+    if jc_val is not None and res_val is not None:
+        if jc_val > (res_val + 1e-4):
+            has_mandatory_chronology = False
+            chron_errors.append(f"CAUSAL_VIOLATION_JOURNAL_AFTER_RESOLUTION: jc={jc_val} > res={res_val}")
+
+    chronology_error_reason = "; ".join(chron_errors) if chron_errors else None
+
     return ResearchObservation(
         prediction_id=pid,
         session_id=sid,
@@ -312,12 +412,17 @@ def adapt_prediction_record(
         is_discrepant=is_discrepant,
         is_incomplete=is_incomplete,
         is_data_gap=is_data_gap,
-        feature_cutoff_timestamp=pred_row.get("feature_cutoff_timestamp"),
-        inference_completion_timestamp=pred_row.get("inference_completion_timestamp"),
-        journal_commit_timestamp=pred_row.get("journal_commit_timestamp"),
-        entry_epoch=pred_row.get("entry_epoch"),
-        expiry_epoch=pred_row.get("expiry_epoch"),
-        resolution_timestamp=outcome_row.get("resolution_timestamp") if outcome_row else None
+        feature_cutoff_timestamp=fc_val,
+        inference_completion_timestamp=ic_val,
+        journal_commit_timestamp=jc_val,
+        entry_epoch=int(ee_val) if ee_val is not None else None,
+        expiry_epoch=int(xe_val) if xe_val is not None else None,
+        resolution_timestamp=res_val,
+        tick_stream_id=tick_stream_id,
+        has_mandatory_chronology=has_mandatory_chronology,
+        chronology_error_reason=chronology_error_reason,
+        entry_mapping_version=pred_row.get("entry_mapping_version", "MAPPING_V1_NEXT_TICK_ENTRY"),
+        contract_spec_version=pred_row.get("contract_spec_version", "1.7.4.5")
     )
 
 
@@ -530,7 +635,8 @@ class DualDurationEvaluator:
         min_conservative_ev: float = 0.0,
         expected_session_id: Optional[str] = None,
         tick_records: Optional[List[Any]] = None,
-        observations: Optional[List[Any]] = None
+        observations: Optional[List[Any]] = None,
+        max_freshness_seconds: float = 60.0
     ) -> DurationMetricSummary:
         if observations is not None:
             n = len(observations)
@@ -691,6 +797,7 @@ class DualDurationEvaluator:
             direction=direction,
             decision_timestamps=decision_timestamps,
             quote_records=quote_records,
+            max_freshness_seconds=max_freshness_seconds,
             expected_session_id=expected_session_id,
             tick_records=tick_records
         )
@@ -1370,17 +1477,23 @@ class DualDurationEvaluator:
             conn = sqlite3.connect(j_path)
             conn.row_factory = sqlite3.Row
             try:
-                rows = conn.execute(
-                    "SELECT * FROM forward_predictions WHERE session_id = ? ORDER BY timestamp ASC",
-                    (target_sid,)
-                ).fetchall()
-                preds = [dict(r) for r in rows]
+                try:
+                    rows = conn.execute(
+                        "SELECT * FROM forward_predictions WHERE session_id = ? ORDER BY timestamp ASC",
+                        (target_sid,)
+                    ).fetchall()
+                    preds = [dict(r) for r in rows]
+                except sqlite3.OperationalError:
+                    preds = []
 
-                rows_out = conn.execute(
-                    "SELECT * FROM forward_outcomes WHERE session_id = ?",
-                    (target_sid,)
-                ).fetchall()
-                outcomes_by_pid = {r["prediction_id"]: dict(r) for r in rows_out}
+                try:
+                    rows_out = conn.execute(
+                        "SELECT * FROM forward_outcomes WHERE session_id = ?",
+                        (target_sid,)
+                    ).fetchall()
+                    outcomes_by_pid = {r["prediction_id"]: dict(r) for r in rows_out}
+                except sqlite3.OperationalError:
+                    outcomes_by_pid = {}
             finally:
                 conn.close()
 
@@ -1414,39 +1527,38 @@ class DualDurationEvaluator:
             except Exception:
                 manifest = None
 
-        # Fail-closed prospective evidence authority classification (V1.7.4.4 Section 6)
-        evidence_class = EvidenceClass.HISTORICAL_REPLAY
+        # Fail-closed prospective evidence authority classification (V1.7.4.5 Section 4)
+        evidence_class = EvidenceClass.PROSPECTIVE_AUTHORITY_UNVERIFIED
         authority_reason = ""
 
         if not adapted_obs or not manifest:
-            authority_reason = f"EVIDENCE AUTHORITY FAIL-CLOSED: Missing predictions or manifest for session '{target_sid}'."
+            evidence_class = EvidenceClass.PROSPECTIVE_AUTHORITY_UNVERIFIED
+            authority_reason = f"PROSPECTIVE_AUTHORITY_UNVERIFIED: Missing predictions or manifest for session '{target_sid}'."
         else:
             is_live_mode = str(manifest.get("mode", "")).upper() in ("SHADOW", "DEMO", "LIVE")
-            has_model_id = all(o.model_id for o in adapted_obs)
-            
-            # Verify chronological event ordering:
-            # feature_cutoff <= inference_completion <= journal_commit
-            ts_ordered = True
-            for o in adapted_obs:
-                fc = o.feature_cutoff_timestamp
-                ic = o.inference_completion_timestamp
-                jc = o.journal_commit_timestamp
-                if fc is not None and ic is not None and jc is not None:
-                    if not (fc <= ic <= jc):
-                        ts_ordered = False
-                        break
-            
-            if is_live_mode and has_model_id and ts_ordered:
+            has_model_id = all(bool(o.model_id) for o in adapted_obs)
+            all_chronology_valid = all(o.has_mandatory_chronology for o in adapted_obs)
+
+            if is_live_mode and has_model_id and all_chronology_valid:
                 evidence_class = EvidenceClass.PROSPECTIVE_SHADOW
                 authority_reason = (
                     f"Prospective evaluation for session {session_id}. "
                     f"Evidence Class: {evidence_class.value}. Evaluation Mode: QUOTE_VERIFIED."
                 )
             else:
-                evidence_class = EvidenceClass.HISTORICAL_REPLAY
+                evidence_class = EvidenceClass.PROSPECTIVE_AUTHORITY_UNVERIFIED
+                failed_items = []
+                if not is_live_mode:
+                    failed_items.append(f"live_mode={is_live_mode}")
+                if not has_model_id:
+                    failed_items.append("has_model_id=False")
+                if not all_chronology_valid:
+                    invalid_obs = [o for o in adapted_obs if not o.has_mandatory_chronology]
+                    sample_err = invalid_obs[0].chronology_error_reason if invalid_obs else "unknown"
+                    failed_items.append(f"ts_ordered=False ({len(invalid_obs)} invalid, sample: {sample_err})")
                 authority_reason = (
-                    f"PROSPECTIVE_AUTHORITY_REJECTED: live_mode={is_live_mode}, "
-                    f"has_model_id={has_model_id}, ts_ordered={ts_ordered}. Reverted to HISTORICAL_REPLAY."
+                    f"PROSPECTIVE_AUTHORITY_REJECTED: {'; '.join(failed_items)}. "
+                    f"Classified as PROSPECTIVE_AUTHORITY_UNVERIFIED."
                 )
 
         # Partition by contract duration (V1.7.4.4 Section 7.2)
@@ -1466,9 +1578,33 @@ class DualDurationEvaluator:
             ("5T_RUNLOW",  5, "RUNLOW",  obs_5t, self.payout_5t, hurdle_5t, dec_ts_5t),
         ]
 
-        metrics_dict: Dict[str, DurationMetricSummary] = {}
+        # 1. COHORT A — ALL RESOLVED OBSERVATIONS (Unconditional base rates & calibration)
+        metrics_cohort_a: Dict[str, DurationMetricSummary] = {}
         for label, dur, direct, obs_subset, payout, hurdle, ts_list in configs:
-            summary = self._compute_metrics(
+            summary_a = self._compute_metrics(
+                label=label,
+                duration=dur,
+                direction=direct,
+                outcomes=[],
+                pred_probs=[],
+                payout=payout,
+                hurdle=hurdle,
+                evidence_class=evidence_class,
+                evaluation_mode=EvaluationMode.REFERENCE_SCENARIO,
+                decision_timestamps=ts_list,
+                quote_records=None,
+                min_ordinary_ev=self.min_ordinary_ev,
+                min_conservative_ev=self.min_conservative_ev,
+                expected_session_id=target_sid,
+                tick_records=tick_records,
+                observations=obs_subset
+            )
+            metrics_cohort_a[label] = summary_a
+
+        # 2. COHORT B — CHRONOLOGICALLY QUOTED (max_freshness = 60.0s)
+        metrics_cohort_b: Dict[str, DurationMetricSummary] = {}
+        for label, dur, direct, obs_subset, payout, hurdle, ts_list in configs:
+            summary_b = self._compute_metrics(
                 label=label,
                 duration=dur,
                 direction=direct,
@@ -1484,9 +1620,53 @@ class DualDurationEvaluator:
                 min_conservative_ev=self.min_conservative_ev,
                 expected_session_id=target_sid,
                 tick_records=tick_records,
-                observations=obs_subset
+                observations=obs_subset,
+                max_freshness_seconds=60.0
             )
-            metrics_dict[label] = summary
+            metrics_cohort_b[label] = summary_b
+
+        # 3. COHORT C — EXECUTION-QUALITY QUOTE EVIDENCE (SHADOW_EXECUTION_QUALITY_PROXY, max_freshness = 5.0s)
+        metrics_cohort_c: Dict[str, DurationMetricSummary] = {}
+        for label, dur, direct, obs_subset, payout, hurdle, ts_list in configs:
+            summary_c = self._compute_metrics(
+                label=label,
+                duration=dur,
+                direction=direct,
+                outcomes=[],
+                pred_probs=[],
+                payout=payout,
+                hurdle=hurdle,
+                evidence_class=evidence_class,
+                evaluation_mode=EvaluationMode.QUOTE_VERIFIED,
+                decision_timestamps=ts_list,
+                quote_records=quotes,
+                min_ordinary_ev=self.min_ordinary_ev,
+                min_conservative_ev=self.min_conservative_ev,
+                expected_session_id=target_sid,
+                tick_records=tick_records,
+                observations=obs_subset,
+                max_freshness_seconds=5.0
+            )
+            metrics_cohort_c[label] = summary_c
+
+        # 4. COHORT D — INDEPENDENT CONFIRMATION (Untouched Future Preregistered Sessions)
+        metrics_cohort_d: Dict[str, DurationMetricSummary] = {}
+        for label, dur, direct, obs_subset, payout, hurdle, ts_list in configs:
+            summary_d = copy.deepcopy(metrics_cohort_c[label])
+            summary_d.evidence_class = EvidenceClass.HISTORICAL_REPLAY.value
+            summary_d.is_economically_positive = False
+            summary_d.verdict = "PREREGISTRATION_REQUIRED_FOR_CONFIRMATION"
+            metrics_cohort_d[label] = summary_d
+
+        cohort_metrics = {
+            ResearchCohort.COHORT_A_ALL_RESOLVED.value: metrics_cohort_a,
+            ResearchCohort.COHORT_B_CHRONOLOGICALLY_QUOTED.value: metrics_cohort_b,
+            ResearchCohort.COHORT_C_EXECUTION_QUALITY_PROXY.value: metrics_cohort_c,
+            ResearchCohort.COHORT_D_INDEPENDENT_CONFIRMATION.value: metrics_cohort_d,
+        }
+
+        # Primary metrics default to Cohort B with all execution-quality statistics available
+        metrics_dict = metrics_cohort_b
 
         sorted_labels = sorted(
             metrics_dict.keys(),
@@ -1518,7 +1698,8 @@ class DualDurationEvaluator:
             selection_bias_warning=authority_reason,
             recommendation=rec,
             evidence_class=evidence_class.value,
-            evaluation_mode=EvaluationMode.QUOTE_VERIFIED.value
+            evaluation_mode=EvaluationMode.QUOTE_VERIFIED.value,
+            cohort_metrics=cohort_metrics
         )
 
 
