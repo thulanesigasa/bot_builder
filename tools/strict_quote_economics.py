@@ -7,8 +7,11 @@ import argparse
 import json
 import math
 import sqlite3
+import sys
 from collections import defaultdict
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from strict_cohort_validator import StrictCohortAuthorityValidator
 from forward_shadow_engine import COHORT_C, LIVE_EXECUTION_DISABLED, DECISION
