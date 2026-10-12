@@ -491,6 +491,23 @@ class ForwardResearchDatabase:
             ))
             conn.commit()
 
+    def record_verified_commit_timestamp(self, observation_id: str, timestamp: float) -> None:
+        """Record an upper bound on successful initial prediction persistence.
+
+        The observation is first committed in a separate transaction; this
+        timestamp is only obtained after that commit has returned successfully.
+        This update does not rewrite the original signal or model prediction.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE forward_observations SET journal_commit_timestamp = ? "
+                "WHERE observation_id = ? AND journal_commit_timestamp IS NULL",
+                (timestamp, observation_id),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("Failed to persist verified prediction commit marker.")
+            conn.commit()
+
     def update_observation_resolution(
         self,
         observation_id: str,
@@ -914,9 +931,8 @@ class DerivLiveShadowCollector:
         ]
 
         decision_ts = signal_tick.received_timestamp
-        # Durable journal commit timestamp (wall-clock time of persistence)
-        # If simulated/historical, commit is immediately after receipt (~5ms)
-        commit_ts = time.time() if decision_ts >= time.time() - 10.0 else decision_ts + 0.005
+        # Never synthesize commit timestamps from historical signal timestamps.
+        # The conservative marker is sampled AFTER the original INSERT commits.
 
         # Query authoritative model registry for canonical baseline provenance
         model_reg = AuthoritativeModelRegistry()
@@ -970,13 +986,15 @@ class DerivLiveShadowCollector:
                 prospective_status=PROSPECTIVE_AUTHORITY_UNVERIFIED,
                 source_classification=SOURCE_BROKER_CAPTURED,
                 model_checksum=true_chk,
-                journal_commit_timestamp=commit_ts,
+                journal_commit_timestamp=None,
                 model_type=MODEL_TYPE_DETERMINISTIC_BASELINE,
                 true_model_checksum=true_chk,
             )
 
             # Persist immediately to database
             self.db.insert_observation(obs)
+            commit_ts = time.time()  # First INSERT transaction has committed.
+            self.db.record_verified_commit_timestamp(obs_id, commit_ts)
             self.predictions_committed_count += 1
 
             # Register pending resolution state
