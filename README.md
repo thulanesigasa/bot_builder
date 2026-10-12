@@ -102,6 +102,7 @@ bot_builder/
 │   ├── test_v180_multi_market_rise_fall.py          # V1.8.0 multi-market Rise/Fall comprehensive tests (23 tests)
 │   ├── test_v1745_evidence_authority_and_contract_mapping.py
 │   └── ... (31 total test modules)
+├── releases/                                        # Packaged release archives (.zip)
 └── reports/                                         # Generated session and audit reports
     ├── V1_8_1_ROOT_CAUSE_AND_GATE_REPAIR.md         # Root cause analysis of negative predicted EV defect
     ├── V1_8_1_DATA_PROVENANCE_AUDIT.md              # Cryptographic hash audit & stream integrity
