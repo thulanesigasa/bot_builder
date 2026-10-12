@@ -996,6 +996,8 @@ class DerivLiveShadowCollector:
                 "ask_price": ask_price,
                 "payout": payout,
                 "cohort": cohort,
+                "model_version": MODEL_ID_CAUSAL_MOMENTUM_V1,
+                "model_checksum": true_chk,
             })
 
     async def _check_pending_resolutions(self, symbol: str, incoming_tick: LiveBrokerTick) -> None:
@@ -1060,6 +1062,13 @@ class DerivLiveShadowCollector:
                 hyp_return = None
                 cohort = pending["cohort"]
 
+                # Authoritative per-observation model registry verification (Critical Defect 2 Repair)
+                model_reg = AuthoritativeModelRegistry()
+                is_model_verified, model_class, model_rec = model_reg.verify_model_provenance(
+                    model_id=pending.get("model_version", MODEL_ID_CAUSAL_MOMENTUM_V1),
+                    reported_checksum=pending.get("model_checksum", ""),
+                )
+
                 # Prospective authority audit
                 audit_res = ChronologyAuditor.audit_observation_chronology(
                     signal_epoch=pending["signal_epoch"],
@@ -1068,13 +1077,13 @@ class DerivLiveShadowCollector:
                     first_future_tick_epoch=first_fut_epoch,
                     first_future_tick_receipt_ts=first_fut_ts,
                     expiry_epoch=expiry_epoch,
-                    model_is_verified=True,
+                    model_is_verified=is_model_verified,
                 )
                 prospective_status = audit_res.status
 
                 if ask is not None and payout is not None:
                     hyp_return = round((outcome * payout) - ask, 4)
-                    if prospective_status == PROSPECTIVE_AUTHENTIC:
+                    if prospective_status == PROSPECTIVE_AUTHENTIC and is_model_verified:
                         cohort = COHORT_C  # Promoted to execution-quality SHADOW proxy
                     else:
                         cohort = COHORT_B

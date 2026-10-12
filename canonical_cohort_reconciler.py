@@ -311,3 +311,180 @@ class CanonicalCohortReconciler:
             },
             "hypotheses": [h.to_dict() for h in hypothesis_metrics],
         }
+
+    def reconcile_session_authoritative(
+        self, session_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Performs strict evidence-authority reconciliation using StrictCohortAuthorityValidator.
+        
+        Derives scientific cohort eligibility independently from ground truth records rather than
+        trusting existing stored labels.
+        """
+        from strict_cohort_validator import StrictCohortAuthorityValidator, VALIDATOR_VERSION
+        validator = StrictCohortAuthorityValidator(db_conn=self.conn)
+        cursor = self.conn.cursor()
+
+        sess_clause = "WHERE session_id = ?" if session_id else ""
+        sess_params = (session_id,) if session_id else ()
+
+        # 1. Total Session Telemetry
+        cursor.execute(f"SELECT count(*) FROM forward_observations {sess_clause}", sess_params)
+        total_committed = cursor.fetchone()[0]
+
+        # 2. Extract Distinct Hypothesis Tuples
+        cursor.execute(
+            f"SELECT DISTINCT contract_family, contract_type, duration_ticks "
+            f"FROM forward_observations {sess_clause} "
+            f"ORDER BY contract_family, contract_type, duration_ticks",
+            sess_params,
+        )
+        hypotheses = cursor.fetchall()
+
+        hypothesis_metrics: List[HypothesisCohortMetrics] = []
+        overall_exclusions: Dict[str, int] = {}
+        total_auth_cohort_a = 0
+        total_auth_cohort_b = 0
+        total_auth_cohort_c = 0
+        total_quarantined = 0
+
+        for h in hypotheses:
+            fam = h["contract_family"]
+            ctype = h["contract_type"]
+            dur = h["duration_ticks"]
+
+            where_base = (
+                f"WHERE contract_family = ? AND contract_type = ? AND duration_ticks = ? "
+                + (f"AND session_id = ? " if session_id else "")
+            )
+            base_params = [fam, ctype, dur]
+            if session_id:
+                base_params.append(session_id)
+
+            cursor.execute(f"SELECT * FROM forward_observations {where_base}", base_params)
+            rows = [dict(r) for r in cursor.fetchall()]
+
+            cohort_a_rows: List[Dict[str, Any]] = []
+            cohort_b_rows: List[Dict[str, Any]] = []
+            cohort_c_rows: List[Dict[str, Any]] = []
+            quarantined_rows: List[Dict[str, Any]] = []
+
+            for r in rows:
+                dec = validator.validate_observation(r)
+                for rj in dec.rejection_reasons:
+                    overall_exclusions[rj] = overall_exclusions.get(rj, 0) + 1
+
+                if dec.final_evidence_cohort == COHORT_C:
+                    cohort_c_rows.append(r)
+                    cohort_b_rows.append(r)
+                    cohort_a_rows.append(r)
+                elif dec.final_evidence_cohort == COHORT_B:
+                    cohort_b_rows.append(r)
+                    if dec.outcome_integrity_verdict:
+                        cohort_a_rows.append(r)
+                elif dec.final_evidence_cohort == COHORT_A:
+                    cohort_a_rows.append(r)
+                else:
+                    quarantined_rows.append(r)
+
+            total_auth_cohort_a += len(cohort_a_rows)
+            total_auth_cohort_b += len(cohort_b_rows)
+            total_auth_cohort_c += len(cohort_c_rows)
+            total_quarantined += len(quarantined_rows)
+
+            # Cohort A metrics
+            res_n = len(cohort_a_rows)
+            res_wins = sum(1 for r in cohort_a_rows if r.get("observed_outcome") == 1)
+            res_losses = res_n - res_wins
+            unpriced_wr = (res_wins / res_n) if res_n > 0 else 0.0
+
+            probs = [r["predicted_prob"] for r in cohort_a_rows if r.get("predicted_prob") is not None]
+            mean_prob = float(np.mean(probs)) if probs else 0.5
+            outcomes = [r["observed_outcome"] for r in cohort_a_rows if r.get("observed_outcome") is not None]
+            brier = float(np.mean([(p - o) ** 2 for p, o in zip(probs, outcomes)])) if (probs and outcomes) else 0.0
+
+            # Cohort B metrics
+            qb_n = len(cohort_b_rows)
+            asks_b = [r["ask_price"] for r in cohort_b_rows if r.get("ask_price") is not None]
+            payouts_b = [r["total_payout"] for r in cohort_b_rows if r.get("total_payout") is not None]
+            mean_ask_b = float(np.mean(asks_b)) if asks_b else 0.0
+            mean_payout_b = float(np.mean(payouts_b)) if payouts_b else 0.0
+            be_b = (mean_ask_b / mean_payout_b) if mean_payout_b > 0 else 0.0
+
+            # Cohort C metrics (Strictly Authoritative)
+            qc_n = len(cohort_c_rows)
+            qc_wins = sum(1 for r in cohort_c_rows if r.get("observed_outcome") == 1)
+            qc_losses = qc_n - qc_wins
+            qc_wr = (qc_wins / qc_n) if qc_n > 0 else 0.0
+
+            asks_c = [r["ask_price"] for r in cohort_c_rows if r.get("ask_price") is not None]
+            payouts_c = [r["total_payout"] for r in cohort_c_rows if r.get("total_payout") is not None]
+            returns_c = [r["hypothetical_return"] for r in cohort_c_rows if r.get("hypothetical_return") is not None]
+
+            mean_ask_c = float(np.mean(asks_c)) if asks_c else 0.0
+            mean_payout_c = float(np.mean(payouts_c)) if payouts_c else 0.0
+            sum_ret_c = float(np.sum(returns_c)) if returns_c else 0.0
+            mean_ret_c = (sum_ret_c / qc_n) if qc_n > 0 else 0.0
+
+            pred_evs_c = [
+                (r["predicted_prob"] * r["total_payout"] - r["ask_price"])
+                for r in cohort_c_rows
+                if r.get("predicted_prob") is not None and r.get("total_payout") is not None and r.get("ask_price") is not None
+            ]
+            mean_pred_ev_c = float(np.mean(pred_evs_c)) if pred_evs_c else 0.0
+
+            ret_arr_c = np.array(returns_c, dtype=np.float64)
+            mbb_low, mbb_high = compute_mbb_bounds(ret_arr_c) if qc_n > 0 else (0.0, 0.0)
+
+            div = res_n - qc_n
+            unpriced_wins = res_wins - qc_wins
+
+            metrics = HypothesisCohortMetrics(
+                contract_family=fam,
+                contract_type=ctype,
+                duration_ticks=dur,
+                cohort_a_total_committed=len(rows),
+                cohort_a_resolved_n=res_n,
+                cohort_a_wins=res_wins,
+                cohort_a_losses=res_losses,
+                cohort_a_win_rate=round(unpriced_wr, 4),
+                cohort_a_mean_prob=round(mean_prob, 4),
+                cohort_a_brier_score=round(brier, 6),
+                cohort_a_obs_ids=[r["observation_id"] for r in cohort_a_rows],
+                cohort_b_matched_n=qb_n,
+                cohort_b_mean_ask=round(mean_ask_b, 2),
+                cohort_b_mean_payout=round(mean_payout_b, 2),
+                cohort_b_implied_break_even=round(be_b, 4),
+                cohort_b_obs_ids=[r["observation_id"] for r in cohort_b_rows],
+                cohort_c_priced_n=qc_n,
+                cohort_c_wins=qc_wins,
+                cohort_c_losses=qc_losses,
+                cohort_c_win_rate=round(qc_wr, 4),
+                cohort_c_mean_ask=round(mean_ask_c, 2),
+                cohort_c_mean_payout=round(mean_payout_c, 2),
+                cohort_c_mean_predicted_ev=round(mean_pred_ev_c, 4),
+                cohort_c_sum_hypothetical_return=round(sum_ret_c, 4),
+                cohort_c_mean_hypothetical_return=round(mean_ret_c, 4),
+                cohort_c_mbb_lower_95=mbb_low,
+                cohort_c_mbb_upper_95=mbb_high,
+                cohort_c_obs_ids=[r["observation_id"] for r in cohort_c_rows],
+                cohort_d_count=0,
+                cohort_d_quarantined=True,
+                unpriced_resolved_n=div,
+                unpriced_wins=unpriced_wins,
+                denominator_divergence=div,
+            )
+            hypothesis_metrics.append(metrics)
+
+        return {
+            "session_id": session_id or "ALL_SESSIONS",
+            "authoritative_validator_version": VALIDATOR_VERSION,
+            "telemetry": {
+                "total_committed": total_committed,
+                "total_authoritative_cohort_a": total_auth_cohort_a,
+                "total_authoritative_cohort_b": total_auth_cohort_b,
+                "total_authoritative_cohort_c": total_auth_cohort_c,
+                "total_quarantined": total_quarantined,
+            },
+            "exclusion_reasons_summary": overall_exclusions,
+            "hypotheses": [h.to_dict() for h in hypothesis_metrics],
+        }
