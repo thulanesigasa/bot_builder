@@ -1,0 +1,974 @@
+{
+  "R_100": {
+    "2t": {
+      "test_sample_size": 4988,
+      "test_win_rate": 0.4828,
+      "naive_50_50": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.4828,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249703,
+        "brier_skill_score": -0.00119,
+        "expected_calibration_error_ece": 0.017241,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.4828,
+        "mean_predicted_prob": 0.4975,
+        "brier_score": 0.24992,
+        "brier_ref_score": 0.249703,
+        "brier_skill_score": -0.00087,
+        "expected_calibration_error_ece": 0.014739,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.692987
+      },
+      "logistic_model": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.4828,
+        "mean_predicted_prob": 0.498,
+        "brier_score": 0.249849,
+        "brier_ref_score": 0.249703,
+        "brier_skill_score": -0.000586,
+        "expected_calibration_error_ece": 0.015212,
+        "calibration_slope": 0.4239,
+        "calibration_intercept": 0.4862,
+        "log_loss": 0.692845
+      }
+    },
+    "3t": {
+      "test_sample_size": 4987,
+      "test_win_rate": 0.4859,
+      "naive_50_50": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.4859,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.2498,
+        "brier_skill_score": -0.0008,
+        "expected_calibration_error_ece": 0.014137,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.4859,
+        "mean_predicted_prob": 0.4968,
+        "brier_score": 0.24992,
+        "brier_ref_score": 0.2498,
+        "brier_skill_score": -0.000478,
+        "expected_calibration_error_ece": 0.010933,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.692987
+      },
+      "logistic_model": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.4859,
+        "mean_predicted_prob": 0.4972,
+        "brier_score": 0.250013,
+        "brier_ref_score": 0.2498,
+        "brier_skill_score": -0.000853,
+        "expected_calibration_error_ece": 0.011313,
+        "calibration_slope": -0.1297,
+        "calibration_intercept": 0.4844,
+        "log_loss": 0.693173
+      }
+    },
+    "5t": {
+      "test_sample_size": 4984,
+      "test_win_rate": 0.4755,
+      "naive_50_50": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.4755,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249401,
+        "brier_skill_score": -0.002403,
+        "expected_calibration_error_ece": 0.024478,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.4755,
+        "mean_predicted_prob": 0.4942,
+        "brier_score": 0.249748,
+        "brier_ref_score": 0.249401,
+        "brier_skill_score": -0.001393,
+        "expected_calibration_error_ece": 0.018638,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.692644
+      },
+      "logistic_model": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.4755,
+        "mean_predicted_prob": 0.4951,
+        "brier_score": 0.249756,
+        "brier_ref_score": 0.249401,
+        "brier_skill_score": -0.001426,
+        "expected_calibration_error_ece": 0.019545,
+        "calibration_slope": 0.1627,
+        "calibration_intercept": 0.4787,
+        "log_loss": 0.69266
+      }
+    },
+    "10t": {
+      "test_sample_size": 4978,
+      "test_win_rate": 0.4616,
+      "naive_50_50": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.4616,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.248528,
+        "brier_skill_score": -0.005924,
+        "expected_calibration_error_ece": 0.038369,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.4616,
+        "mean_predicted_prob": 0.4955,
+        "brier_score": 0.249677,
+        "brier_ref_score": 0.248528,
+        "brier_skill_score": -0.004623,
+        "expected_calibration_error_ece": 0.033896,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.692501
+      },
+      "logistic_model": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.4616,
+        "mean_predicted_prob": 0.4959,
+        "brier_score": 0.249562,
+        "brier_ref_score": 0.248528,
+        "brier_skill_score": -0.00416,
+        "expected_calibration_error_ece": 0.034265,
+        "calibration_slope": 0.3771,
+        "calibration_intercept": 0.4678,
+        "log_loss": 0.69227
+      }
+    }
+  },
+  "1HZ100V": {
+    "2t": {
+      "test_sample_size": 4988,
+      "test_win_rate": 0.5126,
+      "naive_50_50": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.5126,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.24984,
+        "brier_skill_score": -0.000639,
+        "expected_calibration_error_ece": 0.01263,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.5126,
+        "mean_predicted_prob": 0.4984,
+        "brier_score": 0.250044,
+        "brier_ref_score": 0.24984,
+        "brier_skill_score": -0.000815,
+        "expected_calibration_error_ece": 0.014265,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693235
+      },
+      "logistic_model": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.5126,
+        "mean_predicted_prob": 0.4986,
+        "brier_score": 0.250043,
+        "brier_ref_score": 0.24984,
+        "brier_skill_score": -0.00081,
+        "expected_calibration_error_ece": 0.014018,
+        "calibration_slope": 0.1017,
+        "calibration_intercept": 0.5132,
+        "log_loss": 0.693233
+      }
+    },
+    "3t": {
+      "test_sample_size": 4987,
+      "test_win_rate": 0.5107,
+      "naive_50_50": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5107,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249885,
+        "brier_skill_score": -0.000461,
+        "expected_calibration_error_ece": 0.010728,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5107,
+        "mean_predicted_prob": 0.4944,
+        "brier_score": 0.250152,
+        "brier_ref_score": 0.249885,
+        "brier_skill_score": -0.001068,
+        "expected_calibration_error_ece": 0.016335,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693451
+      },
+      "logistic_model": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5107,
+        "mean_predicted_prob": 0.4954,
+        "brier_score": 0.250102,
+        "brier_ref_score": 0.249885,
+        "brier_skill_score": -0.000868,
+        "expected_calibration_error_ece": 0.01534,
+        "calibration_slope": 0.1551,
+        "calibration_intercept": 0.5136,
+        "log_loss": 0.693351
+      }
+    },
+    "5t": {
+      "test_sample_size": 4984,
+      "test_win_rate": 0.5134,
+      "naive_50_50": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.5134,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249819,
+        "brier_skill_score": -0.000723,
+        "expected_calibration_error_ece": 0.013443,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.5134,
+        "mean_predicted_prob": 0.4983,
+        "brier_score": 0.250049,
+        "brier_ref_score": 0.249819,
+        "brier_skill_score": -0.000918,
+        "expected_calibration_error_ece": 0.015145,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693245
+      },
+      "logistic_model": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.5134,
+        "mean_predicted_prob": 0.4985,
+        "brier_score": 0.250142,
+        "brier_ref_score": 0.249819,
+        "brier_skill_score": -0.001294,
+        "expected_calibration_error_ece": 0.019126,
+        "calibration_slope": -0.2286,
+        "calibration_intercept": 0.5121,
+        "log_loss": 0.693432
+      }
+    },
+    "10t": {
+      "test_sample_size": 4978,
+      "test_win_rate": 0.5125,
+      "naive_50_50": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5125,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249845,
+        "brier_skill_score": -0.000621,
+        "expected_calibration_error_ece": 0.012455,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5125,
+        "mean_predicted_prob": 0.4991,
+        "brier_score": 0.250024,
+        "brier_ref_score": 0.249845,
+        "brier_skill_score": -0.000718,
+        "expected_calibration_error_ece": 0.01339,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693195
+      },
+      "logistic_model": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5125,
+        "mean_predicted_prob": 0.499,
+        "brier_score": 0.250141,
+        "brier_ref_score": 0.249845,
+        "brier_skill_score": -0.001186,
+        "expected_calibration_error_ece": 0.013408,
+        "calibration_slope": -0.1488,
+        "calibration_intercept": 0.5119,
+        "log_loss": 0.693429
+      }
+    }
+  },
+  "R_75": {
+    "2t": {
+      "test_sample_size": 4988,
+      "test_win_rate": 0.5154,
+      "naive_50_50": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.5154,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249762,
+        "brier_skill_score": -0.000954,
+        "expected_calibration_error_ece": 0.015437,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.5154,
+        "mean_predicted_prob": 0.5101,
+        "brier_score": 0.24979,
+        "brier_ref_score": 0.249762,
+        "brier_skill_score": -0.000114,
+        "expected_calibration_error_ece": 0.005326,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.692727
+      },
+      "logistic_model": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.5154,
+        "mean_predicted_prob": 0.5084,
+        "brier_score": 0.249795,
+        "brier_ref_score": 0.249762,
+        "brier_skill_score": -0.000132,
+        "expected_calibration_error_ece": 0.008229,
+        "calibration_slope": 0.3343,
+        "calibration_intercept": 0.5042,
+        "log_loss": 0.692736
+      }
+    },
+    "3t": {
+      "test_sample_size": 4987,
+      "test_win_rate": 0.5165,
+      "naive_50_50": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5165,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249726,
+        "brier_skill_score": -0.001096,
+        "expected_calibration_error_ece": 0.016543,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5165,
+        "mean_predicted_prob": 0.5078,
+        "brier_score": 0.249803,
+        "brier_ref_score": 0.249726,
+        "brier_skill_score": -0.000305,
+        "expected_calibration_error_ece": 0.008734,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.692752
+      },
+      "logistic_model": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5165,
+        "mean_predicted_prob": 0.5066,
+        "brier_score": 0.249867,
+        "brier_ref_score": 0.249726,
+        "brier_skill_score": -0.000564,
+        "expected_calibration_error_ece": 0.009987,
+        "calibration_slope": 0.0153,
+        "calibration_intercept": 0.5161,
+        "log_loss": 0.692881
+      }
+    },
+    "5t": {
+      "test_sample_size": 4984,
+      "test_win_rate": 0.5239,
+      "naive_50_50": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.5239,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.24943,
+        "brier_skill_score": -0.002286,
+        "expected_calibration_error_ece": 0.023876,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.5239,
+        "mean_predicted_prob": 0.5102,
+        "brier_score": 0.249616,
+        "brier_ref_score": 0.24943,
+        "brier_skill_score": -0.000745,
+        "expected_calibration_error_ece": 0.01363,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.692378
+      },
+      "logistic_model": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.5239,
+        "mean_predicted_prob": 0.5077,
+        "brier_score": 0.249623,
+        "brier_ref_score": 0.24943,
+        "brier_skill_score": -0.000773,
+        "expected_calibration_error_ece": 0.016192,
+        "calibration_slope": 0.2658,
+        "calibration_intercept": 0.5157,
+        "log_loss": 0.692393
+      }
+    },
+    "10t": {
+      "test_sample_size": 4978,
+      "test_win_rate": 0.5275,
+      "naive_50_50": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5275,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249243,
+        "brier_skill_score": -0.003039,
+        "expected_calibration_error_ece": 0.027521,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5275,
+        "mean_predicted_prob": 0.5139,
+        "brier_score": 0.249428,
+        "brier_ref_score": 0.249243,
+        "brier_skill_score": -0.000746,
+        "expected_calibration_error_ece": 0.013634,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.692004
+      },
+      "logistic_model": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5275,
+        "mean_predicted_prob": 0.5111,
+        "brier_score": 0.249316,
+        "brier_ref_score": 0.249243,
+        "brier_skill_score": -0.000296,
+        "expected_calibration_error_ece": 0.016424,
+        "calibration_slope": 0.8256,
+        "calibration_intercept": 0.4909,
+        "log_loss": 0.691779
+      }
+    }
+  },
+  "1HZ75V": {
+    "2t": {
+      "test_sample_size": 4988,
+      "test_win_rate": 0.509,
+      "naive_50_50": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.509,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249919,
+        "brier_skill_score": -0.000326,
+        "expected_calibration_error_ece": 0.009022,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.509,
+        "mean_predicted_prob": 0.4908,
+        "brier_score": 0.250252,
+        "brier_ref_score": 0.249919,
+        "brier_skill_score": -0.001335,
+        "expected_calibration_error_ece": 0.018265,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693652
+      },
+      "logistic_model": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.509,
+        "mean_predicted_prob": 0.4919,
+        "brier_score": 0.250693,
+        "brier_ref_score": 0.249919,
+        "brier_skill_score": -0.003097,
+        "expected_calibration_error_ece": 0.028112,
+        "calibration_slope": -0.4007,
+        "calibration_intercept": 0.496,
+        "log_loss": 0.694534
+      }
+    },
+    "3t": {
+      "test_sample_size": 4987,
+      "test_win_rate": 0.5141,
+      "naive_50_50": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5141,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.2498,
+        "brier_skill_score": -0.0008,
+        "expected_calibration_error_ece": 0.014137,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5141,
+        "mean_predicted_prob": 0.4895,
+        "brier_score": 0.250406,
+        "brier_ref_score": 0.2498,
+        "brier_skill_score": -0.002426,
+        "expected_calibration_error_ece": 0.024616,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.69396
+      },
+      "logistic_model": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5141,
+        "mean_predicted_prob": 0.4909,
+        "brier_score": 0.250942,
+        "brier_ref_score": 0.2498,
+        "brier_skill_score": -0.004573,
+        "expected_calibration_error_ece": 0.03213,
+        "calibration_slope": -0.3556,
+        "calibration_intercept": 0.5011,
+        "log_loss": 0.695034
+      }
+    },
+    "5t": {
+      "test_sample_size": 4984,
+      "test_win_rate": 0.513,
+      "naive_50_50": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.513,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.24983,
+        "brier_skill_score": -0.000681,
+        "expected_calibration_error_ece": 0.013042,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.513,
+        "mean_predicted_prob": 0.4866,
+        "brier_score": 0.250528,
+        "brier_ref_score": 0.24983,
+        "brier_skill_score": -0.002795,
+        "expected_calibration_error_ece": 0.026425,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.694204
+      },
+      "logistic_model": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.513,
+        "mean_predicted_prob": 0.4885,
+        "brier_score": 0.250846,
+        "brier_ref_score": 0.24983,
+        "brier_skill_score": -0.004067,
+        "expected_calibration_error_ece": 0.032093,
+        "calibration_slope": -0.5693,
+        "calibration_intercept": 0.4869,
+        "log_loss": 0.69484
+      }
+    },
+    "10t": {
+      "test_sample_size": 4978,
+      "test_win_rate": 0.5096,
+      "naive_50_50": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5096,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249907,
+        "brier_skill_score": -0.000372,
+        "expected_calibration_error_ece": 0.009642,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5096,
+        "mean_predicted_prob": 0.4804,
+        "brier_score": 0.250764,
+        "brier_ref_score": 0.249907,
+        "brier_skill_score": -0.003428,
+        "expected_calibration_error_ece": 0.029271,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.694676
+      },
+      "logistic_model": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5096,
+        "mean_predicted_prob": 0.4835,
+        "brier_score": 0.250672,
+        "brier_ref_score": 0.249907,
+        "brier_skill_score": -0.003061,
+        "expected_calibration_error_ece": 0.026182,
+        "calibration_slope": -0.2616,
+        "calibration_intercept": 0.4923,
+        "log_loss": 0.694492
+      }
+    }
+  },
+  "R_50": {
+    "2t": {
+      "test_sample_size": 4988,
+      "test_win_rate": 0.5066,
+      "naive_50_50": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.5066,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249956,
+        "brier_skill_score": -0.000175,
+        "expected_calibration_error_ece": 0.006616,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.5066,
+        "mean_predicted_prob": 0.4983,
+        "brier_score": 0.250025,
+        "brier_ref_score": 0.249956,
+        "brier_skill_score": -0.000277,
+        "expected_calibration_error_ece": 0.008318,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693198
+      },
+      "logistic_model": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.5066,
+        "mean_predicted_prob": 0.4992,
+        "brier_score": 0.250042,
+        "brier_ref_score": 0.249956,
+        "brier_skill_score": -0.000345,
+        "expected_calibration_error_ece": 0.007427,
+        "calibration_slope": 0.0719,
+        "calibration_intercept": 0.5068,
+        "log_loss": 0.693232
+      }
+    },
+    "3t": {
+      "test_sample_size": 4987,
+      "test_win_rate": 0.5149,
+      "naive_50_50": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5149,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249777,
+        "brier_skill_score": -0.000893,
+        "expected_calibration_error_ece": 0.014939,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5149,
+        "mean_predicted_prob": 0.5026,
+        "brier_score": 0.249929,
+        "brier_ref_score": 0.249777,
+        "brier_skill_score": -0.000609,
+        "expected_calibration_error_ece": 0.012336,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693005
+      },
+      "logistic_model": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.5149,
+        "mean_predicted_prob": 0.503,
+        "brier_score": 0.249843,
+        "brier_ref_score": 0.249777,
+        "brier_skill_score": -0.000266,
+        "expected_calibration_error_ece": 0.011896,
+        "calibration_slope": 0.2098,
+        "calibration_intercept": 0.5124,
+        "log_loss": 0.692833
+      }
+    },
+    "5t": {
+      "test_sample_size": 4984,
+      "test_win_rate": 0.5247,
+      "naive_50_50": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.5247,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249391,
+        "brier_skill_score": -0.002442,
+        "expected_calibration_error_ece": 0.024679,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.5247,
+        "mean_predicted_prob": 0.501,
+        "brier_score": 0.249953,
+        "brier_ref_score": 0.249391,
+        "brier_skill_score": -0.002254,
+        "expected_calibration_error_ece": 0.023711,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693054
+      },
+      "logistic_model": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.5247,
+        "mean_predicted_prob": 0.5014,
+        "brier_score": 0.249819,
+        "brier_ref_score": 0.249391,
+        "brier_skill_score": -0.001717,
+        "expected_calibration_error_ece": 0.023248,
+        "calibration_slope": 0.368,
+        "calibration_intercept": 0.5226,
+        "log_loss": 0.692785
+      }
+    },
+    "10t": {
+      "test_sample_size": 4978,
+      "test_win_rate": 0.5356,
+      "naive_50_50": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5356,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.248736,
+        "brier_skill_score": -0.005083,
+        "expected_calibration_error_ece": 0.035556,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5356,
+        "mean_predicted_prob": 0.4961,
+        "brier_score": 0.25029,
+        "brier_ref_score": 0.248736,
+        "brier_skill_score": -0.00625,
+        "expected_calibration_error_ece": 0.039429,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693728
+      },
+      "logistic_model": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.5356,
+        "mean_predicted_prob": 0.4971,
+        "brier_score": 0.249925,
+        "brier_ref_score": 0.248736,
+        "brier_skill_score": -0.004782,
+        "expected_calibration_error_ece": 0.038477,
+        "calibration_slope": 0.9986,
+        "calibration_intercept": 0.5472,
+        "log_loss": 0.692998
+      }
+    }
+  },
+  "1HZ50V": {
+    "2t": {
+      "test_sample_size": 4988,
+      "test_win_rate": 0.4838,
+      "naive_50_50": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.4838,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249736,
+        "brier_skill_score": -0.001056,
+        "expected_calibration_error_ece": 0.016239,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.4838,
+        "mean_predicted_prob": 0.495,
+        "brier_score": 0.249863,
+        "brier_ref_score": 0.249736,
+        "brier_skill_score": -0.000508,
+        "expected_calibration_error_ece": 0.011267,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.692874
+      },
+      "logistic_model": {
+        "sample_size": 4988,
+        "empirical_win_rate": 0.4838,
+        "mean_predicted_prob": 0.4952,
+        "brier_score": 0.250495,
+        "brier_ref_score": 0.249736,
+        "brier_skill_score": -0.00304,
+        "expected_calibration_error_ece": 0.022191,
+        "calibration_slope": -0.2297,
+        "calibration_intercept": 0.4793,
+        "log_loss": 0.694139
+      }
+    },
+    "3t": {
+      "test_sample_size": 4987,
+      "test_win_rate": 0.4754,
+      "naive_50_50": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.4754,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249397,
+        "brier_skill_score": -0.002419,
+        "expected_calibration_error_ece": 0.024564,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.4754,
+        "mean_predicted_prob": 0.4925,
+        "brier_score": 0.249686,
+        "brier_ref_score": 0.249397,
+        "brier_skill_score": -0.001162,
+        "expected_calibration_error_ece": 0.017021,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.69252
+      },
+      "logistic_model": {
+        "sample_size": 4987,
+        "empirical_win_rate": 0.4754,
+        "mean_predicted_prob": 0.493,
+        "brier_score": 0.250769,
+        "brier_ref_score": 0.249397,
+        "brier_skill_score": -0.005504,
+        "expected_calibration_error_ece": 0.023183,
+        "calibration_slope": -0.3142,
+        "calibration_intercept": 0.4666,
+        "log_loss": 0.694689
+      }
+    },
+    "5t": {
+      "test_sample_size": 4984,
+      "test_win_rate": 0.4689,
+      "naive_50_50": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.4689,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.249033,
+        "brier_skill_score": -0.003884,
+        "expected_calibration_error_ece": 0.0311,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.4689,
+        "mean_predicted_prob": 0.4993,
+        "brier_score": 0.249957,
+        "brier_ref_score": 0.249033,
+        "brier_skill_score": -0.003711,
+        "expected_calibration_error_ece": 0.030399,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693061
+      },
+      "logistic_model": {
+        "sample_size": 4984,
+        "empirical_win_rate": 0.4689,
+        "mean_predicted_prob": 0.4992,
+        "brier_score": 0.251133,
+        "brier_ref_score": 0.249033,
+        "brier_skill_score": -0.008435,
+        "expected_calibration_error_ece": 0.038285,
+        "calibration_slope": -0.4402,
+        "calibration_intercept": 0.4674,
+        "log_loss": 0.695416
+      }
+    },
+    "10t": {
+      "test_sample_size": 4978,
+      "test_win_rate": 0.458,
+      "naive_50_50": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.458,
+        "mean_predicted_prob": 0.5,
+        "brier_score": 0.25,
+        "brier_ref_score": 0.248237,
+        "brier_skill_score": -0.007101,
+        "expected_calibration_error_ece": 0.041985,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693147
+      },
+      "unconditional_base": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.458,
+        "mean_predicted_prob": 0.5017,
+        "brier_score": 0.250143,
+        "brier_ref_score": 0.248237,
+        "brier_skill_score": -0.007677,
+        "expected_calibration_error_ece": 0.043654,
+        "calibration_slope": null,
+        "calibration_intercept": null,
+        "log_loss": 0.693433
+      },
+      "logistic_model": {
+        "sample_size": 4978,
+        "empirical_win_rate": 0.458,
+        "mean_predicted_prob": 0.5016,
+        "brier_score": 0.251021,
+        "brier_ref_score": 0.248237,
+        "brier_skill_score": -0.011212,
+        "expected_calibration_error_ece": 0.043611,
+        "calibration_slope": -0.1643,
+        "calibration_intercept": 0.4591,
+        "log_loss": 0.695191
+      }
+    }
+  }
+}

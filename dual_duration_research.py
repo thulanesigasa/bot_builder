@@ -98,11 +98,11 @@ class DurationMetricSummary:
     resolved_outcomes: int
     wins: int
     losses: int
-    empirical_win_rate: float
-    mean_predicted_prob: float
-    calibration_error_ece: float
-    brier_score: float
-    brier_skill_score: float
+    empirical_win_rate: Optional[float]
+    mean_predicted_prob: Optional[float]
+    calibration_error_ece: Optional[float]
+    brier_score: Optional[float]
+    brier_skill_score: Optional[float]
     break_even_hurdle: float
     stake: float
     total_payout: float
@@ -1650,12 +1650,44 @@ class DualDurationEvaluator:
             metrics_cohort_c[label] = summary_c
 
         # 4. COHORT D — INDEPENDENT CONFIRMATION (Untouched Future Preregistered Sessions)
+        # Never reuse exploratory measurements as confirmation results. If no preregistered
+        # confirmation observations exist, Cohort D contains 0 observations and unestimated metrics.
         metrics_cohort_d: Dict[str, DurationMetricSummary] = {}
         for label, dur, direct, obs_subset, payout, hurdle, ts_list in configs:
-            summary_d = copy.deepcopy(metrics_cohort_c[label])
-            summary_d.evidence_class = EvidenceClass.HISTORICAL_REPLAY.value
-            summary_d.is_economically_positive = False
-            summary_d.verdict = "PREREGISTRATION_REQUIRED_FOR_CONFIRMATION"
+            summary_d = DurationMetricSummary(
+                duration=dur,
+                direction=direct,
+                contract_label=label,
+                total_predictions=0,
+                resolved_outcomes=0,
+                wins=0,
+                losses=0,
+                empirical_win_rate=None,
+                mean_predicted_prob=None,
+                calibration_error_ece=None,
+                brier_score=None,
+                brier_skill_score=None,
+                break_even_hurdle=hurdle,
+                stake=0.0,
+                total_payout=0.0,
+                ordinary_ev=None,
+                ordinary_ev_per_dollar=None,
+                predicted_ordinary_ev=None,
+                retrospective_realized_return=None,
+                conservative_ev_bootstrap=None,
+                bootstrap_uncertainty_status="INSUFFICIENT_SAMPLE",
+                bootstrap_sensitivity_summary={},
+                win_rate_ci_95=(0.0, 0.0),
+                raw_quote_coverage_pct=0.0,
+                chronological_quote_coverage_pct=0.0,
+                economic_quote_coverage_pct=0.0,
+                execution_quality_coverage_pct=0.0,
+                quote_availability_pct=0.0,
+                evaluation_mode=EvaluationMode.QUOTE_VERIFIED.value,
+                evidence_class=EvidenceClass.HISTORICAL_REPLAY.value,
+                is_economically_positive=False,
+                verdict="PREREGISTRATION_REQUIRED_FOR_CONFIRMATION",
+            )
             metrics_cohort_d[label] = summary_d
 
         cohort_metrics = {

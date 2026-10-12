@@ -1,0 +1,626 @@
+{
+  "R_100": {
+    "1": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "3c734b96-185d-b58b-0bd3-d8479eab51f5",
+        "longcode": "Win payout if Volatility 100 Index after 1 tick is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "55b77695-66b8-1707-afee-caac31d34a63",
+        "longcode": "Win payout if Volatility 100 Index after 1 tick is strictly lower than entry spot."
+      }
+    },
+    "2": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "5b67bf7e-d9e0-c86c-572d-608792cdb093",
+        "longcode": "Win payout if Volatility 100 Index after 2 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "335fc13c-f211-cfa7-259c-add2dc6f602c",
+        "longcode": "Win payout if Volatility 100 Index after 2 ticks is strictly lower than entry spot."
+      }
+    },
+    "3": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "63b5136a-d807-ff59-2b81-4f02937eabee",
+        "longcode": "Win payout if Volatility 100 Index after 3 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "68d3874c-964c-0495-8ee2-6050b73cb578",
+        "longcode": "Win payout if Volatility 100 Index after 3 ticks is strictly lower than entry spot."
+      }
+    },
+    "5": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "3831e0d6-d6df-40c2-0e7d-f30ab0412e21",
+        "longcode": "Win payout if Volatility 100 Index after 5 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "6e48898d-5000-d3ff-23de-d0f7ed9989b1",
+        "longcode": "Win payout if Volatility 100 Index after 5 ticks is strictly lower than entry spot."
+      }
+    },
+    "10": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "8cad78fd-fb03-2e44-9622-276159589fde",
+        "longcode": "Win payout if Volatility 100 Index after 10 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "cb95def4-9390-ad9b-c1dc-4cb68fa639e5",
+        "longcode": "Win payout if Volatility 100 Index after 10 ticks is strictly lower than entry spot."
+      }
+    },
+    "20": {
+      "CALL": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      },
+      "PUT": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      }
+    }
+  },
+  "1HZ100V": {
+    "1": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "8154b884-8824-c1da-fcba-ef060cecd289",
+        "longcode": "Win payout if Volatility 100 (1s) Index after 1 tick is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "055ba52b-3430-05ae-793b-4dd5ad957f3c",
+        "longcode": "Win payout if Volatility 100 (1s) Index after 1 tick is strictly lower than entry spot."
+      }
+    },
+    "2": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "e4248b53-86a5-1164-9a2f-5b588606d24b",
+        "longcode": "Win payout if Volatility 100 (1s) Index after 2 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "2a128cf6-62b6-85bb-e794-759b5e137c7a",
+        "longcode": "Win payout if Volatility 100 (1s) Index after 2 ticks is strictly lower than entry spot."
+      }
+    },
+    "3": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "d323fcf0-1b38-972d-90f2-90f342e78b14",
+        "longcode": "Win payout if Volatility 100 (1s) Index after 3 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "e7c1842c-efc9-0fec-3cdc-344771bfa255",
+        "longcode": "Win payout if Volatility 100 (1s) Index after 3 ticks is strictly lower than entry spot."
+      }
+    },
+    "5": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "6aea3c6c-c133-0254-bec4-a5725b9a4567",
+        "longcode": "Win payout if Volatility 100 (1s) Index after 5 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "eb9f4456-8e39-3676-bb66-36f68a902aff",
+        "longcode": "Win payout if Volatility 100 (1s) Index after 5 ticks is strictly lower than entry spot."
+      }
+    },
+    "10": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "e1f96832-73bc-7941-78e3-aef38c77f2a1",
+        "longcode": "Win payout if Volatility 100 (1s) Index after 10 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "9a23f347-4817-6364-c1e9-3161a97ea7a2",
+        "longcode": "Win payout if Volatility 100 (1s) Index after 10 ticks is strictly lower than entry spot."
+      }
+    },
+    "20": {
+      "CALL": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      },
+      "PUT": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      }
+    }
+  },
+  "R_75": {
+    "1": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "19950112-bc12-f6b0-8978-b52b1a83ad8f",
+        "longcode": "Win payout if Volatility 75 Index after 1 tick is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "953fb15c-ac07-3cf9-13d2-567490827509",
+        "longcode": "Win payout if Volatility 75 Index after 1 tick is strictly lower than entry spot."
+      }
+    },
+    "2": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "b4a392b1-b209-7610-3eb1-1921ccb80443",
+        "longcode": "Win payout if Volatility 75 Index after 2 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "8c37219d-d40d-f7f8-8ecd-2701188654a6",
+        "longcode": "Win payout if Volatility 75 Index after 2 ticks is strictly lower than entry spot."
+      }
+    },
+    "3": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "392ddde1-3609-f13d-4ff1-3c602eee3261",
+        "longcode": "Win payout if Volatility 75 Index after 3 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "6716e030-6439-9124-c177-af2bd2f17fd1",
+        "longcode": "Win payout if Volatility 75 Index after 3 ticks is strictly lower than entry spot."
+      }
+    },
+    "5": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "0822ba02-768b-8b22-b2d2-a60511728b63",
+        "longcode": "Win payout if Volatility 75 Index after 5 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "8284a912-8e0d-0437-9468-19877c34fd46",
+        "longcode": "Win payout if Volatility 75 Index after 5 ticks is strictly lower than entry spot."
+      }
+    },
+    "10": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "a8342b4f-23b3-213c-cd14-f0e047e7893c",
+        "longcode": "Win payout if Volatility 75 Index after 10 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "3c24de5b-ad24-22be-1383-c984a6334159",
+        "longcode": "Win payout if Volatility 75 Index after 10 ticks is strictly lower than entry spot."
+      }
+    },
+    "20": {
+      "CALL": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      },
+      "PUT": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      }
+    }
+  },
+  "1HZ75V": {
+    "1": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "f8a9a449-e132-dfc2-498f-372bec8599f3",
+        "longcode": "Win payout if Volatility 75 (1s) Index after 1 tick is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "c244ad28-08d4-f442-ee01-6ac4684caa4c",
+        "longcode": "Win payout if Volatility 75 (1s) Index after 1 tick is strictly lower than entry spot."
+      }
+    },
+    "2": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "1b8d921b-5153-435f-e561-a51a9d7874d4",
+        "longcode": "Win payout if Volatility 75 (1s) Index after 2 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "3fdd0926-a1a9-c074-84e8-cee06c2d552c",
+        "longcode": "Win payout if Volatility 75 (1s) Index after 2 ticks is strictly lower than entry spot."
+      }
+    },
+    "3": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "92d28fe0-936d-1ea3-ff4d-9cb4032fd8a4",
+        "longcode": "Win payout if Volatility 75 (1s) Index after 3 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "27c6afe6-b546-65bf-d5df-d84b42c422e5",
+        "longcode": "Win payout if Volatility 75 (1s) Index after 3 ticks is strictly lower than entry spot."
+      }
+    },
+    "5": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "777c1d88-6094-e678-fb3b-92440512b004",
+        "longcode": "Win payout if Volatility 75 (1s) Index after 5 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "5d63fe94-c087-04cc-6a40-3f1794e58645",
+        "longcode": "Win payout if Volatility 75 (1s) Index after 5 ticks is strictly lower than entry spot."
+      }
+    },
+    "10": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "03227c34-41e8-3268-3246-b346ce2e3a9f",
+        "longcode": "Win payout if Volatility 75 (1s) Index after 10 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "63daf628-4d37-63d3-49df-88ddf4b72de3",
+        "longcode": "Win payout if Volatility 75 (1s) Index after 10 ticks is strictly lower than entry spot."
+      }
+    },
+    "20": {
+      "CALL": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      },
+      "PUT": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      }
+    }
+  },
+  "R_50": {
+    "1": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "4833fdfe-1376-defd-6ddd-4f2f8338a40d",
+        "longcode": "Win payout if Volatility 50 Index after 1 tick is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "3896cc92-d606-3dc2-65ba-162779243fb2",
+        "longcode": "Win payout if Volatility 50 Index after 1 tick is strictly lower than entry spot."
+      }
+    },
+    "2": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "47641f43-e808-f311-0f27-0a93f3e4701d",
+        "longcode": "Win payout if Volatility 50 Index after 2 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "01f1a95d-45b2-7b60-6083-77a3f4235a28",
+        "longcode": "Win payout if Volatility 50 Index after 2 ticks is strictly lower than entry spot."
+      }
+    },
+    "3": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "65c634a4-e010-9cd1-a83c-bd4d17bc4876",
+        "longcode": "Win payout if Volatility 50 Index after 3 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "ee0f6ffe-61ec-0f33-5d38-c5721e44fe8d",
+        "longcode": "Win payout if Volatility 50 Index after 3 ticks is strictly lower than entry spot."
+      }
+    },
+    "5": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "7a301613-32d8-cf49-aa78-92f2e59bfff9",
+        "longcode": "Win payout if Volatility 50 Index after 5 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "22f18fcb-3de4-a2d3-11eb-84126c0d243f",
+        "longcode": "Win payout if Volatility 50 Index after 5 ticks is strictly lower than entry spot."
+      }
+    },
+    "10": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "763ff61e-56f1-9c9f-2e9d-62a3d57c1958",
+        "longcode": "Win payout if Volatility 50 Index after 10 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "3faa0b88-a460-6e04-28d1-7427dc1e177f",
+        "longcode": "Win payout if Volatility 50 Index after 10 ticks is strictly lower than entry spot."
+      }
+    },
+    "20": {
+      "CALL": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      },
+      "PUT": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      }
+    }
+  },
+  "1HZ50V": {
+    "1": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "f9e3a1f0-59ae-7167-9937-1334561a45a6",
+        "longcode": "Win payout if Volatility 50 (1s) Index after 1 tick is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "58474a77-7b35-4ea4-bb3e-047898df737c",
+        "longcode": "Win payout if Volatility 50 (1s) Index after 1 tick is strictly lower than entry spot."
+      }
+    },
+    "2": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "94fe9077-ab95-0aff-2f12-8b86adc7421a",
+        "longcode": "Win payout if Volatility 50 (1s) Index after 2 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "1217f48e-1b88-4ada-09f6-955c5fcb30b7",
+        "longcode": "Win payout if Volatility 50 (1s) Index after 2 ticks is strictly lower than entry spot."
+      }
+    },
+    "3": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "c21a0345-631b-4113-6ecb-abb240bf1f88",
+        "longcode": "Win payout if Volatility 50 (1s) Index after 3 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "00238a60-e257-f4e1-4e38-7f4de1c4f0fd",
+        "longcode": "Win payout if Volatility 50 (1s) Index after 3 ticks is strictly lower than entry spot."
+      }
+    },
+    "5": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "33910c33-ed73-0890-67ec-4fccbc4a2da2",
+        "longcode": "Win payout if Volatility 50 (1s) Index after 5 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "fa9ac7ae-3309-ca0f-81d7-c74308269299",
+        "longcode": "Win payout if Volatility 50 (1s) Index after 5 ticks is strictly lower than entry spot."
+      }
+    },
+    "10": {
+      "CALL": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "e7036313-6017-3053-697a-9afaa3d4dd1f",
+        "longcode": "Win payout if Volatility 50 (1s) Index after 10 ticks is strictly higher than entry spot."
+      },
+      "PUT": {
+        "status": "AVAILABLE",
+        "ask_price": 2.0,
+        "payout": 3.91,
+        "break_even": 0.5115,
+        "proposal_id": "41ed4302-3010-f436-0fbb-556c6060c0b6",
+        "longcode": "Win payout if Volatility 50 (1s) Index after 10 ticks is strictly lower than entry spot."
+      }
+    },
+    "20": {
+      "CALL": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      },
+      "PUT": {
+        "status": "REJECTED",
+        "error": "Number of ticks must be between 1 and 10.",
+        "code": "ContractBuyValidationError"
+      }
+    }
+  }
+}

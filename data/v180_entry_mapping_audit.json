@@ -1,0 +1,258 @@
+{
+  "stats": {
+    "R_100": {
+      "2t": {
+        "total": 4995,
+        "call_disagree": 1646,
+        "put_disagree": 1646
+      },
+      "3t": {
+        "total": 4994,
+        "call_disagree": 1335,
+        "put_disagree": 1335
+      },
+      "5t": {
+        "total": 4992,
+        "call_disagree": 1062,
+        "put_disagree": 1062
+      },
+      "10t": {
+        "total": 4987,
+        "call_disagree": 662,
+        "put_disagree": 662
+      }
+    },
+    "1HZ100V": {
+      "2t": {
+        "total": 4995,
+        "call_disagree": 1651,
+        "put_disagree": 1649
+      },
+      "3t": {
+        "total": 4994,
+        "call_disagree": 1314,
+        "put_disagree": 1314
+      },
+      "5t": {
+        "total": 4992,
+        "call_disagree": 1028,
+        "put_disagree": 1026
+      },
+      "10t": {
+        "total": 4987,
+        "call_disagree": 705,
+        "put_disagree": 705
+      }
+    },
+    "R_75": {
+      "2t": {
+        "total": 4995,
+        "call_disagree": 1621,
+        "put_disagree": 1621
+      },
+      "3t": {
+        "total": 4994,
+        "call_disagree": 1303,
+        "put_disagree": 1303
+      },
+      "5t": {
+        "total": 4992,
+        "call_disagree": 983,
+        "put_disagree": 983
+      },
+      "10t": {
+        "total": 4987,
+        "call_disagree": 695,
+        "put_disagree": 695
+      }
+    },
+    "1HZ75V": {
+      "2t": {
+        "total": 4995,
+        "call_disagree": 1712,
+        "put_disagree": 1712
+      },
+      "3t": {
+        "total": 4994,
+        "call_disagree": 1362,
+        "put_disagree": 1362
+      },
+      "5t": {
+        "total": 4992,
+        "call_disagree": 1068,
+        "put_disagree": 1068
+      },
+      "10t": {
+        "total": 4987,
+        "call_disagree": 709,
+        "put_disagree": 709
+      }
+    },
+    "R_50": {
+      "2t": {
+        "total": 4995,
+        "call_disagree": 1676,
+        "put_disagree": 1674
+      },
+      "3t": {
+        "total": 4994,
+        "call_disagree": 1329,
+        "put_disagree": 1329
+      },
+      "5t": {
+        "total": 4992,
+        "call_disagree": 967,
+        "put_disagree": 965
+      },
+      "10t": {
+        "total": 4987,
+        "call_disagree": 681,
+        "put_disagree": 681
+      }
+    },
+    "1HZ50V": {
+      "2t": {
+        "total": 4995,
+        "call_disagree": 1690,
+        "put_disagree": 1692
+      },
+      "3t": {
+        "total": 4994,
+        "call_disagree": 1376,
+        "put_disagree": 1374
+      },
+      "5t": {
+        "total": 4992,
+        "call_disagree": 1086,
+        "put_disagree": 1086
+      },
+      "10t": {
+        "total": 4987,
+        "call_disagree": 757,
+        "put_disagree": 759
+      }
+    }
+  },
+  "sample_records": [
+    {
+      "market": "R_100",
+      "contract": "CALL",
+      "contract_type": "CALL",
+      "duration_ticks": 2,
+      "signal_price": 1431.8983,
+      "forward_ticks": [
+        1431.4889,
+        1431.7454,
+        1433.0212,
+        1433.5968
+      ],
+      "v0_entry_spot": 1431.8983,
+      "v0_expiry_spot": 1431.7454,
+      "v0_outcome": 0,
+      "v1_entry_spot": 1431.4889,
+      "v1_expiry_spot": 1433.0212,
+      "v1_outcome": 1,
+      "outcomes_disagree": true
+    },
+    {
+      "market": "R_100",
+      "contract": "PUT",
+      "contract_type": "PUT",
+      "duration_ticks": 2,
+      "signal_price": 1431.8983,
+      "forward_ticks": [
+        1431.4889,
+        1431.7454,
+        1433.0212,
+        1433.5968
+      ],
+      "v0_entry_spot": 1431.8983,
+      "v0_expiry_spot": 1431.7454,
+      "v0_outcome": 1,
+      "v1_entry_spot": 1431.4889,
+      "v1_expiry_spot": 1433.0212,
+      "v1_outcome": 0,
+      "outcomes_disagree": true
+    },
+    {
+      "market": "R_100",
+      "contract": "CALL",
+      "contract_type": "CALL",
+      "duration_ticks": 2,
+      "signal_price": 1431.7454,
+      "forward_ticks": [
+        1433.0212,
+        1433.5968,
+        1432.498,
+        1431.9211
+      ],
+      "v0_entry_spot": 1431.7454,
+      "v0_expiry_spot": 1433.5968,
+      "v0_outcome": 1,
+      "v1_entry_spot": 1433.0212,
+      "v1_expiry_spot": 1432.498,
+      "v1_outcome": 0,
+      "outcomes_disagree": true
+    },
+    {
+      "market": "R_100",
+      "contract": "PUT",
+      "contract_type": "PUT",
+      "duration_ticks": 2,
+      "signal_price": 1431.7454,
+      "forward_ticks": [
+        1433.0212,
+        1433.5968,
+        1432.498,
+        1431.9211
+      ],
+      "v0_entry_spot": 1431.7454,
+      "v0_expiry_spot": 1433.5968,
+      "v0_outcome": 0,
+      "v1_entry_spot": 1433.0212,
+      "v1_expiry_spot": 1432.498,
+      "v1_outcome": 1,
+      "outcomes_disagree": true
+    },
+    {
+      "market": "R_100",
+      "contract": "CALL",
+      "contract_type": "CALL",
+      "duration_ticks": 2,
+      "signal_price": 1433.5968,
+      "forward_ticks": [
+        1432.498,
+        1431.9211,
+        1433.5433,
+        1432.8699
+      ],
+      "v0_entry_spot": 1433.5968,
+      "v0_expiry_spot": 1431.9211,
+      "v0_outcome": 0,
+      "v1_entry_spot": 1432.498,
+      "v1_expiry_spot": 1433.5433,
+      "v1_outcome": 1,
+      "outcomes_disagree": true
+    },
+    {
+      "market": "R_100",
+      "contract": "PUT",
+      "contract_type": "PUT",
+      "duration_ticks": 2,
+      "signal_price": 1433.5968,
+      "forward_ticks": [
+        1432.498,
+        1431.9211,
+        1433.5433,
+        1432.8699
+      ],
+      "v0_entry_spot": 1433.5968,
+      "v0_expiry_spot": 1431.9211,
+      "v0_outcome": 1,
+      "v1_entry_spot": 1432.498,
+      "v1_expiry_spot": 1433.5433,
+      "v1_outcome": 0,
+      "outcomes_disagree": true
+    }
+  ]
+}

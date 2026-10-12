@@ -1,93 +1,68 @@
-# Deriv Quantitative Research & Dual-Duration Statistical Validation Framework (V1.7.4.5)
+# Deriv Multi-Market Rise/Fall Quantitative Edge Discovery & Research Framework (V1.8.0)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://github.com/thulanesigasa/bot_builder)
-[![Testing](https://img.shields.io/badge/pytest-349%20passed%20(100%25)-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Testing](https://img.shields.io/badge/pytest-372%20passed%20(100%25)-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v1%2Foptions%20Verified-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Safety](https://img.shields.io/badge/Safety-Real--Money%20Trading%20DISABLED-0F172A)](https://github.com/thulanesigasa/bot_builder)
-[![Dual Duration](https://img.shields.io/badge/Architecture-Dual--Duration%202T%20%7C%205T-0284C7)](https://github.com/thulanesigasa/bot_builder)
-[![Evidence Authority](https://img.shields.io/badge/Evidence%20Authority-Strict%20Causal%20Verified-brightgreen.svg)](https://github.com/thulanesigasa/bot_builder)
-[![Broker Mapping](https://img.shields.io/badge/Broker%20Mapping-MAPPING__V1__NEXT__TICK-purple.svg)](https://github.com/thulanesigasa/bot_builder)
-[![Execution Quality](https://img.shields.io/badge/Execution%20Quality-4--Cohort%20Reconciled-blueviolet.svg)](https://github.com/thulanesigasa/bot_builder)
-[![Verdict](https://img.shields.io/badge/Verdict-NO__VALIDATED__POSITIVE__EV__EDGE-lightgrey.svg)](https://github.com/thulanesigasa/bot_builder)
-[![Version](https://img.shields.io/badge/Version-V1.7.4.5%20Evidence%20Authority-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Multi-Market](https://img.shields.io/badge/Markets-6%20Target%20Indices%20(V100%2C%20V75%2C%20V50)-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Contract](https://img.shields.io/badge/Contracts-Rise%2FFall%20(CALL%2FPUT)-blue.svg)](https://github.com/thulanesigasa/bot_builder)
+[![Multiple Testing](https://img.shields.io/badge/Hypothesis%20Control-Benjamini--Hochberg%20FDR%20(48%20Hypotheses)-purple.svg)](https://github.com/thulanesigasa/bot_builder)
+[![Verdict](https://img.shields.io/badge/Verdict-EXPLORATORY__CANDIDATE__IDENTIFIED-yellow.svg)](https://github.com/thulanesigasa/bot_builder)
+[![Version](https://img.shields.io/badge/Version-V1.8.0%20Multi--Market%20Rise%2FFall-0284C7)](https://github.com/thulanesigasa/bot_builder)
 
-A quantitative financial research, machine-learning inference, and real-market forward observation system engineered for Deriv synthetic index contracts—specifically modeling Only Ups (`RUNHIGH`) and Only Downs (`RUNLOW`) on the Volatility 75 Index (`R_75`).
+A quantitative financial research, probabilistic machine-learning inference, and market-data forward observation system engineered for Deriv synthetic volatility index markets.
 
-V1.7.4.5 establishes the complete Prospective Evidence Authority specification, resolves the official Deriv broker contract entry mapping (`MAPPING_V1_NEXT_TICK_ENTRY`), reconciles execution-quality quote coverage into four distinct cohorts (A, B, C, D), and performs an independent forensic re-audit of benchmark forward sessions. Real-money live trade execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`).
+Release V1.8.0 evolves `bot_builder` from single-market Only Ups/Only Downs modeling into a multi-market Rise/Fall (`CALL` / `PUT`) edge-discovery platform spanning six synthetic volatility markets:
+1. `R_100` — Volatility 100 Index (Standard 2s ticks)
+2. `1HZ100V` — Volatility 100 (1s) Index (1s ticks)
+3. `R_75` — Volatility 75 Index (Standard 2s ticks)
+4. `1HZ75V` — Volatility 75 (1s) Index (1s ticks)
+5. `R_50` — Volatility 50 Index (Standard 2s ticks)
+6. `1HZ50V` — Volatility 50 (1s) Index (1s ticks)
 
----
-
-## The Central Research Question: 2-Tick vs. 5-Tick
-
-> **Does a two-tick contract provide more reliable, economically profitable prediction opportunities than the existing five-tick contract?**
-
-### The Empirical Finding
-**A higher winning frequency does NOT imply economic profitability.**
-- **Winning Frequency**: 2-Tick contracts win approximately **25.67%** of the time (7x more frequently than 5-tick contracts at **3.63%**).
-- **Payout Asymmetry**: Deriv's total payout on a $2.00 stake is **$7.63** for 2 ticks versus **$61.07** for 5 ticks.
-- **The Economic Hurdle**: The break-even probability for 2 ticks is **26.212%**, which is strictly higher than both the empirical base rate (25.34%) and observed live win rates (24.69% - 25.48%).
-- **Economic Return**: The unconditional 2-tick contract produces an average loss of **-$0.0815** to **-$0.1960** per $2.00 stake.
-- **Uncertainty Lower Bound**: When dependence-aware moving-block bootstrap uncertainty is applied, all configurations produce negative conservative expected values (-$0.2124 to -$0.8984).
-- **Authoritative Verdict**: Authoritative Positive-EV Evidence Ladder Level 0 (`NO_VALIDATED_POSITIVE_EV_EDGE`).
+Operating mode: **SHADOW**, strictly non-purchasing. Real-money live trade execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`), and all generated decisions remain `NO_TRADE`.
 
 ---
 
-## Canonical Contract Execution Lifecycles (V1.7.4.5)
+## Architecture & System Overview
 
-The framework centrally supports configurable monotonic contract durations:
-
-### 1. Two-Tick Lifecycle (2T - MAPPING_V1_NEXT_TICK_ENTRY)
 ```text
-Signal detected at tick i (Epoch E_sig, Price P_sig)
-       |
-Order submitted & processed (Disk commitment at E_commit)
-       |
-Entry Spot S_0 = tick i + 1 (First tick after processing, Epoch E_entry > E_commit)
-       |
-  Step 1: S_0 -> S_1 (tick i + 2)
-  Step 2: S_1 -> S_2 (tick i + 3, Expiry Spot)
+                           V1.8.0 MULTI-MARKET QUANTITATIVE RESEARCH PLATFORM
+                                                  |
+         +-------------------+--------------------+--------------------+--------------------+
+         |                   |                    |                    |                    |
+         v                   v                    v                    v                    v
+  MARKET DISCOVERY    RISE/FALL CONTRACTS   PROBABILISTIC MODELS  QUOTE ECONOMICS      MULTIPLE TESTING
+  +-----------------+ +-------------------+ +-------------------+  +------------------+ +------------------+
+  |6 Target Markets | |CALL: Strictly Higher| |Causal Features:   |  |Ask: $2.00        | |48 Hypotheses     |
+  |Pip Precision 2/4| |PUT: Strictly Lower  | Returns, Momentum,  |  |Payout: $3.91     | Benjamini-Hochberg |
+  |Durations 1-10t  | |Tie: Strict LOSS (0) | Realized Volatility |  |Hurdle: 51.15%    | FDR Control        |
+  |20t: Unsupported | |V1 Next-Tick Entry   | Chrono Purge/Embargo|  |Cohort A/B/C/D    | MBB 95% Bound      |
+  +-----------------+ +-------------------+ +-------------------+  +------------------+ +------------------+
 ```
-- **RUNHIGH_2T**: Wins iff $S_0 < S_1 < S_2$ (both movements strictly increase).
-- **RUNLOW_2T**: Wins iff $S_0 > S_1 > S_2$ (both movements strictly decrease).
-- **Strict Equality Loss**: If $S_0 = S_1$ or $S_1 = S_2$, the contract loses.
-- **Reversal Dual Loss**: If $S_0 < S_1$ and $S_1 > S_2$, both RUNHIGH and RUNLOW lose.
-
-### 2. Five-Tick Lifecycle (5T - MAPPING_V1_NEXT_TICK_ENTRY)
-```text
-Signal detected at tick i
-       |
-Order submitted & processed
-       |
-Entry Spot S_0 = tick i + 1 (First tick after processing)
-       |
-  Step 1: S_0 -> S_1 (tick i + 2)
-  Step 2: S_1 -> S_2 (tick i + 3)
-  Step 3: S_2 -> S_3 (tick i + 4)
-  Step 4: S_3 -> S_4 (tick i + 5)
-  Step 5: S_4 -> S_5 (tick i + 6, Expiry Spot)
-```
-- **RUNHIGH_5T**: Wins iff $S_0 < S_1 < S_2 < S_3 < S_4 < S_5$ (all 5 movements strictly increase).
-- **RUNLOW_5T**: Wins iff $S_0 > S_1 > S_2 > S_3 > S_4 > S_5$ (all 5 movements strictly decrease).
 
 ---
 
-## Prospective Evidence & Four-Cohort Architecture (V1.7.4.5)
+## Key Research Findings in V1.8.0
 
-```text
-                           PROSPECTIVE EVIDENCE PIPELINE (V1.7.4.5)
-                                              |
-        +-------------------+-------------------+-------------------+-------------------+
-        |                   |                   |                   |                   |
-        v                   v                   v                   v                   v
-EVIDENCE AUTHORITY    BROKER MAPPING       4-COHORT ECONOMICS   RECONSTRUCTION AUDIT  SAFETY ENCLOSURE
-+------------------+  +-----------------+  +------------------+ +-------------------+ +---------------------+
-|Strict Inequality |  |MAPPING_V1: S_0  |  |Cohort A: All Res | |Raw Tick Replay    | |Hardcoded Invariant  |
-|T_feat <= T_inf   |  |Next Tick Entry  |  |Cohort B: Quoted  | |Zero Discrepancies | |LIVE_EXEC_DISABLED=1 |
-|T_commit < T_entry|  |Provenance Stamped| |Cohort C: Exec Q  | |Cross-Table Join   | |Preflight Environment|
-|No Null Defaults  |  |V1 vs V0 Audited |  |Cohort D: Conf    | |Monotonic Check    | |NO_TRADE Enforced    |
-+------------------+  +-----------------+  +------------------+ +-------------------+ +---------------------+
-```
+### 1. Market Capability Matrix
+- **Tick Durations 1 to 10**: Fully supported with live proposal quotes across all six markets.
+- **Duration 20 Ticks**: Deriv contract rules limit tick contracts to a maximum of 10 ticks (`Number of ticks must be between 1 and 10`). Rejection is classified as `UNSUPPORTED_CONTRACT_COMBINATION` and not a strategy failure.
+
+### 2. Rise/Fall Broker Semantics & Equality
+- **Strict Inequality Verified**: Deriv longcode confirms `CALL` requires strictly higher than entry spot and `PUT` requires strictly lower. Equal prices ($S_{\text{expiry}} == S_{\text{entry}}$) result in a **broker loss (0) for both contracts**.
+- **Entry Mapping Audit (Issue 4.2)**: Independent verification across 5,000 raw ticks per market shows that **32.5% to 34.3% of 2-tick contracts and 19.4% to 21.8% of 5-tick contracts reverse outcomes** between V0 signal-tick and V1 next-tick entry. V1 is maintained as canonical broker proxy.
+
+### 3. Probabilistic Calibration
+- **Brier Scores Near 0.250**: Across all markets, Brier scores range between 0.2497 and 0.2501, showing that raw tick movements approximate a Martingale difference sequence.
+- **Brier Skill Scores**: Regularized logistic models achieve Brier Skill Scores near zero ($[-0.002, +0.00005]$), confirming that short-term returns and momentum provide minimal unconditional predictive edge.
+
+### 4. Hypothesis Testing & Multiple-Testing Control
+- **48 Predefined Hypotheses**: 6 markets $\times$ 4 durations (2, 3, 5, 10 ticks) $\times$ 2 directions (`CALL`, `PUT`).
+- **Benjamini-Hochberg FDR ($\alpha = 0.05$)**: Controls family-wise false discoveries.
+- **Verdict Summary**: 28 Hypotheses Rejected (Negative EV), 17 Inconclusive (Insufficient bootstrap lower bound), 3 Exploratory Candidates Identified (`HYP_R_100_10T_PUT`, `HYP_1HZ50V_10T_PUT`, `HYP_1HZ50V_5T_PUT`).
+- **Research Status**: `EXPLORATORY_CANDIDATE_IDENTIFIED` / `CONFIRMATION_READY`. Candidates require untouched prospective confirmation before validation.
 
 ---
 
@@ -96,94 +71,76 @@ EVIDENCE AUTHORITY    BROKER MAPPING       4-COHORT ECONOMICS   RECONSTRUCTION A
 ```text
 bot_builder/
 ├── config.py                                        # Global application configuration & safety preflight
+├── market_discovery.py                              # Dynamic market discovery, 6 symbols, capability matrix (V1.8.0)
+├── contract_rise_fall.py                            # Canonical Rise/Fall contract specification & outcome resolver (V1.8.0)
+├── model_rise_fall.py                               # Probabilistic modeling, causal features, Brier calibration (V1.8.0)
+├── rise_fall_research.py                            # 48-hypothesis edge discovery, MBB bootstrap, BH-FDR engine (V1.8.0)
 ├── contract_specification.py                        # Canonical contract specs with mapping versions (V1.7.4.5)
-├── contract_model.py                                # Duration-aware contract label computer
-├── feature_schema.py                                # Discrete market state classification
-├── model_artifact.py                                # Model artifact serialization & SHA-256
-├── model_manager.py                                 # Multi-model discovery & duration filtering
-├── model_2tick.py                                   # Independent 2-tick model trainer & OOS Brier
-├── probability.py                                   # Statistical distributions & Wilson score intervals
-│
-├── quote_recorder.py                                # Composite quote record generator & break-even computer
-├── quote_database.py                                # Indexed SQLite proposal quote storage with composite IDs
-├── quote_engine.py                                  # Quoting engine with dual-duration polling support
-│
-├── outcome_resolver.py                              # Duration-aware multi-pending outcome resolver
-├── forward_journal.py                               # Pre-outcome timestamped prediction & outcome journal
-├── forward_observer.py                              # PairedForwardObserver with sub-ms timestamp injection
-├── forward_session.py                               # Session registry and lifecycle states
-├── session_reconciler.py                            # Multi-index 6-dimension audit reconciler
-├── run_forward_session.py                           # Forward research CLI runner with preflight checks
-├── forward_collection_service.py                    # Live WebSocket collector with dual-duration support
-│
-├── decision_gate.py                                 # Centralized 11-gate paper decision gate
-├── forward_confirmation_gate.py                     # Authoritative confirmation gate
-├── confirmation_specification.py                    # Pre-registered confirmation manifests
-├── risk.py                                          # Institutional persistent risk engine
-│
-├── strategy_discovery.py                            # Advisory-only hypothesis engine with Monotonic BH
-├── dual_duration_research.py                        # 4-cohort metrics, prospective evaluator & causal validation
-├── research_metrics_engine.py                       # Research metrics aggregation engine
-│
-├── data/
-│   ├── R_75_master.csv                              # Canonical training dataset (43,184 ticks)
-│   ├── R_75_ticks.csv                               # Live market stream (898 ticks)
-│   ├── deriv_2t_5t_availability.json                # Reconciled live Deriv API proposal records
-│   ├── forward_predictions.db                       # SQLite prediction & outcome journal
-│   ├── quotes.db                                    # SQLite proposal quotes database
-│   ├── sessions.db                                  # SQLite session registry
-│   ├── risk_state.db                                # SQLite persistent risk limits
-│   ├── v1744_session_evidence.json                  # Previous V1.7.4.4 prospective evidence
-│   └── v1745_session_evidence.json                  # V1.7.4.5 sanitized machine-readable evidence package
-│
-├── models/
-│   ├── M_R_75_5TICK_20261008_132512.json            # Preserved authoritative 5-tick frozen model
-│   └── M_R_75_2TICK_20261011_120000.json            # Preserved independent 2-tick frozen model
-│
-├── tests/
-│   ├── test_v1745_evidence_authority_and_contract_mapping.py # 21 V1.7.4.5 evidence authority & mapping tests
-│   ├── test_v1744_schema_repair_and_reconstruction.py # 8 V1.7.4.4 schema repair & regression tests
-│   ├── test_v1743_strict_provenance_and_live_shadow.py # 16 V1.7.4.3 strict provenance & shadow tests
-│   ├── test_v1742_quote_economics_and_paired_shadow.py # 16 V1.7.4.2 regression & adversarial tests
-│   ├── test_v1741_integrity_and_reconciliation.py   # 14 V1.7.4.1 regression & adversarial tests
-│   ├── test_v174_dual_duration_and_discovery.py     # 17 V1.7.4 regression tests
-│   ├── test_v173_chronology_and_audit.py            # V1.7.3 chronology & audit tests
-│   ├── test_v1721_reconciliation.py                 # V1.7.2.1 integrity & confirmation tests
-│   └── ... (349 total passing tests)
-│
-└── Authoritative Research Reports:
-    ├── V1_7_4_5_PROSPECTIVE_AUTHORITY_AUDIT.md      # Timestamp field requirements, clock domains, and causality
-    ├── V1_7_4_5_DERIV_CONTRACT_MAPPING_AUDIT.md     # Official broker contract rules & V1 vs V0 sensitivity
-    ├── V1_7_4_5_EXECUTION_QUALITY_ECONOMICS.md      # 4-cohort economic results across all configurations
-    ├── V1_7_4_5_30_MIN_SESSION_REAUDIT.md           # Independent re-audit of session 1cc84e31-5e48-4287-b94d
-    ├── V1_7_4_5_STRATEGY_CONFIRMATION_READINESS.md  # Hypothesis evaluation & Level 0 Evidence Ladder verdict
-    ├── V1_7_4_5_STATISTICAL_POWER_PLAN.md           # Autocorrelation analysis & multi-session sample size plan
-    └── V1_7_4_5_RELEASE_VALIDATION_REPORT.md        # Comprehensive release validation & test results
+├── dual_duration_research.py                        # Paired dual-duration research engine & empty Cohort D (V1.8.0)
+├── session_reconciler.py                            # Automated session reconciler with separated cohort accounting (V1.8.0)
+├── forward_session.py                               # Prospective session lifecycle & SQLite registry
+├── probability.py                                   # Statistical distributions, Wilson score intervals
+├── data/                                            # Raw tick streams, SQLite databases, and evidence exports
+│   ├── R_100_ticks.csv                              # Volatility 100 Index raw ticks (200,000 ticks)
+│   ├── 1HZ100V_ticks.csv                            # Volatility 100 (1s) Index raw ticks (200,000 ticks)
+│   ├── R_75_master.csv                              # Volatility 75 Index raw ticks (43,184 ticks)
+│   ├── 1HZ75V_ticks.csv                             # Volatility 75 (1s) Index raw ticks (200,000 ticks)
+│   ├── R_50_ticks.csv                               # Volatility 50 Index raw ticks (200,000 ticks)
+│   ├── 1HZ50V_ticks.csv                             # Volatility 50 (1s) Index raw ticks (200,000 ticks)
+│   ├── forward_predictions.db                       # Journaled prospective predictions
+│   ├── quotes.db                                    # Genuine Deriv proposal quotes
+│   ├── sessions.db                                  # Forward session registry
+│   ├── v180_multi_market_evidence.json              # V1.8.0 machine-readable evidence export package
+│   ├── v180_live_proposal_capabilities.json         # Live WebSocket proposal capability matrix
+│   ├── v180_entry_mapping_audit.json                # V0 vs V1 entry mapping discrepancy statistics
+│   ├── v180_multi_market_data_audit.json            # 6-market stream continuity audit
+│   └── v180_model_comparison.json                   # Cross-market model calibration benchmarks
+├── tests/                                           # Automated regression test suite
+│   ├── test_v180_multi_market_rise_fall.py          # V1.8.0 multi-market Rise/Fall comprehensive tests (23 tests)
+│   ├── test_v1745_evidence_authority_and_contract_mapping.py
+│   ├── test_v173_chronology_and_settlement.py
+│   ├── test_v162_data_integrity.py
+│   └── ...                                          # Total 372 automated passing tests
+├── V1_8_0_MARKET_CAPABILITY_MATRIX.md               # 6-market capability matrix report
+├── V1_8_0_RISE_FALL_CONTRACT_AUDIT.md               # Rise/Fall broker semantics & entry mapping audit
+├── V1_8_0_MULTI_MARKET_DATA_AUDIT.md                # 1,043,184-tick data & clock integrity audit
+├── V1_8_0_MODEL_COMPARISON.md                       # Out-of-sample model calibration & Brier comparison
+├── V1_8_0_QUOTE_ECONOMICS.md                        # Real proposal quote economics & break-even hurdle
+├── V1_8_0_EDGE_DISCOVERY_REPORT.md                  # 48-hypothesis multiple testing & candidate ranking
+├── V1_8_0_FORWARD_VALIDATION_REPORT.md              # SHADOW session telemetry & empty Cohort D validation
+├── V1_8_0_RELEASE_VALIDATION_REPORT.md              # Complete release validation & test pass certification
+└── README.md                                        # System documentation & architectural reference
 ```
 
 ---
 
-## Test Suite Execution
+## Running the System
 
-Execute the full automated test suite:
-
+### 1. Execute Regression Tests
 ```bash
 python -m pytest -q
 ```
+*Expected Output: `372 passed in ~73s (100% green)`*
 
-Expected result:
-```text
-349 passed in ~72s (100% green)
+### 2. Generate Market Capability Matrix
+```bash
+python -c "from market_discovery import MarketDiscovery; print(MarketDiscovery().export_capability_matrix_markdown())"
+```
+
+### 3. Run Multi-Market Edge Discovery
+```bash
+python scratch/run_edge_discovery.py
 ```
 
 ---
 
-## Permanent Safety Invariants
+## Safety & Research Integrity Invariants
 
-1. **`LIVE_EXECUTION_DISABLED = True`**: Hardcoded compile-time invariant. Real-money purchases are permanently disabled across all modules.
-2. **Startup Safety Preflight**: System blocks execution if any live trading environment variable (`DERIV_LIVE_EXECUTION`, `DERIV_REAL_EXECUTION`, `DERIV_ACCOUNT_TYPE=real`) is detected.
-3. **No Real-Money Endpoints**: The software contains zero real-money order routing code.
-4. **`IS_ADVISORY_ONLY = True`**: AI strategy discovery is locked behind an advisory firewall.
-5. **Authoritative NO_TRADE**: Every observation in SHADOW mode resolves to `decision: NO_TRADE`.
-6. **Strict 3-Way Outcomes**: Missing or unresolved outcomes are marked `UNAVAILABLE` and never coerced to losses.
-7. **No Fallback Probabilities**: Model probabilities must be authentic floating-point values; random-walk fallbacks are prohibited.
+1. **`LIVE_EXECUTION_DISABLED = True`**: Hardcoded compile-time constant across all research modules.
+2. **`NO_TRADE`**: All generated decision signals remain strictly advisory and non-purchasing.
+3. **No Automatic Confirmation Promotion**: Exploratory candidates remain frozen and unconfirmed until verified on prospective data recorded strictly after preregistration.
+4. **Honest Reporting**: When no statistically credible edge survives conservative bootstrap bounds and FDR correction, the authoritative result is reported as `NO_VALIDATED_POSITIVE_EV_EDGE`.
+
+---
+
+*Release V1.8.0 Quantitative Research Platform — Certified 100% Green*

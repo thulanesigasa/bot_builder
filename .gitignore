@@ -24,3 +24,6 @@ venv.bak/
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Scratch and temp files
+scratch/

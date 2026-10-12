@@ -115,6 +115,15 @@ class ReconciliationReport:
     missing_response_time_errors: int = 0
     stale_quote_errors: int = 0
 
+    # Granular Cohort Accounting (V1.8.0 Section 4.1)
+    unique_decision_epochs: int = 0
+    duration_specific_predictions: int = 0
+    directional_candidate_evaluations: int = 0
+    unique_valid_proposal_quotes: int = 0
+    per_direction_eligible_matches: Dict[str, int] = field(default_factory=dict)
+    union_eligible_prediction_ids_count: int = 0
+    intersection_eligible_prediction_ids_count: int = 0
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "session_id": self.session_id,
@@ -122,6 +131,15 @@ class ReconciliationReport:
             "status": self.status,
             "is_verified": self.is_verified,
             "reconciled_at_utc": self.reconciled_at_utc,
+            "cohort_accounting": {
+                "unique_decision_epochs": self.unique_decision_epochs,
+                "duration_specific_predictions": self.duration_specific_predictions,
+                "directional_candidate_evaluations": self.directional_candidate_evaluations,
+                "unique_valid_proposal_quotes": self.unique_valid_proposal_quotes,
+                "per_direction_eligible_matches": self.per_direction_eligible_matches,
+                "union_eligible_prediction_ids_count": self.union_eligible_prediction_ids_count,
+                "intersection_eligible_prediction_ids_count": self.intersection_eligible_prediction_ids_count,
+            },
             "ticks": {
                 "session_counter_ticks": self.session_counter_ticks,
                 "live_ticks": self.live_ticks,
@@ -216,7 +234,14 @@ class ReconciliationReport:
             f"  Live Deriv Source : {self.is_live_deriv_provenance}",
             f"  Chronology Errors : {self.chronology_errors}",
             f"  Future Quotes     : {self.future_quote_errors}",
-            f"  Missing Resp Time : {self.missing_response_time_errors}",
+            "--- COHORT ACCOUNTING (V1.8.0 SECTION 4.1) ---",
+            f"  Decision Epochs   : {self.unique_decision_epochs}",
+            f"  Duration Preds    : {self.duration_specific_predictions}",
+            f"  Directional Cands : {self.directional_candidate_evaluations}",
+            f"  Valid Quotes      : {self.unique_valid_proposal_quotes}",
+            f"  Eligible Matches  : {self.per_direction_eligible_matches}",
+            f"  Union Eligible    : {self.union_eligible_prediction_ids_count}",
+            f"  Intersect Eligible: {self.intersection_eligible_prediction_ids_count}",
         ]
         if self.issues:
             lines.append("--- RECONCILIATION ISSUES ---")
@@ -515,6 +540,52 @@ class SessionReconciler:
             if entry_ep and expiry_ep and expiry_ep < entry_ep:
                 chronology_errors += 1
 
+        # Granular Cohort Accounting (V1.8.0 Section 4.1)
+        unique_decision_epochs = len({
+            p.get("decision_timestamp") or p.get("timestamp")
+            for p in preds
+            if (p.get("decision_timestamp") or p.get("timestamp")) is not None
+        })
+        duration_specific_predictions = total_preds
+        directional_candidate_evaluations = total_preds * 2
+
+        valid_quotes_set = {
+            str(q.get("proposal_id"))
+            for q in session_quotes
+            if q.get("proposal_id") and float(q.get("stake") or 0.0) > 0 and float(q.get("total_payout") or 0.0) > 0
+        }
+        unique_valid_proposal_quotes = len(valid_quotes_set)
+
+        up_eligible_ids = set()
+        down_eligible_ids = set()
+        for p in preds:
+            pid = str(p.get("prediction_id"))
+            has_up = (p.get("runhigh_ask") is not None and float(p.get("runhigh_ask") or 0) > 0)
+            has_down = (p.get("runlow_ask") is not None and float(p.get("runlow_ask") or 0) > 0)
+            qid = str(p.get("quote_id") or "")
+            if qid:
+                candidate_quotes = quotes_by_record_id.get(qid, []) or quotes_by_proposal_id.get(qid, []) or quotes_by_db_id.get(qid, [])
+                for cq in candidate_quotes:
+                    ct = cq.get("contract_type", "").upper()
+                    if "HIGH" in ct or "CALL" in ct:
+                        has_up = True
+                    elif "LOW" in ct or "PUT" in ct:
+                        has_down = True
+                    else:
+                        has_up = True
+                        has_down = True
+            if has_up:
+                up_eligible_ids.add(pid)
+            if has_down:
+                down_eligible_ids.add(pid)
+
+        per_direction_eligible_matches = {
+            "CALL_OR_RUNHIGH": len(up_eligible_ids),
+            "PUT_OR_RUNLOW": len(down_eligible_ids),
+        }
+        union_eligible_prediction_ids_count = len(up_eligible_ids.union(down_eligible_ids))
+        intersection_eligible_prediction_ids_count = len(up_eligible_ids.intersection(down_eligible_ids))
+
         # 7. Evaluate Specific Reconciliation Rules
         status = RECON_STATUS_RECONCILED
 
@@ -695,6 +766,13 @@ class SessionReconciler:
             execution_quality_coverage_pct=round(exec_quality_cov_pct, 2),
             missing_response_time_errors=missing_resp_time_errors,
             stale_quote_errors=stale_quote_errors,
+            unique_decision_epochs=unique_decision_epochs,
+            duration_specific_predictions=duration_specific_predictions,
+            directional_candidate_evaluations=directional_candidate_evaluations,
+            unique_valid_proposal_quotes=unique_valid_proposal_quotes,
+            per_direction_eligible_matches=per_direction_eligible_matches,
+            union_eligible_prediction_ids_count=union_eligible_prediction_ids_count,
+            intersection_eligible_prediction_ids_count=intersection_eligible_prediction_ids_count,
         )
         return report
 
