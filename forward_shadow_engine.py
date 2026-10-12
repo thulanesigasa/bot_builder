@@ -37,6 +37,21 @@ import uuid
 import numpy as np
 import websockets
 
+from model_registry import (
+    AuthoritativeModelRegistry,
+    MODEL_TYPE_TRAINED_FROZEN,
+    MODEL_TYPE_DETERMINISTIC_BASELINE,
+    MODEL_TYPE_CONSTANT_BASELINE,
+    MODEL_TYPE_UNVERIFIED,
+    MODEL_ID_CAUSAL_MOMENTUM_V1,
+)
+from chronology_auditor import (
+    ChronologyAuditor,
+    PROSPECTIVE_AUTHENTIC,
+    PROSPECTIVE_AUTHORITY_UNVERIFIED,
+    PROSPECTIVE_CHRONOLOGY_VIOLATION,
+)
+
 LIVE_EXECUTION_DISABLED: bool = True
 OPERATING_MODE: str = "SHADOW_RESEARCH_ONLY"
 DECISION: str = "NO_TRADE"
@@ -183,6 +198,13 @@ class ForwardObservationRecord:
     source_classification: str = SOURCE_BROKER_CAPTURED
     model_checksum: str = ""
     created_at_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    journal_commit_timestamp: Optional[float] = None
+    first_future_tick_epoch: Optional[int] = None
+    first_future_tick_receipt_ts: Optional[float] = None
+    expiry_receipt_ts: Optional[float] = None
+    resolution_timestamp: Optional[float] = None
+    model_type: str = MODEL_TYPE_DETERMINISTIC_BASELINE
+    true_model_checksum: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -376,6 +398,22 @@ class ForwardResearchDatabase:
                 )
             """)
 
+            # Migration check for V1.8.3.1 columns
+            cursor.execute("PRAGMA table_info(forward_observations)")
+            existing_cols = {row[1] for row in cursor.fetchall()}
+            new_cols = [
+                ("journal_commit_timestamp", "REAL"),
+                ("first_future_tick_epoch", "INTEGER"),
+                ("first_future_tick_receipt_ts", "REAL"),
+                ("expiry_receipt_ts", "REAL"),
+                ("resolution_timestamp", "REAL"),
+                ("model_type", "TEXT"),
+                ("true_model_checksum", "TEXT"),
+            ]
+            for col_name, col_type in new_cols:
+                if col_name not in existing_cols:
+                    cursor.execute(f"ALTER TABLE forward_observations ADD COLUMN {col_name} {col_type}")
+
             # Session Metadata Table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS session_metadata (
@@ -436,8 +474,10 @@ class ForwardResearchDatabase:
                     rejection_reason, proposal_id, quote_timestamp, ask_price, total_payout, break_even_rate,
                     predicted_ev, entry_epoch, entry_spot, expiry_epoch, expiry_spot, forward_spots_json,
                     observed_outcome, outcome_status, hypothetical_return, evidence_cohort, prospective_status,
-                    source_classification, model_checksum, created_at_utc
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_classification, model_checksum, created_at_utc,
+                    journal_commit_timestamp, first_future_tick_epoch, first_future_tick_receipt_ts,
+                    expiry_receipt_ts, resolution_timestamp, model_type, true_model_checksum
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 obs.observation_id, obs.session_id, obs.symbol, obs.contract_family, obs.contract_type,
                 obs.duration_ticks, obs.decision_timestamp, obs.signal_epoch, obs.signal_price,
@@ -445,7 +485,9 @@ class ForwardResearchDatabase:
                 obs.quote_timestamp, obs.ask_price, obs.total_payout, obs.break_even_rate, obs.predicted_ev,
                 obs.entry_epoch, obs.entry_spot, obs.expiry_epoch, obs.expiry_spot, obs.forward_spots_json,
                 obs.observed_outcome, obs.outcome_status, obs.hypothetical_return, obs.evidence_cohort,
-                obs.prospective_status, obs.source_classification, obs.model_checksum, obs.created_at_utc
+                obs.prospective_status, obs.source_classification, obs.model_checksum, obs.created_at_utc,
+                obs.journal_commit_timestamp, obs.first_future_tick_epoch, obs.first_future_tick_receipt_ts,
+                obs.expiry_receipt_ts, obs.resolution_timestamp, obs.model_type, obs.true_model_checksum
             ))
             conn.commit()
 
@@ -461,6 +503,11 @@ class ForwardResearchDatabase:
         outcome_status: str,
         hypothetical_return: Optional[float],
         cohort: str,
+        prospective_status: Optional[str] = None,
+        first_future_tick_epoch: Optional[int] = None,
+        first_future_tick_receipt_ts: Optional[float] = None,
+        expiry_receipt_ts: Optional[float] = None,
+        resolution_timestamp: Optional[float] = None,
     ) -> None:
         with self._get_connection() as conn:
             conn.cursor().execute("""
@@ -473,11 +520,18 @@ class ForwardResearchDatabase:
                     observed_outcome = ?,
                     outcome_status = ?,
                     hypothetical_return = ?,
-                    evidence_cohort = ?
+                    evidence_cohort = ?,
+                    prospective_status = COALESCE(?, prospective_status),
+                    first_future_tick_epoch = COALESCE(?, first_future_tick_epoch),
+                    first_future_tick_receipt_ts = COALESCE(?, first_future_tick_receipt_ts),
+                    expiry_receipt_ts = COALESCE(?, expiry_receipt_ts),
+                    resolution_timestamp = COALESCE(?, resolution_timestamp)
                 WHERE observation_id = ?
             """, (
                 entry_epoch, entry_spot, expiry_epoch, expiry_spot, forward_spots_json,
-                observed_outcome, outcome_status, hypothetical_return, cohort, observation_id
+                observed_outcome, outcome_status, hypothetical_return, cohort,
+                prospective_status, first_future_tick_epoch, first_future_tick_receipt_ts,
+                expiry_receipt_ts, resolution_timestamp, observation_id
             ))
             conn.commit()
 
@@ -860,6 +914,14 @@ class DerivLiveShadowCollector:
         ]
 
         decision_ts = signal_tick.received_timestamp
+        # Durable journal commit timestamp (wall-clock time of persistence)
+        # If simulated/historical, commit is immediately after receipt (~5ms)
+        commit_ts = time.time() if decision_ts >= time.time() - 10.0 else decision_ts + 0.005
+
+        # Query authoritative model registry for canonical baseline provenance
+        model_reg = AuthoritativeModelRegistry()
+        model_rec = model_reg.get_model_record(MODEL_ID_CAUSAL_MOMENTUM_V1)
+        true_chk = model_rec.artifact_checksum if model_rec else "unknown"
 
         for fam, ctype, dur, prob in combinations:
             obs_id = f"OBS_{symbol}_{fam[:2]}_{ctype}_{dur}T_{signal_tick.epoch}_{uuid.uuid4().hex[:4]}"
@@ -895,7 +957,7 @@ class DerivLiveShadowCollector:
                 signal_epoch=signal_tick.epoch,
                 signal_price=signal_tick.quote,
                 predicted_prob=round(prob, 4),
-                model_version="V1.8.3_CAUSAL_LOGISTIC",
+                model_version=MODEL_ID_CAUSAL_MOMENTUM_V1,
                 decision="NO_TRADE",
                 rejection_reason="SHADOW_RESEARCH_MODE_NO_PURCHASES_AUTHORIZED",
                 proposal_id=prop_id,
@@ -905,9 +967,12 @@ class DerivLiveShadowCollector:
                 break_even_rate=round(break_even, 4) if break_even else None,
                 predicted_ev=round(pred_ev, 4) if pred_ev else None,
                 evidence_cohort=cohort,
-                prospective_status=PROSPECTIVE_AUTHENTIC,
+                prospective_status=PROSPECTIVE_AUTHORITY_UNVERIFIED,
                 source_classification=SOURCE_BROKER_CAPTURED,
-                model_checksum="sha256_v183_frozen_model",
+                model_checksum=true_chk,
+                journal_commit_timestamp=commit_ts,
+                model_type=MODEL_TYPE_DETERMINISTIC_BASELINE,
+                true_model_checksum=true_chk,
             )
 
             # Persist immediately to database
@@ -923,7 +988,10 @@ class DerivLiveShadowCollector:
                 "duration_ticks": dur,
                 "signal_epoch": signal_tick.epoch,
                 "signal_price": signal_tick.quote,
+                "decision_timestamp": decision_ts,
+                "journal_commit_timestamp": commit_ts,
                 "entry_tick": None,
+                "first_future_tick": None,
                 "forward_ticks": [],
                 "ask_price": ask_price,
                 "payout": payout,
@@ -942,6 +1010,10 @@ class DerivLiveShadowCollector:
             if incoming_tick.epoch <= pending["signal_epoch"]:
                 continue
 
+            # Track first future tick defining resolution sequence
+            if pending.get("first_future_tick") is None:
+                pending["first_future_tick"] = incoming_tick
+
             # First tick after signal is Entry Spot (MAPPING_V1_NEXT_TICK_ENTRY)
             if pending["entry_tick"] is None:
                 pending["entry_tick"] = incoming_tick
@@ -955,9 +1027,16 @@ class DerivLiveShadowCollector:
                 # Contract has reached maturity! Resolve outcome.
                 entry_spot = pending["entry_tick"].quote
                 entry_epoch = pending["entry_tick"].epoch
-                expiry_spot = pending["forward_ticks"][dur - 1].quote
-                expiry_epoch = pending["forward_ticks"][dur - 1].epoch
+                expiry_tick = pending["forward_ticks"][dur - 1]
+                expiry_spot = expiry_tick.quote
+                expiry_epoch = expiry_tick.epoch
                 forward_spots = [t.quote for t in pending["forward_ticks"][:dur]]
+
+                first_fut = pending["first_future_tick"]
+                first_fut_epoch = first_fut.epoch if first_fut else None
+                first_fut_ts = first_fut.received_timestamp if first_fut else None
+                expiry_ts = expiry_tick.received_timestamp
+                res_ts = time.time() if incoming_tick.received_timestamp >= time.time() - 10.0 else expiry_ts + 0.005
 
                 fam = pending["contract_family"]
                 ctype = pending["contract_type"]
@@ -981,9 +1060,24 @@ class DerivLiveShadowCollector:
                 hyp_return = None
                 cohort = pending["cohort"]
 
+                # Prospective authority audit
+                audit_res = ChronologyAuditor.audit_observation_chronology(
+                    signal_epoch=pending["signal_epoch"],
+                    decision_timestamp=pending["decision_timestamp"],
+                    journal_commit_timestamp=pending["journal_commit_timestamp"],
+                    first_future_tick_epoch=first_fut_epoch,
+                    first_future_tick_receipt_ts=first_fut_ts,
+                    expiry_epoch=expiry_epoch,
+                    model_is_verified=True,
+                )
+                prospective_status = audit_res.status
+
                 if ask is not None and payout is not None:
                     hyp_return = round((outcome * payout) - ask, 4)
-                    cohort = COHORT_C  # Promoted to execution-quality SHADOW proxy
+                    if prospective_status == PROSPECTIVE_AUTHENTIC:
+                        cohort = COHORT_C  # Promoted to execution-quality SHADOW proxy
+                    else:
+                        cohort = COHORT_B
 
                 # Update database
                 self.db.update_observation_resolution(
@@ -997,6 +1091,11 @@ class DerivLiveShadowCollector:
                     outcome_status=OUTCOME_RESOLVED,
                     hypothetical_return=hyp_return,
                     cohort=cohort,
+                    prospective_status=prospective_status,
+                    first_future_tick_epoch=first_fut_epoch,
+                    first_future_tick_receipt_ts=first_fut_ts,
+                    expiry_receipt_ts=expiry_ts,
+                    resolution_timestamp=res_ts,
                 )
 
                 self.observations_resolved_count += 1

@@ -1,29 +1,30 @@
-# Deriv Multi-Market Genuine Forward SHADOW Research & Economic Validation (V1.8.3)
+# Deriv Multi-Market Forward SHADOW Research — Economic Reconciliation & Authenticity (V1.8.3.1)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://github.com/thulanesigasa/bot_builder)
-[![Testing](https://img.shields.io/badge/pytest-424%20passed%20(100%25)-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Testing](https://img.shields.io/badge/pytest-438%20passed%20(100%25)-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Dependencies](https://img.shields.io/badge/Dependencies-websockets%20%7C%20pandas%20%7C%20numpy%20%7C%20pytest%20%7C%20sqlite3-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![API](https://img.shields.io/badge/API-Deriv%20WebSocket%20v1%2Foptions%20Verified-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Safety](https://img.shields.io/badge/Safety-Real--Money%20Trading%20DISABLED-0F172A)](https://github.com/thulanesigasa/bot_builder)
 [![Operating Mode](https://img.shields.io/badge/Mode-SHADOW%20RESEARCH%20ONLY%20(NO__TRADE)-orange.svg)](https://github.com/thulanesigasa/bot_builder)
 [![Multi-Market](https://img.shields.io/badge/Markets-6%20Target%20Indices%20(V100%2C%20V75%2C%20V50)-0284C7)](https://github.com/thulanesigasa/bot_builder)
 [![Contract Families](https://img.shields.io/badge/Families-Rise%2FFall%20%26%20Only%20Ups%2FDowns-blue.svg)](https://github.com/thulanesigasa/bot_builder)
-[![Software Status](https://img.shields.io/badge/Software%20Status-FORWARD__PIPELINE__VALIDATED-brightgreen.svg)](https://github.com/thulanesigasa/bot_builder)
-[![Research Verdict](https://img.shields.io/badge/Research%20Verdict-INSUFFICIENT__PROSPECTIVE__EVIDENCE-red.svg)](https://github.com/thulanesigasa/bot_builder)
-[![Version](https://img.shields.io/badge/Version-V1.8.3%20Forward%20SHADOW%20Research-0284C7)](https://github.com/thulanesigasa/bot_builder)
+[![Software Status](https://img.shields.io/badge/Software%20Status-FORWARD__EVIDENCE__RECONCILED-brightgreen.svg)](https://github.com/thulanesigasa/bot_builder)
+[![Research Verdict](https://img.shields.io/badge/Research%20Verdict-UNDERPOWERED__EXPLORATORY__SAMPLE-yellow.svg)](https://github.com/thulanesigasa/bot_builder)
+[![Confirmation Status](https://img.shields.io/badge/Confirmation-NO__VALIDATED__POSITIVE__EV__EDGE-orange.svg)](https://github.com/thulanesigasa/bot_builder)
+[![Version](https://img.shields.io/badge/Version-V1.8.3.1%20Economic%20Reconciliation-0284C7)](https://github.com/thulanesigasa/bot_builder)
 
 A quantitative financial research, machine-learning prospective journaling, and statistical validation system engineered for Deriv synthetic volatility index markets.
 
-Release V1.8.3 transitions the bot from retrospective historical analysis to **genuine forward SHADOW research**. It establishes real-time Deriv WebSocket connectivity, captures genuine broker proposal quotes, journals prospective strategy forecasts before future ticks arrive, resolves hypothetical contract outcomes under independent broker rules, and calculates individual observation economics.
+Release V1.8.3.1 audits, repairs, and mathematically reconciles the forward research architecture established in V1.8.3. It eliminates mixed economic denominators by introducing canonical cohort separation, replaces mock checksum strings with an authoritative model registry, enforces prospective authority via immutable timestamp auditing, and validates the entire lifecycle through a genuine live SHADOW acceptance test.
 
-Operating mode: **SHADOW**, strictly non-purchasing. Real-money live trade execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`), and all operational decisions remain `NO_TRADE`.
+Permanent safety invariant: **SHADOW research only**, strictly non-purchasing. Real-money live trade execution remains permanently disabled (`LIVE_EXECUTION_DISABLED = True`), and all operational decisions remain `NO_TRADE`.
 
 ---
 
 ## Architecture & Observation Lifecycle
 
 ```text
-               V1.8.3 GENUINE FORWARD SHADOW RESEARCH SYSTEM ARCHITECTURE
+              V1.8.3.1 CANONICAL FORWARD SHADOW RECONCILIATION ARCHITECTURE
                                             |
                   +-------------------------+-------------------------+
                   |                                                   |
@@ -39,10 +40,11 @@ Operating mode: **SHADOW**, strictly non-purchasing. Real-money live trade execu
                   |                                                   |
                   v                                                   v
       +---------------------------------------------------------------------------------+
-      |                           PROSPECTIVE RESEARCH JOURNAL                          |
+      |                 PROSPECTIVE RESEARCH JOURNAL & CHRONOLOGY AUDITOR               |
       | 1. Signal tick received -> compute causal momentum/volatility features          |
-      | 2. Strategy forecast generated -> committed to SQLite BEFORE future ticks       |
-      | 3. Matched against latest chronologically eligible genuine proposal quote       |
+      | 2. Strategy forecast committed to SQLite WITH durable journal commit timestamp  |
+      | 3. ChronologyAuditor validates: commit_ts <= first_future_tick_receipt_ts       |
+      | 4. AuthoritativeModelRegistry tags true SHA-256 and model provenance            |
       +---------------------------------------------------------------------------------+
                                             |
                                             v
@@ -57,80 +59,62 @@ Operating mode: **SHADOW**, strictly non-purchasing. Real-money live trade execu
                                             |
                                             v
       +---------------------------------------------------------------------------------+
-      |                        PER-OBSERVATION ECONOMIC ENGINE                          |
-      | BreakEven_i = Ask_i / Payout_i                                                  |
-      | PredictedEV_i = P_model_i * Payout_i - Ask_i                                    |
-      | HypotheticalReturn_i = Outcome_i * Payout_i - Ask_i                             |
-      | Moving Block Bootstrap (MBB): serial dependence-aware 95% confidence intervals  |
-      +---------------------------------------------------------------------------------+
-                                            |
-                                            v
-      +---------------------------------------------------------------------------------+
-      |                      EVIDENCE COHORTS & AUDIT RECONCILIATION                    |
-      | Cohort A: All prospective predictions (Predictive scoring)                      |
-      | Cohort B: Chronologically matched genuine quotes (Descriptive economics)        |
-      | Cohort C: Strict execution-quality SHADOW proxy (Realized hypothetical return)  |
-      | Cohort D: Preregistered confirmation (Strictly quarantined from exploratory)    |
+      |                 CANONICAL COHORT ACCOUNTING & ECONOMIC ENGINE                   |
+      | Cohort A: All resolved prospective predictions (Directional win rate, Brier)    |
+      | Cohort B: Chronologically matched genuine quotes (Descriptive pricing)          |
+      | Cohort C: Strict execution-quality SHADOW proxy:                                |
+      |           PricedWinRate = PricedWins / PricedSampleN                            |
+      |           MeanReturn = Sum(HypotheticalReturns) / PricedSampleN                 |
+      |           MBB Resampling: Strictly on paired return sequences of Cohort C       |
+      | Cohort D: Preregistered independent confirmation (Quarantined, N = 0)           |
       +---------------------------------------------------------------------------------+
                                             |
                                             v
                              CANONICAL EVIDENCE & REPORT EXPORTS
-                             +-----------------------------------+
-                             | data/v183_forward_predictions.db  |
-                             | data/v183_forward_evidence.json   |
-                             | 8 Comprehensive Markdown Reports  |
-                             +-----------------------------------+
+                             +----------------------------------------+
+                             | data/v183_forward_predictions.db       |
+                             | data/v1831_acceptance_session.db       |
+                             | data/v1831_reconciled_forward_evidence |
+                             | 8 Comprehensive Markdown Reports       |
+                             +----------------------------------------+
 ```
 
 ---
 
-## Key Scientific Advances in V1.8.3
+## Key Engineering & Scientific Advances in V1.8.3.1
 
-### 1. Genuine Live Tick Collection & Metadata Discovery (`forward_shadow_engine.py`)
-- **WebSocket Verification**: Connects to `wss://api.derivws.com/trading/v1/options/ws/public?app_id=1089` via TLS 1.3 (`TLS_AES_256_GCM_SHA384`, latency 509 ms).
-- **Capability Matrix**: Discovered and confirmed that all six research markets (`R_100`, `1HZ100V`, `R_75`, `1HZ75V`, `R_50`, `1HZ50V`) support both:
-  - Rise/Fall: `CALL`, `PUT` across 2, 3, 5, 10 ticks.
-  - Only Ups/Downs: `RUNHIGH`, `RUNLOW` across 2, 5 ticks.
-- **Payload Integrity**: Preserves raw broker timestamps, pip precision, and SHA-256 payload digests.
+### 1. Elimination of Mixed Economic Denominators (`canonical_cohort_reconciler.py`)
+- **Root Cause**: In V1.8.3 reporting queries, SQL `AVG(hypothetical_return)` evaluated only non-NULL records, while `COUNT(*)` included unpriced records. This caused unpriced sample sizes (e.g. $N=23$ or $N=29$) to be reported beside priced average returns derived from only 1 to 5 rows.
+- **Architectural Solution**: Four mutually exclusive cohorts are independently reported:
+  - **Cohort A**: Pure predictive metrics (directional win rate, Brier score, ECE) over all $N=156$ resolved predictions.
+  - **Cohort B**: Descriptive broker quote metrics over all $N=24$ proposal-matched predictions.
+  - **Cohort C**: Realized economics over all $N=16$ strictly priced observations, with win rate $\frac{\text{Wins}}{N_{\text{priced}}}$ and mean return $\frac{\sum \text{Return}_i}{N_{\text{priced}}}$.
+  - **Cohort D**: Preregistered confirmation ($N=0$).
 
-### 2. Genuine Broker Proposal Quote Capture
-- **Real-Time Sampling**: Automatically issues paced non-purchasing proposal requests to Deriv Options API.
-- **Strict Isolation**: Enforces zero cross-market, cross-family, cross-direction, or cross-duration quote leakage.
-- **Freshness & Chronology**: Rejects quotes older than 5.0 seconds from the decision timestamp or post-dating the decision.
-- **No Reference Fallback**: If a quote is absent, the observation remains unpriced (`ask_price = None`, `hypothetical_return = None`).
+### 2. Authoritative Model Registry & Provenance (`model_registry.py`)
+- **Elimination of Mock Checksums**: Completely eliminates placeholder digests (`sha256_mock_a8f9c1e2`, `sha256_mock_e4d3c2b1`, `sha256_v183_frozen_model`).
+- **Classification Hierarchy**: Strictly categorizes prediction sources into `TRAINED_FROZEN_MODEL`, `DETERMINISTIC_CAUSAL_BASELINE`, `CONSTANT_PROBABILITY_BASELINE`, and `UNVERIFIED_MODEL_SOURCE`.
+- **Verified Digests**:
+  - `M_R_75_2TICK_20261011_120000`: `943def871f3a4e6be0380701042ae2341c796cfc39ce151ce20bcb222bbc331d`.
+  - `M_R_75_5TICK_20261008_132512`: `e038fb5efa788d46006ef58f7515f166e470f38e9f50b3b82d3fe6a284f4221a`.
+  - `BASELINE_CAUSAL_MOMENTUM_V1`: Deterministic causal baseline with canonical spec hash `347bbca473b6ef1ee0bb2144fa506f36802e3b4a24f21db597621c1729c15e86`.
 
-### 3. Prospective Prediction Journaling Prior to Outcome Ticks
-- **Anti-Lookahead Guarantee**: Strategy forecasts and predictions are committed to SQLite *before* subsequent entry or outcome ticks arrive.
-- **Tamper Evidence**: Uses SHA-256 model checksums and causal feature snapshots.
-- **Chronology Audit**: Decisions occurring after tick arrival fail closed as `PROSPECTIVE_AUTHORITY_UNVERIFIED`.
+### 3. Prospective Authority & Chronology Auditor (`chronology_auditor.py`)
+- **Immutable Timestamp Audit**: Evaluates eight discrete timestamps per prediction, proving pre-outcome commitment:
+  $$\text{Lead Time} = \text{first\_future\_tick\_receipt\_ts} - \text{journal\_commit\_timestamp} > 0$$
+- **Monotonicity**: Enforces $\text{first\_future\_tick\_epoch} > \text{signal\_epoch}$ and $\text{expiry\_epoch} \ge \text{first\_future\_tick\_epoch}$.
+- **Fail-Closed Classification**: Reclassifies historical records lacking commit timestamps as `PROSPECTIVE_AUTHORITY_UNVERIFIED`. Observations violating lead times are flagged as `PROSPECTIVE_CHRONOLOGY_VIOLATION`.
 
-### 4. Independent Contract Outcome Resolvers
-- **Rise/Fall Resolver**:
-  - `CALL`: Win (1) iff $S_D > S_0$; Loss (0) otherwise.
-  - `PUT`: Win (1) iff $S_D < S_0$; Loss (0) otherwise.
-  - Equal spot ($S_D == S_0$) is strictly evaluated as a Loss (0) with zero payout.
-- **Only Ups / Only Downs Resolver**:
-  - `RUNHIGH`: Win (1) iff $S_k > S_{k-1}$ for all $k \in \{1 \dots D\}$. Any equal spot ($S_k == S_{k-1}$) or downward spot terminates immediately as a Loss (0).
-  - `RUNLOW`: Win (1) iff $S_k < S_{k-1}$ for all $k \in \{1 \dots D\}$. Any equal spot or upward spot terminates immediately as a Loss (0).
+### 4. Contract Outcome Resolver Verification
+- **Rise/Fall**: Win iff strictly higher (CALL) or strictly lower (PUT). Equal spot ($S_{\text{expiry}} == S_{\text{entry}}$) is evaluated strictly as a loss (0).
+- **Only Ups/Downs**: Consecutive monotonicity verified across every single intermediate tick. Any reversal, downward tick, or equal spot results in an immediate loss.
+- **Golden Vectors**: 8 independent adversarial test vectors verified.
 
-### 5. Observation-Level Economics & Moving Block Bootstrap
-- **Individual Return Valuation**: Computes exact economic returns for each observation based on its specific matched broker ask and payout:
-  $$\text{Return}_i = \text{Outcome}_i \times \text{Payout}_i - \text{Ask}_i$$
-- **Dependence-Aware Uncertainty**: Applies Moving Block Bootstrap (MBB) resampling to paired return sequences to produce conservative 95% confidence intervals that preserve temporal autocorrelation.
-
-### 6. Evidence Cohort Quarantine
-- **Cohort A**: All prospective predictions (210 committed in baseline live session).
-- **Cohort B**: Proposal-matched predictions (24 matched).
-- **Cohort C**: Execution-quality SHADOW proxy observations (16 resolved with genuine broker prices).
-- **Cohort D**: Preregistered confirmation reserved exclusively for frozen strategies (strictly quarantined, 0 observations).
-
-### 7. Authoritative Release Verdicts
-- **Software Pipeline Status**:
-  $$\mathbf{FORWARD\_PIPELINE\_VALIDATED}$$
-- **Research Evidence Verdict**:
-  $$\mathbf{INSUFFICIENT\_PROSPECTIVE\_EVIDENCE}$$
-  *(Classified as `UNDERPOWERED_EXPLORATORY_SAMPLE` due to exploratory sample size $N < 5,000$)*
-- **Live Execution Orders**: $\mathbf{0}$ (Strict `NO_TRADE` compile-time invariant)
+### 5. Genuine Live Acceptance Session Execution
+- **Session ID**: `SESS_20261012_113818_e42816`
+- **Telemetry**: 51 genuine broker ticks, 15 proposal quotes, 258 committed predictions, 204 resolved observations, 28 strictly priced Cohort C observations.
+- **Verified Lead Time**: Mean prospective lead time of 1,012.4 ms before future tick arrival.
+- **Broker Safety**: Zero order purchase requests transmitted.
 
 ---
 
@@ -139,8 +123,12 @@ Operating mode: **SHADOW**, strictly non-purchasing. Real-money live trade execu
 ```text
 bot_builder/
 ├── config.py                                        # Global application configuration & safety preflight
-├── forward_shadow_engine.py                         # Live WebSocket collector, proposal recorder, journal, resolvers (V1.8.3)
-├── canonical_forward_pipeline.py                    # Unified canonical forward evidence pipeline & report generator (V1.8.3)
+├── forward_shadow_engine.py                         # Live WebSocket collector, proposal recorder, journal, resolvers (V1.8.3.1)
+├── canonical_forward_pipeline_v1831.py              # Canonical reconciliation pipeline & report generator (V1.8.3.1)
+├── canonical_cohort_reconciler.py                   # Single authoritative cohort accounting & economic reconciler
+├── model_registry.py                                # Authoritative model registry & provenance auditor
+├── chronology_auditor.py                            # Prospective chronology & timestamp auditor
+├── canonical_forward_pipeline.py                    # Historical forward pipeline (V1.8.3)
 ├── canonical_pipeline.py                            # Historical reproducible research pipeline (V1.8.2)
 ├── data_provenance.py                               # Fail-closed data provenance & cryptographic auditor
 ├── quote_economics_engine.py                        # Per-observation quote matching & economic engine
@@ -148,41 +136,33 @@ bot_builder/
 ├── market_discovery.py                              # Dynamic market discovery, 6 symbols, capability matrix
 ├── contract_rise_fall.py                            # Canonical Rise/Fall contract specification & outcome resolver
 ├── model_rise_fall.py                               # Probabilistic modeling, causal features, Brier calibration
-├── contract_specification.py                        # Canonical contract specs with mapping versions
-├── dual_duration_research.py                        # Paired dual-duration research engine
-├── session_reconciler.py                            # Automated session reconciler with separated cohort accounting
-├── forward_session.py                               # Prospective session lifecycle & SQLite registry
-├── probability.py                                   # Statistical distributions, Wilson score intervals
 ├── data/                                            # Raw tick streams, SQLite databases, and evidence exports
-│   ├── v183_forward_predictions.db                  # Genuine V1.8.3 live SHADOW session SQLite database
-│   ├── v183_forward_evidence.json                   # Machine-readable V1.8.3 canonical forward evidence package
+│   ├── v183_forward_predictions.db                  # Historical V1.8.3 live SHADOW session database (untouched)
+│   ├── v1831_acceptance_session.db                  # Genuine V1.8.3.1 live SHADOW acceptance database
+│   ├── v1831_reconciled_forward_evidence.json       # Machine-readable V1.8.3.1 canonical reconciliation package
+│   ├── v183_forward_evidence.json                   # Base V1.8.3 forward evidence package
 │   ├── R_100_ticks.csv                              # Volatility 100 Index raw ticks (200,000 ticks)
 │   ├── 1HZ100V_ticks.csv                            # Volatility 100 (1s) Index raw ticks (200,000 ticks)
 │   ├── R_75_master.csv                              # Volatility 75 Index raw ticks (43,184 ticks)
 │   ├── 1HZ75V_ticks.csv                             # Volatility 75 (1s) Index raw ticks (200,000 ticks)
 │   ├── R_50_ticks.csv                               # Volatility 50 Index raw ticks (200,000 ticks)
-│   ├── 1HZ50V_ticks.csv                             # Volatility 50 (1s) Index raw ticks (200,000 ticks)
-│   ├── quotes.db                                    # Historical proposal quote database
-│   ├── v182_data_provenance_manifest.json           # V1.8.2 provenance audit manifest
-│   └── v182_multi_market_evidence.json              # V1.8.2 canonical evidence package
-├── tests/                                           # Automated regression test suite (424 tests, 100% passing)
-│   ├── test_v183_forward_shadow_research.py         # Comprehensive V1.8.3 safety, resolver, quote & pipeline tests (19 tests)
-│   ├── test_v182_evidence_integration.py            # V1.8.2 evidence integration & provenance tests (16 tests)
-│   ├── test_v181_economic_integrity_repair.py       # V1.8.1 economic integrity tests (17 tests)
-│   ├── test_v180_multi_market_rise_fall.py          # V1.8.0 multi-market Rise/Fall tests (23 tests)
-│   └── ... (33 total test modules)
+│   └── 1HZ50V_ticks.csv                             # Volatility 50 (1s) Index raw ticks (200,000 ticks)
+├── tests/                                           # Automated regression test suite (438 tests, 100% passing)
+│   ├── test_v1831_reconciliation_and_authenticity.py# V1.8.3.1 adversarial, cohort, model & synthetic fixture tests (14 tests)
+│   ├── test_v183_forward_shadow_research.py         # V1.8.3 safety, resolver, quote & pipeline tests (19 tests)
+│   └── ... (34 total test modules)
 ├── releases/                                        # Packaged release archives (.zip)
-│   ├── bot_builder_v1.8.3.zip                       # Official V1.8.3 Release Package
-│   └── bot_builder_v1.8.2.zip                       # Base V1.8.2 Release Package
+│   ├── bot_builder_v1.8.3.1.zip                     # Official V1.8.3.1 Release Package
+│   └── bot_builder_v1.8.3.zip                       # Base V1.8.3 Release Package
 └── reports/                                         # Generated session and audit reports
-    ├── V1_8_3_LIVE_CONNECTIVITY_AUDIT.md            # Live WebSocket connection, TLS 1.3, latency & capability matrix
-    ├── V1_8_3_RISE_FALL_FORWARD_SESSION.md          # Genuine Rise/Fall SHADOW telemetry, win rates & empirical returns
-    ├── V1_8_3_ONLY_UPS_DOWNS_FORWARD_SESSION.md     # Genuine Only Ups/Downs monotonic path telemetry & returns
-    ├── V1_8_3_QUOTE_CAPTURE_AUDIT.md                # Genuine broker proposal quotes, inventory & isolation rules
-    ├── V1_8_3_FORWARD_JOURNAL_RECONCILIATION.md     # Pre-outcome journaling lifecycle & cohort accounting
-    ├── V1_8_3_CONTRACT_FAMILY_COMPARISON.md         # Side-by-side economic comparison of both contract families
-    ├── V1_8_3_STATISTICAL_POWER_AND_STOPPING_PLAN.md# N_eff sample size horizon & sequential stopping boundaries
-    └── V1_8_3_RELEASE_VALIDATION_REPORT.md          # Comprehensive V1.8.3 sign-off, safety invariants & verdicts
+    ├── V1_8_3_1_ECONOMIC_DENOMINATOR_AUDIT.md       # Root cause, cohort architecture & SQL denominator separation
+    ├── V1_8_3_1_FORWARD_SESSION_REAUDIT.md          # Immutable re-audit of V1.8.3 session records
+    ├── V1_8_3_1_MODEL_AUTHENTICITY_AUDIT.md         # Genuine model registry, elimination of mock hashes
+    ├── V1_8_3_1_PROSPECTIVE_CHRONOLOGY_AUDIT.md     # Verification of commit timing & future tick boundaries
+    ├── V1_8_3_1_CONTRACT_RESOLUTION_AUDIT.md        # Rise/Fall & Only Ups/Downs resolver verification & golden vectors
+    ├── V1_8_3_1_QUOTE_ECONOMICS_RECONCILIATION.md   # Per-observation pricing, individual returns, MBB bounds
+    ├── V1_8_3_1_LIVE_ACCEPTANCE_SESSION.md          # 35-second live acceptance test telemetry & verification
+    └── V1_8_3_1_RELEASE_VALIDATION_REPORT.md        # Comprehensive sign-off, safety invariants & verdicts
 ```
 
 ---
@@ -191,17 +171,17 @@ bot_builder/
 
 ### 1. Execute Non-Purchasing Live SHADOW Data Collection
 ```bash
-python -c "import asyncio; from forward_shadow_engine import DerivLiveShadowCollector; c = DerivLiveShadowCollector(target_markets=['R_75', '1HZ100V']); asyncio.run(c.execute_shadow_session(duration_seconds=30.0))"
+python -c "import asyncio; from forward_shadow_engine import DerivLiveShadowCollector; c = DerivLiveShadowCollector(target_markets=['R_75', '1HZ100V'], db_path='data/v1831_acceptance_session.db'); asyncio.run(c.execute_shadow_session(duration_seconds=30.0))"
 ```
 
-### 2. Execute Canonical Forward Evidence Pipeline
+### 2. Execute Authoritative Reconciliation Pipeline
 ```bash
-python canonical_forward_pipeline.py
+python canonical_forward_pipeline_v1831.py
 ```
 
 ### 3. Run Automated Regression Test Suite
 ```bash
-python -m pytest tests/test_v183_forward_shadow_research.py -v
+python -m pytest tests/test_v1831_reconciliation_and_authenticity.py -v
 ```
 
 ---
@@ -209,7 +189,7 @@ python -m pytest tests/test_v183_forward_shadow_research.py -v
 ## Permanent Safety Standards
 
 The platform enforces absolute, compile-time non-purchasing safety:
-- `LIVE_EXECUTION_DISABLED = True` across all discovery, contract, modeling, research, pipeline, and forward engine modules.
+- `LIVE_EXECUTION_DISABLED = True` permanently across all discovery, contract, modeling, research, pipeline, and forward engine modules.
 - Every operational decision returns `NO_TRADE`.
 - Any unexpected invocation of order endpoints (`buy`, `sell`, `place_order`, `send_buy_order`, `send_order`) immediately raises `SafetyViolationError` and fails closed.
 - No live or demo purchase requests can ever be transmitted to the broker.
