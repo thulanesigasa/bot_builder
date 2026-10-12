@@ -246,16 +246,37 @@ class TestV182DataProvenanceFailClosed:
         assert res["source_authenticity_status"] == STATUS_SOURCE_AUTHENTICITY_UNVERIFIED
 
     def test_decoupled_statuses_on_verified_broker_data(self):
+        """Check actual source integrity instead of assuming legacy CSVs match.
+
+        Six legacy CSV/companion pairs were committed with inconsistent hashes
+        in the initial repository import. They remain usable only as
+        exploratory/unverified data unless independently re-acquired.
+        """
         auditor = DataProvenanceAuditor()
         manifest = auditor.generate_manifest()
         assert len(manifest) == 6
-        for sym, rec in manifest.items():
-            assert rec["file_integrity_status"] == STATUS_FILE_INTEGRITY_VERIFIED
-            assert rec["source_authenticity_status"] == STATUS_SOURCE_AUTHENTICITY_VERIFIED
-            assert rec["transformation_lineage_status"] == STATUS_LINEAGE_VERIFIED
-            assert len(rec["sha256_checksum"]) == 64
+        from data_provenance import (
+            compute_file_sha256,
+            STATUS_FILE_INTEGRITY_FAILED,
+            STATUS_SOURCE_AUTHENTICITY_UNVERIFIED,
+        )
+        import json
+        for sym, path, _, provenance_path in auditor.MARKET_SPECS:
+            rec = manifest[sym]
+            with open(provenance_path, encoding="utf-8") as f:
+                claimed = json.load(f).get("sha256_checksum")
+            actual = compute_file_sha256(path)
+            assert rec["sha256_checksum"] == actual
+            assert len(actual) == 64
             assert rec["duplicates_count"] == 0
             assert rec["inversions_count"] == 0
+            if claimed != actual:
+                assert rec["file_integrity_status"] == STATUS_FILE_INTEGRITY_FAILED
+                assert rec["source_authenticity_status"] == STATUS_SOURCE_AUTHENTICITY_UNVERIFIED
+                assert rec["is_eligible_for_authoritative_research"] is False
+            else:
+                assert rec["file_integrity_status"] == STATUS_FILE_INTEGRITY_VERIFIED
+                assert rec["transformation_lineage_status"] == STATUS_LINEAGE_VERIFIED
 
     def test_synthetic_fixture_cannot_acquire_broker_status(self):
         sim_rec = DataProvenanceAuditor.audit_file("data/quarantine/simulated.csv")
