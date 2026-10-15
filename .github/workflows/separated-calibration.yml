@@ -1,7 +1,7 @@
 name: Time-separated non-purchasing calibration
+# Historical October 2026 schedule retired after the study window ended.
+# Retain the manual inspection entry point; its capture job remains gated off.
 on:
-  schedule:
-    - cron: '15 0,4,8,12 13,14 10 *'
   workflow_dispatch:
 
 permissions:
