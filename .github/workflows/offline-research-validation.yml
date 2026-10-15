@@ -11,6 +11,7 @@ on:
       - research/pilot-power-diagnostics
       - research/separated-calibration-protocol
       - research/scheduled-calibration-capture
+      - audit/october-calibration-completeness-and-expiry
   pull_request:
   workflow_dispatch:
 
@@ -180,6 +181,10 @@ jobs:
           assert p["no_positive_ev_promotion"] is True
           print("SEPARATED_CALIBRATION_PROTOCOL", p["protocol_sha256"])
           PY
+
+      - name: Reconcile October scheduled calibration completeness
+        if: always()
+        run: python tools/reconcile_scheduled_calibration.py
 
       - name: Upload test and audit outputs
         if: always()
