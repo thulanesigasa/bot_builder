@@ -26,6 +26,8 @@ struct VirtualBook {
   int dayKey;
   int position;             // 0 flat, +1 buy, -1 sell
   double entry,sl,tp,volume;
+  datetime openedAt,lastObservedTickAt;
+  double estimatedStopLossAtEntry;
   int recoveryLosses;
   int wins,losses,skipped;
   bool disabled;
@@ -63,6 +65,7 @@ void ResetBook(VirtualBook &b) {
   b.balance=InpHypotheticalUSD;b.peak=InpHypotheticalUSD;b.dayOpening=InpHypotheticalUSD;
   b.dayKey=-1;b.position=0;b.entry=0;b.sl=0;b.tp=0;b.volume=0;
   b.recoveryLosses=0;b.wins=0;b.losses=0;b.skipped=0;b.disabled=false;
+  b.openedAt=0;b.lastObservedTickAt=0;b.estimatedStopLossAtEntry=0;
 }
 int DateKey(datetime t) {
   MqlDateTime d;TimeToStruct(t,d);
@@ -98,6 +101,17 @@ double Pnl(const VirtualBook &b,double exitPrice) {
 }
 void CloseVirtual(VirtualBook &b,const string label,const double price,const string reason) {
   double change=Pnl(b,price);
+  if(StringFind(reason,"STOP")>=0) {
+    double intended=Pnl(b,b.sl);
+    double overrun=MathMax(0.0,MathAbs(change)-MathAbs(intended));
+    Audit(label,"EXECUTION_TRACE",b.balance,b.volume,
+      StringFormat("entry=%.5f;stop=%.5f;first_exit_quote=%.5f;intended_stop_pnl=%.5f;actual_quote_pnl=%.5f;loss_overshoot=%.5f;entry_stop_estimate=%.5f;open_time=%s;last_tick=%s;exit_time=%s;tick_gap_seconds=%d",
+        b.entry,b.sl,price,intended,change,overrun,b.estimatedStopLossAtEntry,
+        TimeToString(b.openedAt,TIME_DATE|TIME_SECONDS),
+        TimeToString(b.lastObservedTickAt,TIME_DATE|TIME_SECONDS),
+        TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS),
+        (int)(TimeCurrent()-b.lastObservedTickAt)));
+  }
   b.balance+=change;
   if(change>0) {b.wins++;b.recoveryLosses=0;}
   else {b.losses++;b.recoveryLosses++;}
@@ -115,7 +129,7 @@ void CloseVirtual(VirtualBook &b,const string label,const double price,const str
                        change,adaptiveStage,AdaptiveCount(),AdaptivePerLegLots()));
   }
   Audit(label,"CLOSE",b.balance,b.volume,StringFormat("pnl=%.5f; %s",change,reason));
-  b.position=0;b.volume=0;
+  b.position=0;b.volume=0;b.openedAt=0;b.lastObservedTickAt=0;b.estimatedStopLossAtEntry=0;
   UpdateLimits(b,label);
 }
 void MarkToMarket(VirtualBook &b,const string label,const MqlTick &tick) {
@@ -123,10 +137,12 @@ void MarkToMarket(VirtualBook &b,const string label,const MqlTick &tick) {
   // Use executable side of spread. Stop takes precedence for ambiguous quotes.
   double price=b.position>0?tick.bid:tick.ask;
   if((b.position>0 && price<=b.sl)||(b.position<0 && price>=b.sl)) {
-    CloseVirtual(b,label,price,"STOP (slippage included)");return;
+    CloseVirtual(b,label,price,"STOP (first available quote)");return;
   }
-  if((b.position>0 && price>=b.tp)||(b.position<0 && price<=b.tp))
-    CloseVirtual(b,label,price,"TARGET");
+  if((b.position>0 && price>=b.tp)||(b.position<0 && price<=b.tp)) {
+    CloseVirtual(b,label,price,"TARGET");return;
+  }
+  b.lastObservedTickAt=TimeCurrent();
 }
 void OpenVirtual(VirtualBook &b,const string label,const int side,const double atr,const MqlTick &tick,const bool bounded) {
   if(b.position!=0 || !UpdateLimits(b,label)) return;
@@ -156,6 +172,7 @@ void OpenVirtual(VirtualBook &b,const string label,const int side,const double a
   }
   double entry=side>0?tick.ask:tick.bid;
   b.position=side;b.entry=entry;b.volume=lots;
+  b.openedAt=TimeCurrent();b.lastObservedTickAt=TimeCurrent();b.estimatedStopLossAtEntry=perLotLoss*lots;
   b.sl=NormalizeDouble(entry-side*distance,_Digits);
   b.tp=NormalizeDouble(entry+side*distance*InpRewardToRisk,_Digits);
   if(bounded) virtualRecoveryOpens++; else virtualBaselineOpens++;
@@ -209,6 +226,7 @@ void OpenAdaptiveBook(VirtualBook &b,const string label,int &stage,
   }
   double volume=actual*perLeg;
   b.position=side;b.entry=price;b.volume=volume;
+  b.openedAt=TimeCurrent();b.lastObservedTickAt=TimeCurrent();b.estimatedStopLossAtEntry=lossPerLeg*actual;
   b.sl=NormalizeDouble(price-side*distance,_Digits);
   b.tp=NormalizeDouble(price+side*distance*InpRewardToRisk,_Digits);
   if(feasible) {
