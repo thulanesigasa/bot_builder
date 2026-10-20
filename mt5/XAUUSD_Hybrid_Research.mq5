@@ -35,7 +35,7 @@ struct VirtualBook {
 };
 VirtualBook baseline,recovery,adaptive,theoretical,weekendFlat;
 int weekendFlatStage=0;
-long weekendFlatOpens=0,weekendFlatBlocked=0,weekendFlatCloses=0;
+long weekendFlatOpens=0,weekendFlatClipped=0,weekendFlatBlocked=0,weekendFlatCloses=0;
 int theoreticalStage=0;
 long theoreticalOpens=0;
 long adaptiveClippedOpens=0;
@@ -239,7 +239,10 @@ void OpenAdaptiveBook(VirtualBook &b,const string label,int &stage,
   if(feasible) {
     if(label=="WEEKEND_FLAT") weekendFlatOpens++;
     else adaptiveVirtualOpens++;
-    if(actual<desired) adaptiveClippedOpens++;
+    if(actual<desired) {
+      if(label=="WEEKEND_FLAT") weekendFlatClipped++;
+      else adaptiveClippedOpens++;
+    }
   } else theoreticalOpens++;
   Audit(label,"OPEN_VIRTUAL_BASKET",b.balance,volume,
      StringFormat("requested=%d accepted=%d per_leg=%.3f stop_budget=%.4f estimated_stop=%.4f estimated_margin=%.4f broker_feasible=%d",
@@ -336,8 +339,8 @@ void OnTick() {
 void OnDeinit(const int reason) {
   Print(StringFormat("XAU_DIAG SUMMARY m5_bars=%I64d spread_blocks=%I64d no_signal_bars=%I64d signals=%I64d baseline_virtual_opens=%I64d recovery_virtual_opens=%I64d",
       m5BarsEvaluated,spreadBlocks,noSignalBars,signalsGenerated,virtualBaselineOpens,virtualRecoveryOpens));
-  Print(StringFormat("XAU_WEEKEND_COMPARE control_balance=%.5f weekend_balance=%.5f weekend_opens=%I64d weekend_flat_exits=%I64d blocked_signals=%I64d weekend_wins=%d weekend_losses=%d weekend_stage=%d cutoff_hour_server=%d",
-      adaptive.balance,weekendFlat.balance,weekendFlatOpens,weekendFlatCloses,weekendFlatBlocked,
+  Print(StringFormat("XAU_WEEKEND_COMPARE control_balance=%.5f weekend_balance=%.5f weekend_opens=%I64d weekend_clipped=%I64d weekend_flat_exits=%I64d blocked_signals=%I64d weekend_wins=%d weekend_losses=%d weekend_stage=%d cutoff_hour_server=%d",
+      adaptive.balance,weekendFlat.balance,weekendFlatOpens,weekendFlatClipped,weekendFlatCloses,weekendFlatBlocked,
       weekendFlat.wins,weekendFlat.losses,weekendFlatStage,InpFridayFlatHourServer));
   Print(StringFormat("XAU_V4_COMPARISON feasible_opens=%I64d clipped=%I64d theoretical_opens=%I64d feasible_balance=%.5f theoretical_balance=%.5f theoretical_stage=%d",
       adaptiveVirtualOpens,adaptiveClippedOpens,theoreticalOpens,adaptive.balance,theoretical.balance,theoreticalStage));
