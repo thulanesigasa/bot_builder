@@ -32,6 +32,8 @@ struct VirtualBook {
 };
 VirtualBook baseline,recovery;
 int journal=INVALID_HANDLE;
+long m5BarsEvaluated=0, signalsGenerated=0, spreadBlocks=0, noSignalBars=0;
+long virtualBaselineOpens=0, virtualRecoveryOpens=0;
 
 bool ReadClosed(const int handle,double &out) {
   double data[1];
@@ -126,6 +128,7 @@ void OpenVirtual(VirtualBook &b,const string label,const int side,const double a
   b.position=side;b.entry=entry;b.volume=lots;
   b.sl=NormalizeDouble(entry-side*distance,_Digits);
   b.tp=NormalizeDouble(entry+side*distance*InpRewardToRisk,_Digits);
+  if(bounded) virtualRecoveryOpens++; else virtualBaselineOpens++;
   Audit(label,"OPEN_VIRTUAL",b.balance,lots,
      StringFormat("side=%d;entry=%.5f;sl=%.5f;tp=%.5f;recovery_level=%d",
        side,entry,b.sl,b.tp,b.recoveryLosses));
@@ -167,6 +170,9 @@ int OnInit() {
     if(journal!=INVALID_HANDLE) FileWrite(journal,"server_time","variant","event","balance","lots","details");
   }
   Print("XAUUSD RESEARCH MODE: NO OrderSend / CTrade / purchases; virtual USD50 baseline and capped recovery.");
+  Print(StringFormat("XAU_DIAG SYMBOL=%s minlot=%.4f lotstep=%.4f tick_size=%.6f tick_value=%.6f spread_limit_pts=%d",
+       _Symbol,SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN),SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP),
+       SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE),SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE),InpMaxSpreadPoints));
   return INIT_SUCCEEDED;
 }
 void OnTick() {
@@ -177,13 +183,18 @@ void OnTick() {
   if(current<=0||current==lastM5Bar) return;
   lastM5Bar=current;
   double pt=SymbolInfoDouble(_Symbol,SYMBOL_POINT);
-  if(pt<=0 || (t.ask-t.bid)/pt>InpMaxSpreadPoints) return;
+  m5BarsEvaluated++;
+  if(pt<=0 || (t.ask-t.bid)/pt>InpMaxSpreadPoints) {spreadBlocks++;return;}
   double atr=0;int direction=Signal(atr);
-  if(direction==0)return;
+  if(direction==0) {noSignalBars++;return;}
+  signalsGenerated++;
+  if(signalsGenerated<=10) Print(StringFormat("XAU_DIAG SIGNAL #%d direction=%d atr=%.5f spread_pts=%.1f",signalsGenerated,direction,atr,(t.ask-t.bid)/pt));
   OpenVirtual(baseline,"BASELINE",direction,atr,t,false);
   OpenVirtual(recovery,"RECOVERY_1_5",direction,atr,t,true);
 }
 void OnDeinit(const int reason) {
+  Print(StringFormat("XAU_DIAG SUMMARY m5_bars=%I64d spread_blocks=%I64d no_signal_bars=%I64d signals=%I64d baseline_virtual_opens=%I64d recovery_virtual_opens=%I64d",
+      m5BarsEvaluated,spreadBlocks,noSignalBars,signalsGenerated,virtualBaselineOpens,virtualRecoveryOpens));
   Print(StringFormat("XAU_FINAL BASELINE balance=%.5f wins=%d losses=%d skipped=%d; RECOVERY balance=%.5f wins=%d losses=%d skipped=%d",
       baseline.balance,baseline.wins,baseline.losses,baseline.skipped,
       recovery.balance,recovery.wins,recovery.losses,recovery.skipped));
