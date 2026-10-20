@@ -30,7 +30,10 @@ struct VirtualBook {
   int wins,losses,skipped;
   bool disabled;
 };
-VirtualBook baseline,recovery,adaptive;
+VirtualBook baseline,recovery,adaptive,theoretical;
+int theoreticalStage=0;
+long theoreticalOpens=0;
+long adaptiveClippedOpens=0;
 int adaptiveStage=0;
 long adaptiveVirtualOpens=0,adaptiveRiskBlocks=0;
 int AdaptiveCount() {
@@ -77,7 +80,7 @@ bool UpdateLimits(VirtualBook &b,const string label) {
   // Adaptive is a separate high-risk research stress case: its virtual
   // capital floor is $15 (70% of initial $50). Baseline/recovery retain
   // their original 2% daily and 10% account protections.
-  bool hitLimit=(label=="ADAPTIVE")
+  bool hitLimit=(label=="ADAPTIVE" || label=="THEORETICAL")
       ? b.balance<=15.0
       : (b.balance<=InpHypotheticalUSD*(1.0-InpMaximumDrawdown) ||
          b.balance<=b.dayOpening-InpHypotheticalUSD*InpDailyLossFraction);
@@ -100,6 +103,10 @@ void CloseVirtual(VirtualBook &b,const string label,const double price,const str
   else {b.losses++;b.recoveryLosses++;}
   // Recovery is capped: after the 4th loss reset to initial risk.
   if(b.recoveryLosses>InpMaxRecoveryIncreases) b.recoveryLosses=0;
+  if(label=="THEORETICAL") {
+    if(change>0) theoreticalStage=MathMin(theoreticalStage+1,3);
+    else if(change<0) theoreticalStage=MathMax(theoreticalStage-1,-3);
+  }
   if(label=="ADAPTIVE") {
     if(change>0) adaptiveStage=MathMin(adaptiveStage+1,3);
     else if(change<0) adaptiveStage=MathMax(adaptiveStage-1,-3);
@@ -159,8 +166,12 @@ void OpenVirtual(VirtualBook &b,const string label,const int side,const double a
 // Entire adaptive basket is one virtual aggregate: equal entry, stop and target.
 // The requested N x minimum-lot exposure is rejected if risk OR MT5 margin
 // exceeds the hypothetical account. Never send orders or bypass this gate.
-void OpenAdaptive(const int side,const double atr,const MqlTick &tick) {
-  if(adaptive.position!=0 || !UpdateLimits(adaptive,"ADAPTIVE")) return;
+// Both books are paper-only. Feasible mode clips leg count to actual broker
+// margin and stop-risk bounds; theoretical mode retains the requested stage.
+void OpenAdaptiveBook(VirtualBook &b,const string label,int &stage,
+                      const int side,const double atr,const MqlTick &tick,
+                      const bool feasible) {
+  if(b.position!=0 || !UpdateLimits(b,label)) return;
   double tickSize=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
   double tickValue=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
   double minLot=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
@@ -168,39 +179,51 @@ void OpenAdaptive(const int side,const double atr,const MqlTick &tick) {
   double maxLot=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MAX);
   double pt=SymbolInfoDouble(_Symbol,SYMBOL_POINT);
   if(tickSize<=0||tickValue<=0||minLot<=0||step<=0||pt<=0) {adaptiveRiskBlocks++;return;}
-  double perLeg=AdaptivePerLegLots();
-  int n=AdaptiveCount();
-  double volume=n*perLeg;
-  if(perLeg+1e-8<minLot || MathAbs(perLeg/step-MathRound(perLeg/step))>1e-6 ||
-     perLeg>maxLot || volume<=0) {
-    adaptiveRiskBlocks++;Audit("ADAPTIVE","SKIP",adaptive.balance,0,"LOT_SPEC_INFEASIBLE");return;
+  int desired=stage<=-3?1:stage==-2?3:stage==-1?4:7+MathMin(stage,3);
+  double perLeg=stage>=3?0.02:0.01;
+  if(feasible && (perLeg+1e-8<minLot || perLeg>maxLot ||
+                  MathAbs(perLeg/step-MathRound(perLeg/step))>1e-6)) {
+    adaptiveRiskBlocks++;Audit(label,"SKIP",b.balance,0,"LOT_SPEC_INFEASIBLE");return;
   }
   double distance=MathMax(atr*InpATRStopMultiplier,2*tickSize);
   distance=MathMax(distance,SymbolInfoInteger(_Symbol,SYMBOL_TRADE_STOPS_LEVEL)*pt+2*pt);
-  double stopLoss=distance/tickSize*tickValue*volume;
-  // Stress-test-only 70% loss-floor: $15 equity from original virtual $50.
-  // Stop orders may slip, so this is NOT a guarantee against real losses.
-  double allowed=MathMax(0,adaptive.balance-15.0);
-  double entry=side>0?tick.ask:tick.bid;
+  double lossPerLeg=distance/tickSize*tickValue*perLeg;
+  double price=side>0?tick.ask:tick.bid;
   double marginPerLeg=0;
-  ENUM_ORDER_TYPE orderType=side>0?ORDER_TYPE_BUY:ORDER_TYPE_SELL;
-  bool marginOk=OrderCalcMargin(orderType,_Symbol,perLeg,entry,marginPerLeg);
-  double totalMargin=marginPerLeg*n;
-  if(stopLoss>allowed || !marginOk || marginPerLeg<=0 || totalMargin>adaptive.balance) {
-    adaptiveRiskBlocks++;
-    Audit("ADAPTIVE","SKIP",adaptive.balance,volume,
-      StringFormat("BASKET_RISK_OR_MARGIN stage=%d positions=%d stop_loss=%.4f allowed=%.4f margin=%.4f",
-                   adaptiveStage,n,stopLoss,allowed,totalMargin));
-    return;
+  ENUM_ORDER_TYPE type=side>0?ORDER_TYPE_BUY:ORDER_TYPE_SELL;
+  bool marginOk=OrderCalcMargin(type,_Symbol,perLeg,price,marginPerLeg);
+  int actual=desired;
+  double budget=MathMax(0,b.balance-15.0);
+  if(feasible) {
+    if(!marginOk || marginPerLeg<=0 || lossPerLeg<=0) actual=0;
+    else {
+      int byRisk=(int)MathFloor((budget+1e-8)/lossPerLeg);
+      int byMargin=(int)MathFloor((b.balance+1e-8)/marginPerLeg);
+      actual=MathMin(desired,MathMax(0,MathMin(byRisk,byMargin)));
+    }
   }
-  adaptive.position=side;adaptive.entry=entry;adaptive.volume=volume;
-  adaptive.sl=NormalizeDouble(entry-side*distance,_Digits);
-  adaptive.tp=NormalizeDouble(entry+side*distance*InpRewardToRisk,_Digits);
-  adaptiveVirtualOpens++;
-  Audit("ADAPTIVE","OPEN_VIRTUAL_BASKET",adaptive.balance,volume,
-        StringFormat("stage=%d;positions=%d;per_leg=%.3f;aggregate_stop=%.4f;margin=%.4f",
-                     adaptiveStage,n,perLeg,stopLoss,totalMargin));
+  if(actual<=0) {
+    adaptiveRiskBlocks++;Audit(label,"SKIP",b.balance,0,
+       StringFormat("NO_FEASIBLE_LEG requested=%d risk_per_leg=%.4f margin_per_leg=%.4f budget=%.4f",
+                    desired,lossPerLeg,marginPerLeg,budget));return;
+  }
+  double volume=actual*perLeg;
+  b.position=side;b.entry=price;b.volume=volume;
+  b.sl=NormalizeDouble(price-side*distance,_Digits);
+  b.tp=NormalizeDouble(price+side*distance*InpRewardToRisk,_Digits);
+  if(feasible) {
+    adaptiveVirtualOpens++;
+    if(actual<desired) adaptiveClippedOpens++;
+  } else theoreticalOpens++;
+  Audit(label,"OPEN_VIRTUAL_BASKET",b.balance,volume,
+     StringFormat("requested=%d accepted=%d per_leg=%.3f stop_budget=%.4f estimated_stop=%.4f estimated_margin=%.4f broker_feasible=%d",
+                  desired,actual,perLeg,budget,lossPerLeg*actual,marginPerLeg*actual,(int)feasible));
 }
+void OpenAdaptive(const int side,const double atr,const MqlTick &tick) {
+  OpenAdaptiveBook(adaptive,"ADAPTIVE",adaptiveStage,side,atr,tick,true);
+  OpenAdaptiveBook(theoretical,"THEORETICAL",theoreticalStage,side,atr,tick,false);
+}
+
 int Signal(double &atr) {
   double fast,slow,rsi,pullback;
   if(!ReadClosed(hFast,fast)||!ReadClosed(hSlow,slow)||
@@ -232,7 +255,7 @@ int OnInit() {
   hPullback=iMA(_Symbol,PERIOD_M15,20,0,MODE_EMA,PRICE_CLOSE);
   if(hFast==INVALID_HANDLE||hSlow==INVALID_HANDLE||hRsi==INVALID_HANDLE||
      hAtr==INVALID_HANDLE||hPullback==INVALID_HANDLE) return INIT_FAILED;
-  ResetBook(baseline);ResetBook(recovery);ResetBook(adaptive);
+  ResetBook(baseline);ResetBook(recovery);ResetBook(adaptive);ResetBook(theoretical);
   if(InpJournalToCommonFiles) {
     journal=FileOpen("XAUUSD_Research_NoTrades.csv",FILE_WRITE|FILE_CSV|FILE_COMMON|FILE_ANSI,',');
     if(journal!=INVALID_HANDLE) FileWrite(journal,"server_time","variant","event","balance","lots","details");
@@ -248,6 +271,7 @@ void OnTick() {
   MarkToMarket(baseline,"BASELINE",t);
   MarkToMarket(recovery,"RECOVERY_1_5",t);
   MarkToMarket(adaptive,"ADAPTIVE",t);
+  MarkToMarket(theoretical,"THEORETICAL",t);
   datetime current=iTime(_Symbol,PERIOD_M5,0);
   if(current<=0||current==lastM5Bar) return;
   lastM5Bar=current;
@@ -265,6 +289,8 @@ void OnTick() {
 void OnDeinit(const int reason) {
   Print(StringFormat("XAU_DIAG SUMMARY m5_bars=%I64d spread_blocks=%I64d no_signal_bars=%I64d signals=%I64d baseline_virtual_opens=%I64d recovery_virtual_opens=%I64d",
       m5BarsEvaluated,spreadBlocks,noSignalBars,signalsGenerated,virtualBaselineOpens,virtualRecoveryOpens));
+  Print(StringFormat("XAU_V4_COMPARISON feasible_opens=%I64d clipped=%I64d theoretical_opens=%I64d feasible_balance=%.5f theoretical_balance=%.5f theoretical_stage=%d",
+      adaptiveVirtualOpens,adaptiveClippedOpens,theoreticalOpens,adaptive.balance,theoretical.balance,theoreticalStage));
   Print(StringFormat("XAU_ADAPTIVE_SUMMARY stage=%d next_positions=%d next_lot=%.3f basket_opens=%I64d risk_blocks=%I64d balance=%.5f wins=%d losses=%d",
       adaptiveStage,AdaptiveCount(),AdaptivePerLegLots(),adaptiveVirtualOpens,adaptiveRiskBlocks,
       adaptive.balance,adaptive.wins,adaptive.losses));
