@@ -31,7 +31,7 @@ def test_stress_floor_and_margin_reject():
 
 def test_ea_has_three_virtual_books_and_no_orders():
     code=Path("mt5/XAUUSD_Hybrid_Research.mq5").read_text()
-    assert "VirtualBook baseline,recovery,adaptive;" in code
+    assert "VirtualBook baseline,recovery,adaptive,theoretical;" in code
     assert 'OpenAdaptive(direction,atr,t)' in code
     assert 'label=="ADAPTIVE"' in code
     assert "OrderCalcMargin(" in code  # estimating paper feasibility, NOT placing an order
