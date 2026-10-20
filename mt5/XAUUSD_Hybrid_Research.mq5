@@ -16,6 +16,7 @@ input double InpRewardToRisk=1.5;
 input int InpMaxSpreadPoints=150;        // must be calibrated for broker symbol
 input int InpMinimumATRPts=20;
 input bool InpJournalToCommonFiles=false;
+input int InpFridayFlatHourServer=20; // server-time conservative Friday cutoff (0-23)
 
 int hFast=INVALID_HANDLE,hSlow=INVALID_HANDLE,hRsi=INVALID_HANDLE,hAtr=INVALID_HANDLE,hPullback=INVALID_HANDLE;
 datetime lastM5Bar=0;
@@ -32,7 +33,9 @@ struct VirtualBook {
   int wins,losses,skipped;
   bool disabled;
 };
-VirtualBook baseline,recovery,adaptive,theoretical;
+VirtualBook baseline,recovery,adaptive,theoretical,weekendFlat;
+int weekendFlatStage=0;
+long weekendFlatOpens=0,weekendFlatBlocked=0,weekendFlatCloses=0;
 int theoreticalStage=0;
 long theoreticalOpens=0;
 long adaptiveClippedOpens=0;
@@ -83,7 +86,7 @@ bool UpdateLimits(VirtualBook &b,const string label) {
   // Adaptive is a separate high-risk research stress case: its virtual
   // capital floor is $15 (70% of initial $50). Baseline/recovery retain
   // their original 2% daily and 10% account protections.
-  bool hitLimit=(label=="ADAPTIVE" || label=="THEORETICAL")
+  bool hitLimit=(label=="ADAPTIVE" || label=="THEORETICAL" || label=="WEEKEND_FLAT")
       ? b.balance<=15.0
       : (b.balance<=InpHypotheticalUSD*(1.0-InpMaximumDrawdown) ||
          b.balance<=b.dayOpening-InpHypotheticalUSD*InpDailyLossFraction);
@@ -117,6 +120,10 @@ void CloseVirtual(VirtualBook &b,const string label,const double price,const str
   else {b.losses++;b.recoveryLosses++;}
   // Recovery is capped: after the 4th loss reset to initial risk.
   if(b.recoveryLosses>InpMaxRecoveryIncreases) b.recoveryLosses=0;
+  if(label=="WEEKEND_FLAT") {
+    if(change>0) weekendFlatStage=MathMin(weekendFlatStage+1,3);
+    else if(change<0) weekendFlatStage=MathMax(weekendFlatStage-1,-3);
+  }
   if(label=="THEORETICAL") {
     if(change>0) theoreticalStage=MathMin(theoreticalStage+1,3);
     else if(change<0) theoreticalStage=MathMax(theoreticalStage-1,-3);
@@ -230,7 +237,8 @@ void OpenAdaptiveBook(VirtualBook &b,const string label,int &stage,
   b.sl=NormalizeDouble(price-side*distance,_Digits);
   b.tp=NormalizeDouble(price+side*distance*InpRewardToRisk,_Digits);
   if(feasible) {
-    adaptiveVirtualOpens++;
+    if(label=="WEEKEND_FLAT") weekendFlatOpens++;
+    else adaptiveVirtualOpens++;
     if(actual<desired) adaptiveClippedOpens++;
   } else theoreticalOpens++;
   Audit(label,"OPEN_VIRTUAL_BASKET",b.balance,volume,
@@ -242,6 +250,22 @@ void OpenAdaptive(const int side,const double atr,const MqlTick &tick) {
   OpenAdaptiveBook(theoretical,"THEORETICAL",theoreticalStage,side,atr,tick,false);
 }
 
+// Server-time cutoff is conservative: the actual broker Friday closing hour
+// must be verified separately. No lookahead or assumed executable quote.
+bool WeekendEntryBlocked(const datetime when) {
+  MqlDateTime d;TimeToStruct(when,d);
+  return d.day_of_week==6 || d.day_of_week==0 ||
+         (d.day_of_week==5 && d.hour>=InpFridayFlatHourServer);
+}
+void FlattenWeekendControl(const MqlTick &tick) {
+  if(weekendFlat.position==0 || !WeekendEntryBlocked(TimeCurrent())) return;
+  double quote=weekendFlat.position>0?tick.bid:tick.ask;
+  weekendFlatCloses++;
+  Audit("WEEKEND_FLAT","FRIDAY_FLAT",weekendFlat.balance,weekendFlat.volume,
+        StringFormat("quote=%.5f;at=%s;policy_hour=%d;first_tick_after_cutoff=1",
+                     quote,TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS),InpFridayFlatHourServer));
+  CloseVirtual(weekendFlat,"WEEKEND_FLAT",quote,"POLICY_FLAT_AT_AVAILABLE_TICK");
+}
 int Signal(double &atr) {
   double fast,slow,rsi,pullback;
   if(!ReadClosed(hFast,fast)||!ReadClosed(hSlow,slow)||
@@ -265,7 +289,8 @@ int OnInit() {
      InpMaximumDrawdown<=0||InpMaximumDrawdown>0.10||
      InpRecoveryMultiplier<1.0||InpRecoveryMultiplier>1.5||
      InpMaxRecoveryIncreases<0||InpMaxRecoveryIncreases>3||
-     InpATRStopMultiplier<=0||InpRewardToRisk<=0||InpMaxSpreadPoints<=0) return INIT_PARAMETERS_INCORRECT;
+     InpATRStopMultiplier<=0||InpRewardToRisk<=0||InpMaxSpreadPoints<=0||
+     InpFridayFlatHourServer<0||InpFridayFlatHourServer>23) return INIT_PARAMETERS_INCORRECT;
   hFast=iMA(_Symbol,PERIOD_H1,50,0,MODE_EMA,PRICE_CLOSE);
   hSlow=iMA(_Symbol,PERIOD_H1,200,0,MODE_EMA,PRICE_CLOSE);
   hRsi=iRSI(_Symbol,PERIOD_M15,14,PRICE_CLOSE);
@@ -273,7 +298,7 @@ int OnInit() {
   hPullback=iMA(_Symbol,PERIOD_M15,20,0,MODE_EMA,PRICE_CLOSE);
   if(hFast==INVALID_HANDLE||hSlow==INVALID_HANDLE||hRsi==INVALID_HANDLE||
      hAtr==INVALID_HANDLE||hPullback==INVALID_HANDLE) return INIT_FAILED;
-  ResetBook(baseline);ResetBook(recovery);ResetBook(adaptive);ResetBook(theoretical);
+  ResetBook(baseline);ResetBook(recovery);ResetBook(adaptive);ResetBook(theoretical);ResetBook(weekendFlat);
   if(InpJournalToCommonFiles) {
     journal=FileOpen("XAUUSD_Research_NoTrades.csv",FILE_WRITE|FILE_CSV|FILE_COMMON|FILE_ANSI,',');
     if(journal!=INVALID_HANDLE) FileWrite(journal,"server_time","variant","event","balance","lots","details");
@@ -290,6 +315,8 @@ void OnTick() {
   MarkToMarket(recovery,"RECOVERY_1_5",t);
   MarkToMarket(adaptive,"ADAPTIVE",t);
   MarkToMarket(theoretical,"THEORETICAL",t);
+  MarkToMarket(weekendFlat,"WEEKEND_FLAT",t);
+  FlattenWeekendControl(t);
   datetime current=iTime(_Symbol,PERIOD_M5,0);
   if(current<=0||current==lastM5Bar) return;
   lastM5Bar=current;
@@ -303,10 +330,15 @@ void OnTick() {
   OpenVirtual(baseline,"BASELINE",direction,atr,t,false);
   OpenVirtual(recovery,"RECOVERY_1_5",direction,atr,t,true);
   OpenAdaptive(direction,atr,t);
+  if(WeekendEntryBlocked(TimeCurrent())) weekendFlatBlocked++;
+  else OpenAdaptiveBook(weekendFlat,"WEEKEND_FLAT",weekendFlatStage,direction,atr,t,true);
 }
 void OnDeinit(const int reason) {
   Print(StringFormat("XAU_DIAG SUMMARY m5_bars=%I64d spread_blocks=%I64d no_signal_bars=%I64d signals=%I64d baseline_virtual_opens=%I64d recovery_virtual_opens=%I64d",
       m5BarsEvaluated,spreadBlocks,noSignalBars,signalsGenerated,virtualBaselineOpens,virtualRecoveryOpens));
+  Print(StringFormat("XAU_WEEKEND_COMPARE control_balance=%.5f weekend_balance=%.5f weekend_opens=%I64d weekend_flat_exits=%I64d blocked_signals=%I64d weekend_wins=%d weekend_losses=%d weekend_stage=%d cutoff_hour_server=%d",
+      adaptive.balance,weekendFlat.balance,weekendFlatOpens,weekendFlatCloses,weekendFlatBlocked,
+      weekendFlat.wins,weekendFlat.losses,weekendFlatStage,InpFridayFlatHourServer));
   Print(StringFormat("XAU_V4_COMPARISON feasible_opens=%I64d clipped=%I64d theoretical_opens=%I64d feasible_balance=%.5f theoretical_balance=%.5f theoretical_stage=%d",
       adaptiveVirtualOpens,adaptiveClippedOpens,theoreticalOpens,adaptive.balance,theoretical.balance,theoreticalStage));
   Print(StringFormat("XAU_ADAPTIVE_SUMMARY stage=%d next_positions=%d next_lot=%.3f basket_opens=%I64d risk_blocks=%I64d balance=%.5f wins=%d losses=%d",

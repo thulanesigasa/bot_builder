@@ -3,7 +3,7 @@ import re
 
 def test_two_adaptive_paper_books():
     s=Path("mt5/XAUUSD_Hybrid_Research.mq5").read_text()
-    assert "VirtualBook baseline,recovery,adaptive,theoretical;" in s
+    assert "VirtualBook baseline,recovery,adaptive,theoretical,weekendFlat;" in s
     assert 'OpenAdaptiveBook(adaptive,"ADAPTIVE"' in s
     assert 'OpenAdaptiveBook(theoretical,"THEORETICAL"' in s
     assert "int byRisk=" in s and "int byMargin=" in s
@@ -15,6 +15,6 @@ def test_two_adaptive_paper_books():
 
 def test_baseline_guards_still_present():
     s=Path("mt5/XAUUSD_Hybrid_Research.mq5").read_text()
-    assert 'label=="ADAPTIVE" || label=="THEORETICAL"' in s
+    assert 'label=="ADAPTIVE" || label=="THEORETICAL" || label=="WEEKEND_FLAT"' in s
     assert "LOT_INFEASIBLE" in s
     assert "InpHypotheticalUSD!=50.0" in s
