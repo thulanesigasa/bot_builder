@@ -74,8 +74,14 @@ bool UpdateLimits(VirtualBook &b,const string label) {
   int today=DateKey(TimeCurrent());
   if(today!=b.dayKey) {b.dayKey=today;b.dayOpening=b.balance;}
   if(b.balance>b.peak) b.peak=b.balance;
-  if(b.balance<=InpHypotheticalUSD*(1.0-InpMaximumDrawdown) ||
-     b.balance<=b.dayOpening-InpHypotheticalUSD*InpDailyLossFraction) {
+  // Adaptive is a separate high-risk research stress case: its virtual
+  // capital floor is $15 (70% of initial $50). Baseline/recovery retain
+  // their original 2% daily and 10% account protections.
+  bool hitLimit=(label=="ADAPTIVE")
+      ? b.balance<=15.0
+      : (b.balance<=InpHypotheticalUSD*(1.0-InpMaximumDrawdown) ||
+         b.balance<=b.dayOpening-InpHypotheticalUSD*InpDailyLossFraction);
+  if(hitLimit) {
     if(!b.disabled) Audit(label,"RISK_LOCK",b.balance,b.volume,"virtual loss threshold");
     b.disabled=true;
   }
