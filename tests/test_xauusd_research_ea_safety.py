@@ -24,7 +24,7 @@ def test_no_order_submission_or_trade_library():
 
 def test_two_virtual_books_are_separate():
     code=SOURCE.read_text(encoding="utf-8")
-    assert "VirtualBook baseline,recovery,adaptive,theoretical;" in code
+    assert "VirtualBook baseline,recovery,adaptive,theoretical,weekendFlat;" in code
     assert 'OpenVirtual(baseline,"BASELINE"' in code
     assert 'OpenVirtual(recovery,"RECOVERY_1_5"' in code
     assert "MathPow(InpRecoveryMultiplier,b.recoveryLosses)" in code
